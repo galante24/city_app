@@ -4,6 +4,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_ready.dart';
 
 /// Админ: sranometrr@gmail.com (роли в JWT / RLS).
+///
+/// Redirect из письма подтверждения (должен быть в Supabase Auth → URL Configuration).
+const String kAuthEmailRedirectTo = 'https://galante24.github.io/city_app/ ';
+
+/// Минимальная длина пароля при регистрации (нужна для сочетания с правилами).
+const int kRegisterPasswordMinLength = 6;
+
+/// Хотя бы одна заглавная буква (латиница / кириллица).
+final RegExp kRegisterPasswordHasUpper = RegExp(r'[A-ZЁА-Я]');
+
+/// Хотя бы один символ из набора: !@#$%^&*
+final RegExp kRegisterPasswordHasSpecial = RegExp(r'[!@#$%^&*]');
+
 const Color kAuthGreen = Color(0xFF0B723E);
 const Color kAuthVkBlue = Color(0xFF2787F5);
 const Color kAuthFieldBorder = Color(0xFFD1D1D6);
@@ -109,11 +122,33 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  /// Пароль при регистрации: [kRegisterPasswordMinLength] и RegExp-правила.
+  bool _isPasswordValidForRegistration(String password) {
+    if (password.length < kRegisterPasswordMinLength) {
+      return false;
+    }
+    return kRegisterPasswordHasUpper.hasMatch(password) &&
+        kRegisterPasswordHasSpecial.hasMatch(password);
+  }
+
   Future<void> _signUp() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
-    if (_passwordController.text != _passwordRepeatController.text) {
+    final String password = _passwordController.text;
+    if (!_isPasswordValidForRegistration(password)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Пароль должен содержать хотя бы одну заглавную букву и один специальный символ',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (password != _passwordRepeatController.text) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Пароли не совпадают')),
@@ -133,6 +168,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final AuthResponse r = await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        emailRedirectTo: kAuthEmailRedirectTo,
         data: <String, dynamic>{
           'first_name': _firstNameController.text.trim(),
           'last_name': _lastNameController.text.trim(),
@@ -256,10 +292,12 @@ class _AuthScreenState extends State<AuthScreen> {
     return null;
   }
 
-  /// Непустой пароль (допустима длина от 1 символа).
   String? _validatePassword(String? v) {
     if (v == null || v.isEmpty) {
       return 'Введите пароль';
+    }
+    if (_isRegister && v.length < kRegisterPasswordMinLength) {
+      return 'Минимум $kRegisterPasswordMinLength символов';
     }
     return null;
   }
