@@ -59,6 +59,17 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       if (mounted) {
         setState(() => _all = r);
       }
+    } on PostgrestException catch (e) {
+      if (mounted) {
+        setState(() => _all = <ConversationListItem>[]);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.message.isNotEmpty ? e.message : 'Не удалось загрузить чаты',
+            ),
+          ),
+        );
+      }
     } on Object {
       if (mounted) {
         setState(() => _all = <ConversationListItem>[]);

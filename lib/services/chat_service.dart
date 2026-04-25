@@ -80,10 +80,48 @@ class ChatService {
     return id.toString();
   }
 
-  static String _orEqIn(String col, List<String> ids) {
-    return ids.map((String id) => '$col.eq.$id').join(',');
+  static Future<Map<String, Map<String, dynamic>>> _fetchLastMessagePreviews(
+    SupabaseClient c,
+    List<String> convIds,
+  ) async {
+    if (convIds.isEmpty) {
+      return <String, Map<String, dynamic>>{};
+    }
+    try {
+      final PostgrestResponse<dynamic> r = await c.rpc(
+        'conversation_last_message_previews',
+        params: <String, dynamic>{'p_conv_ids': convIds},
+      );
+      final Object? d = r.data;
+      if (d is! List) {
+        return <String, Map<String, dynamic>>{};
+      }
+      final Map<String, Map<String, dynamic>> out = <String, Map<String, dynamic>>{};
+      for (final dynamic e in d) {
+        if (e is Map<String, dynamic>) {
+          final String? cid = e['conversation_id']?.toString();
+          if (cid != null) {
+            out[cid] = e;
+          }
+        }
+      }
+      return out;
+    } on Object {
+      return <String, Map<String, dynamic>>{};
+    }
   }
 
+  static String _uuidFromRpcData(Object? data) {
+    if (data == null) {
+      return '';
+    }
+    if (data is String) {
+      return data;
+    }
+    return data.toString();
+  }
+
+  /// PostgREST `.or('id.eq.uuid,...')` с UUID ломает разбор; используем [PostgrestFilterBuilder.inFilter].
   static Future<List<ConversationListItem>> listConversations() async {
     final SupabaseClient? c = _c;
     if (c == null) {
@@ -111,11 +149,11 @@ class ChatService {
       return <ConversationListItem>[];
     }
     final List<dynamic> convRows =
-        await c.from('conversations').select().or(_orEqIn('id', convIds));
+        await c.from('conversations').select().inFilter('id', convIds);
     final List<dynamic> allPart = await c
         .from('conversation_participants')
         .select('conversation_id, user_id, role')
-        .or(_orEqIn('conversation_id', convIds));
+        .inFilter('conversation_id', convIds);
     final Set<String> uids = <String>{};
     for (final dynamic e in allPart) {
       final String? u = (e as Map<String, dynamic>)['user_id']?.toString();
@@ -130,7 +168,9 @@ class ChatService {
     final List<dynamic> profRows = await c
         .from('profiles')
         .select('id, first_name, last_name, username')
-        .or(_orEqIn('id', uids.toList()));
+        .inFilter('id', uids.toList());
+    final Map<String, Map<String, dynamic>> lastMsgByConv =
+        await _fetchLastMessagePreviews(c, convIds);
     final Map<String, Map<String, dynamic>> profById = <String, Map<String, dynamic>>{
       for (final Map<String, dynamic> p in profRows.cast<Map<String, dynamic>>())
         p['id']!.toString(): p
@@ -154,9 +194,31 @@ class ChatService {
         }
       }
       final String? gname = (row['group_name'] as String?)?.trim();
-      final String? preview = row['last_message_preview'] as String?;
-      final String? updated =
-          (row['last_message_at'] as String?) ?? (row['updated_at'] as String?);
+      String? preview = (row['last_message_preview'] as String?)?.trim();
+      if (preview == null || preview.isEmpty) {
+        final String? fromRpc = lastMsgByConv[cid]?['body_preview'] as String?;
+        if (fromRpc != null && fromRpc.trim().isNotEmpty) {
+          preview = fromRpc.trim();
+        }
+      }
+      String? updated = (row['last_message_at'] as String?)?.trim();
+      if (updated == null || updated.isEmpty) {
+        updated = (row['updated_at'] as String?)?.trim();
+      }
+      final String? lastAtRpc = lastMsgByConv[cid]?['last_at'] as String?;
+      if (lastAtRpc != null && lastAtRpc.isNotEmpty) {
+        if (updated == null || updated.isEmpty) {
+          updated = lastAtRpc;
+        } else {
+          try {
+            if (DateTime.parse(lastAtRpc).isAfter(DateTime.parse(updated))) {
+              updated = lastAtRpc;
+            }
+          } on Object {
+            /* keep updated */
+          }
+        }
+      }
       int sortMs = 0;
       if (updated != null && updated.isNotEmpty) {
         try {
@@ -170,7 +232,7 @@ class ChatService {
           ConversationListItem(
             id: cid,
             title: (gname != null && gname.isNotEmpty) ? gname : 'Группа',
-            subtitle: preview ?? 'Нет сообщений',
+            subtitle: (preview != null && preview.isNotEmpty) ? preview : 'Нет сообщений',
             timeText: _formatListTime(updated),
             sortKeyMs: sortMs,
             isGroup: true,
@@ -184,7 +246,7 @@ class ChatService {
           ConversationListItem(
             id: cid,
             title: _titleForOther(otherId, profById),
-            subtitle: preview ?? 'Нет сообщений',
+            subtitle: (preview != null && preview.isNotEmpty) ? preview : 'Нет сообщений',
             timeText: _formatListTime(updated),
             sortKeyMs: sortMs,
             otherUserId: otherId,
@@ -284,11 +346,11 @@ class ChatService {
       'create_group_conversation',
       params: <String, dynamic>{'p_title': title, 'p_is_open': isOpen},
     );
-    final Object? id = r.data;
-    if (id == null) {
+    final String id = _uuidFromRpcData(r.data);
+    if (id.isEmpty) {
       throw StateError('Не удалось создать группу');
     }
-    return id.toString();
+    return id;
   }
 
   static Future<void> addGroupParticipant(String conversationId, String userId) async {
@@ -401,7 +463,7 @@ class ChatService {
     final List<dynamic> profs = await c
         .from('profiles')
         .select('id, first_name, last_name, username')
-        .or(_orEqIn('id', uids));
+        .inFilter('id', uids);
     final Map<String, Map<String, dynamic>> byU = <String, Map<String, dynamic>>{
       for (final Map<String, dynamic> p in profs.cast<Map<String, dynamic>>()) p['id']!.toString(): p
     };

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
@@ -67,10 +68,20 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
           ),
         ),
       );
+    } on PostgrestException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.message.isNotEmpty ? e.message : 'Не удалось создать группу',
+            ),
+          ),
+        );
+      }
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось создать')),
+          const SnackBar(content: Text('Не удалось создать группу')),
         );
       }
     } finally {
