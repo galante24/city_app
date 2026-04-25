@@ -17,6 +17,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  int _profileReload = 0;
+
   Future<void> _signOut() async {
     if (!supabaseAppReady) {
       return;
@@ -41,7 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bool isEmailAdmin = CityDataService.isCurrentUserAdminSync();
 
     return FutureBuilder<Map<String, dynamic>?>(
-      key: ObjectKey(user.id),
+      key: ValueKey<String>('${user.id}_$_profileReload'),
       future: CityDataService.fetchProfileRow(user.id),
       builder: (BuildContext c, AsyncSnapshot<Map<String, dynamic>?> snap) {
         final Map<String, dynamic>? row = snap.data;
@@ -153,6 +155,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                       const SizedBox(height: 12),
                       const Text(
+                        'Ник @username (латиница, цифры, _; 3–32 симв.; виден всем)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6C6C70),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _ProfileUsername(
+                        key: ValueKey(
+                          '${row?['username'] as String? ?? ''}_${user.id}_$_profileReload',
+                        ),
+                        initial: row?['username'] as String?,
+                        onSaved: () {
+                          setState(() {
+                            _profileReload++;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
                         'Телефон в формате +7 (для чатов с контактов)',
                         style: TextStyle(
                           fontSize: 12,
@@ -167,7 +189,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         initial: (row?['phone_e164'] as String?),
                         onSaved: () {
-                          setState(() {});
+                          setState(() {
+                            _profileReload++;
+                          });
                         },
                       ),
                     ],
@@ -218,6 +242,128 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ProfileUsername extends StatefulWidget {
+  const _ProfileUsername({super.key, this.initial, required this.onSaved});
+
+  final String? initial;
+  final VoidCallback onSaved;
+
+  @override
+  State<_ProfileUsername> createState() => _ProfileUsernameState();
+}
+
+class _ProfileUsernameState extends State<_ProfileUsername> {
+  late final TextEditingController _c = TextEditingController(
+    text: widget.initial == null || widget.initial!.isEmpty ? '' : '@${widget.initial}',
+  );
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  String _normalizedInput() {
+    String s = _c.text.trim();
+    if (s.startsWith('@')) {
+      s = s.substring(1);
+    }
+    return s;
+  }
+
+  Future<void> _save() async {
+    final String s = _normalizedInput();
+    if (s.isEmpty) {
+      setState(() => _saving = true);
+      try {
+        await ChatService.setMyUsername(null);
+        if (mounted) {
+          widget.onSaved();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ник сброшен')),
+          );
+        }
+      } on Object {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось сохранить')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _saving = false);
+        }
+      }
+      return;
+    }
+    if (!RegExp(r'^[a-z0-9_]{3,32}$').hasMatch(s)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ник: 3–32 символа, латиница, цифры, только _'),
+          ),
+        );
+      }
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ChatService.setMyUsername(s);
+      if (mounted) {
+        widget.onSaved();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ник сохранён')),
+        );
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ник занят или ошибка. Выберите другой.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: <Widget>[
+        Expanded(
+          child: TextField(
+            controller: _c,
+            textCapitalization: TextCapitalization.none,
+            autocorrect: false,
+            keyboardType: TextInputType.text,
+            decoration: const InputDecoration(
+              hintText: '@my_nick',
+              isDense: true,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('OK'),
+        ),
+      ],
     );
   }
 }

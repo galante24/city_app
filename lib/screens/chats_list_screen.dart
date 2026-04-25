@@ -9,7 +9,8 @@ import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
-import '../utils/phone_normalize.dart';
+import 'contact_picker_page.dart';
+import 'create_group_screen.dart';
 import 'user_chat_thread_screen.dart';
 
 /// Список чатов, поиск, кнопка «новый чат» (контакты на телефоне или email).
@@ -113,6 +114,23 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(c).pop();
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (BuildContext c2) => const CreateGroupScreen(),
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(c).colorScheme.secondaryContainer,
+                    foregroundColor: Theme.of(c).colorScheme.onSecondaryContainer,
+                  ),
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: const Text('Создать группу'),
+                ),
+                const SizedBox(height: 8),
                 if (_isMobile)
                   FilledButton.icon(
                     onPressed: () {
@@ -223,6 +241,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           builder: (BuildContext c) => UserChatThreadScreen(
             conversationId: conv,
             title: name,
+            listItem: null,
           ),
         ),
       );
@@ -253,11 +272,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     if (!mounted) {
       return;
     }
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (BuildContext c) => const _ContactPickerPage(),
-      ),
-    );
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext c) => const ContactPickerPage(),
+        ),
+      );
     await _load();
   }
 
@@ -358,6 +377,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                       builder: (BuildContext c) => UserChatThreadScreen(
                                         conversationId: item.id,
                                         title: item.title,
+                                        listItem: item,
                                       ),
                                     ),
                                   );
@@ -396,15 +416,17 @@ class _ChatListTile extends StatelessWidget {
             children: <Widget>[
               CircleAvatar(
                 backgroundColor: kPrimaryBlue.withValues(alpha: 0.2),
-                child: Text(
-                  item.title.isNotEmpty
-                      ? item.title[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    color: kPrimaryBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                child: item.isGroup
+                    ? const Icon(Icons.group, color: kPrimaryBlue, size: 22)
+                    : Text(
+                        item.title.isNotEmpty
+                            ? item.title[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: kPrimaryBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -454,183 +476,5 @@ class _ChatListTile extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _ContactPickerPage extends StatefulWidget {
-  const _ContactPickerPage();
-
-  @override
-  State<_ContactPickerPage> createState() => _ContactPickerPageState();
-}
-
-class _ContactPickerPageState extends State<_ContactPickerPage> {
-  bool _loading = true;
-  List<Contact> _contacts = <Contact>[];
-  final TextEditingController _search = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      _contacts = await FlutterContacts.getContacts(
-        withProperties: true,
-        withPhoto: false,
-      );
-    } on Object {
-      _contacts = <Contact>[];
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  String _searchText(Contact c) {
-    return '${c.displayName} ${c.phones.map((Phone p) => p.number).join(' ')}'.toLowerCase();
-  }
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final String lq = _search.text.toLowerCase();
-    final List<Contact> list = _loading
-        ? <Contact>[]
-        : _contacts
-            .where((Contact c) => lq.isEmpty || _searchText(c).contains(lq))
-            .toList();
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Контакты'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      body: Column(
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _search,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                hintText: 'Поиск в контактах',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                ),
-                isDense: true,
-              ),
-            ),
-          ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    itemCount: list.length,
-                    itemBuilder: (BuildContext c, int i) {
-                      final Contact cont = list[i];
-                      return ListTile(
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.person),
-                        ),
-                        title: Text(cont.displayName),
-                        subtitle: Text(
-                          cont.phones.isEmpty
-                              ? 'Нет номера'
-                              : cont.phones.map((Phone p) => p.number).join(', '),
-                        ),
-                        onTap: () => _onPick(cont),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _onPick(Contact c) async {
-    if (c.phones.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('У контакта нет телефона')),
-        );
-      }
-      return;
-    }
-    String? e164;
-    for (final Phone p in c.phones) {
-      e164 = normalizePhoneToE164Ru(p.number);
-      if (e164 != null) {
-        break;
-      }
-    }
-    if (e164 == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось разобрать номер. Укажите +7 в профиле у друга.')),
-        );
-      }
-      return;
-    }
-    final String? other = await ChatService.findUserIdByPhoneE164(e164);
-    if (other == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Пользователь с таким номером не в приложении. Пусть добавит тот же номер в «Профиль».',
-            ),
-          ),
-        );
-      }
-      return;
-    }
-    final String? me = Supabase.instance.client.auth.currentUser?.id;
-    if (other == me) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Это ваш номер в профиле')),
-        );
-      }
-      return;
-    }
-    try {
-      final String conv = await ChatService.getOrCreateDirectConversation(other);
-      final String name = (await ChatService.displayNameForUserId(other)) ?? c.displayName;
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop();
-      if (!context.mounted) {
-        return;
-      }
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext c) => UserChatThreadScreen(
-            conversationId: conv,
-            title: name,
-          ),
-        ),
-      );
-    } on Object {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось открыть чат')),
-        );
-      }
-    }
   }
 }

@@ -7,6 +7,10 @@ class ConversationListItem {
     required this.timeText,
     required this.sortKeyMs,
     this.otherUserId,
+    this.isGroup = false,
+    this.isOpen,
+    this.myRole,
+    this.groupName,
   });
 
   final String id;
@@ -14,5 +18,15 @@ class ConversationListItem {
   final String subtitle;
   final String timeText;
   final int sortKeyMs;
+  /// Собеседник в личном чате.
   final String? otherUserId;
+  final bool isGroup;
+  /// Только для группы: открытая (любой участник добавляет) или закрытая.
+  final bool? isOpen;
+  /// Роль текущего пользователя: owner | moderator | member.
+  final String? myRole;
+  final String? groupName;
+
+  bool get canModerate =>
+      myRole == 'owner' || myRole == 'moderator';
 }

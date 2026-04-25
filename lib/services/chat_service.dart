@@ -95,12 +95,18 @@ class ChatService {
     }
     final List<dynamic> part = await c
         .from('conversation_participants')
-        .select('conversation_id')
+        .select('conversation_id, role')
         .eq('user_id', me);
-    final List<String> convIds = part
-        .map((dynamic e) => (e as Map<String, dynamic>)['conversation_id']?.toString())
-        .whereType<String>()
-        .toList();
+    final Map<String, String> myRoleByConv = <String, String>{};
+    final List<String> convIds = <String>[];
+    for (final dynamic e in part) {
+      final Map<String, dynamic> m = e as Map<String, dynamic>;
+      final String? id = m['conversation_id']?.toString();
+      if (id != null) {
+        convIds.add(id);
+        myRoleByConv[id] = (m['role'] as String?)?.trim() ?? 'member';
+      }
+    }
     if (convIds.isEmpty) {
       return <ConversationListItem>[];
     }
@@ -108,7 +114,7 @@ class ChatService {
         await c.from('conversations').select().or(_orEqIn('id', convIds));
     final List<dynamic> allPart = await c
         .from('conversation_participants')
-        .select('conversation_id, user_id')
+        .select('conversation_id, user_id, role')
         .or(_orEqIn('conversation_id', convIds));
     final Set<String> uids = <String>{};
     for (final dynamic e in allPart) {
@@ -122,7 +128,7 @@ class ChatService {
     }
     final List<dynamic> profRows = await c
         .from('profiles')
-        .select('id, first_name, last_name, phone_e164')
+        .select('id, first_name, last_name, phone_e164, username')
         .or(_orEqIn('id', uids.toList()));
     final Map<String, Map<String, dynamic>> profById = <String, Map<String, dynamic>>{
       for (final Map<String, dynamic> p in profRows.cast<Map<String, dynamic>>())
@@ -131,6 +137,8 @@ class ChatService {
     final List<ConversationListItem> out = <ConversationListItem>[];
     for (final Map<String, dynamic> row in convRows.cast<Map<String, dynamic>>()) {
       final String cid = row['id']!.toString();
+      final bool isGroup = row['is_group'] as bool? ?? !(row['is_direct'] as bool? ?? true);
+      final String? myRole = myRoleByConv[cid];
       String? otherId;
       for (final dynamic p in allPart) {
         final Map<String, dynamic> m = p as Map<String, dynamic>;
@@ -138,11 +146,13 @@ class ChatService {
           final String? uid = m['user_id']?.toString();
           if (uid != null && uid != me) {
             otherId = uid;
-            break;
+            if (!(row['is_group'] as bool? ?? false)) {
+              break;
+            }
           }
         }
       }
-      final String title = _titleForOther(otherId, profById);
+      final String? gname = (row['group_name'] as String?)?.trim();
       final String? preview = row['last_message_preview'] as String?;
       final String? updated =
           (row['last_message_at'] as String?) ?? (row['updated_at'] as String?);
@@ -154,16 +164,34 @@ class ChatService {
           sortMs = 0;
         }
       }
-      out.add(
-        ConversationListItem(
-          id: cid,
-          title: title,
-          subtitle: preview ?? 'Нет сообщений',
-          timeText: _formatListTime(updated),
-          sortKeyMs: sortMs,
-          otherUserId: otherId,
-        ),
-      );
+      if (isGroup) {
+        out.add(
+          ConversationListItem(
+            id: cid,
+            title: (gname != null && gname.isNotEmpty) ? gname : 'Группа',
+            subtitle: preview ?? 'Нет сообщений',
+            timeText: _formatListTime(updated),
+            sortKeyMs: sortMs,
+            isGroup: true,
+            isOpen: row['is_open'] as bool?,
+            myRole: myRole,
+            groupName: gname,
+          ),
+        );
+      } else {
+        out.add(
+          ConversationListItem(
+            id: cid,
+            title: _titleForOther(otherId, profById),
+            subtitle: preview ?? 'Нет сообщений',
+            timeText: _formatListTime(updated),
+            sortKeyMs: sortMs,
+            otherUserId: otherId,
+            isGroup: false,
+            myRole: myRole,
+          ),
+        );
+      }
     }
     out.sort(
         (ConversationListItem a, ConversationListItem b) => b.sortKeyMs.compareTo(a.sortKeyMs));
@@ -233,6 +261,184 @@ class ChatService {
       'sender_id': uid,
       'body': t,
     });
+  }
+
+  static Future<void> setMyUsername(String? username) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.rpc('set_my_username', params: <String, dynamic>{'p_username': username});
+  }
+
+  static Future<String> createGroupConversation({
+    required String title,
+    required bool isOpen,
+  }) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final PostgrestResponse<dynamic> r = await c.rpc(
+      'create_group_conversation',
+      params: <String, dynamic>{'p_title': title, 'p_is_open': isOpen},
+    );
+    final Object? id = r.data;
+    if (id == null) {
+      throw StateError('Не удалось создать группу');
+    }
+    return id.toString();
+  }
+
+  static Future<void> addGroupParticipant(String conversationId, String userId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.rpc(
+      'add_group_participant',
+      params: <String, dynamic>{'p_conversation_id': conversationId, 'p_user_id': userId},
+    );
+  }
+
+  static Future<void> removeGroupParticipant(String conversationId, String userId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.rpc(
+      'remove_group_participant',
+      params: <String, dynamic>{'p_conversation_id': conversationId, 'p_user_id': userId},
+    );
+  }
+
+  static Future<void> setGroupModerator(
+    String conversationId,
+    String userId, {
+    required bool isModerator,
+  }) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.rpc(
+      'set_group_moderator',
+      params: <String, dynamic>{
+        'p_conversation_id': conversationId,
+        'p_user_id': userId,
+        'p_moderator': isModerator,
+      },
+    );
+  }
+
+  static Future<void> softDeleteMessage(String messageId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.rpc('soft_delete_group_message', params: <String, dynamic>{'p_message_id': messageId});
+  }
+
+  static Future<List<Map<String, dynamic>>> searchProfilesForChat(String query) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return <Map<String, dynamic>>[];
+    }
+    if (query.trim().isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+    final PostgrestResponse<dynamic> r = await c.rpc(
+      'search_profiles_for_chat',
+      params: <String, dynamic>{'p_query': query.trim(), 'p_limit': 20},
+    );
+    final Object? d = r.data;
+    if (d is List) {
+      return d.cast<Map<String, dynamic>>();
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+  static Future<List<String>> listDirectPartnerUserIds() async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return <String>[];
+    }
+    final PostgrestResponse<dynamic> r = await c.rpc('list_direct_partner_user_ids');
+    final Object? d = r.data;
+    if (d is List) {
+      return List<String>.from(d.map((dynamic e) => e.toString()));
+    }
+    return <String>[];
+  }
+
+  static Future<Map<String, dynamic>?> fetchConversation(String conversationId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return null;
+    }
+    return c.from('conversations').select().eq('id', conversationId).maybeSingle();
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchParticipantsWithProfiles(
+    String conversationId,
+  ) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return <Map<String, dynamic>>[];
+    }
+    final List<dynamic> parts = await c
+        .from('conversation_participants')
+        .select('user_id, role')
+        .eq('conversation_id', conversationId);
+    if (parts.isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+    final List<String> uids = parts
+        .map((dynamic e) => (e as Map<String, dynamic>)['user_id']?.toString())
+        .whereType<String>()
+        .toList();
+    final List<dynamic> profs = await c
+        .from('profiles')
+        .select('id, first_name, last_name, username')
+        .or(_orEqIn('id', uids));
+    final Map<String, Map<String, dynamic>> byU = <String, Map<String, dynamic>>{
+      for (final Map<String, dynamic> p in profs.cast<Map<String, dynamic>>()) p['id']!.toString(): p
+    };
+    final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
+    for (final dynamic p in parts) {
+      final Map<String, dynamic> m = p as Map<String, dynamic>;
+      final String? uid = m['user_id']?.toString();
+      if (uid == null) {
+        continue;
+      }
+      final Map<String, dynamic>? pr = byU[uid];
+      out.add(<String, dynamic>{
+        'user_id': uid,
+        'role': m['role'],
+        'first_name': pr?['first_name'],
+        'last_name': pr?['last_name'],
+        'username': pr?['username'],
+      });
+    }
+    return out;
+  }
+
+  static Future<String?> getMyRoleInConversation(String conversationId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return null;
+    }
+    final String? me = c.auth.currentUser?.id;
+    if (me == null) {
+      return null;
+    }
+    final Map<String, dynamic>? row = await c
+        .from('conversation_participants')
+        .select('role')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', me)
+        .maybeSingle();
+    return row?['role'] as String?;
   }
 
   static Future<String?> otherParticipantId(String conversationId) async {

@@ -3,17 +3,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
+import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
+import 'group_chat_info_screen.dart';
 
 class UserChatThreadScreen extends StatefulWidget {
   const UserChatThreadScreen({
     super.key,
     required this.conversationId,
     required this.title,
+    this.listItem,
   });
 
   final String conversationId;
   final String title;
+  final ConversationListItem? listItem;
 
   @override
   State<UserChatThreadScreen> createState() => _UserChatThreadScreenState();
@@ -22,6 +26,39 @@ class UserChatThreadScreen extends StatefulWidget {
 class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   final TextEditingController _input = TextEditingController();
   bool _sending = false;
+  String _headerTitle = '';
+  bool? _isGroup;
+  bool? _isOpen;
+  String? _myRole;
+
+  @override
+  void initState() {
+    super.initState();
+    _headerTitle = widget.title;
+    _isGroup = widget.listItem?.isGroup;
+    _isOpen = widget.listItem?.isOpen;
+    _myRole = widget.listItem?.myRole;
+    _loadMeta();
+  }
+
+  Future<void> _loadMeta() async {
+    if (widget.listItem == null) {
+      final Map<String, dynamic>? row = await ChatService.fetchConversation(widget.conversationId);
+      if (row != null && mounted) {
+        setState(() {
+          _isGroup = row['is_group'] as bool? ?? !(row['is_direct'] as bool? ?? true);
+          _isOpen = row['is_open'] as bool?;
+          if (_isGroup == true) {
+            _headerTitle = (row['group_name'] as String?)?.trim() ?? 'Группа';
+          }
+        });
+      }
+      final String? r = await ChatService.getMyRoleInConversation(widget.conversationId);
+      if (mounted) {
+        setState(() => _myRole = r ?? _myRole);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -66,6 +103,36 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     }
   }
 
+  bool _canDeleteMessage(Map<String, dynamic> m, String? me) {
+    if (me == null) {
+      return false;
+    }
+    final String? sid = m['sender_id']?.toString();
+    final bool deleted = m['deleted_at'] != null;
+    if (deleted) {
+      return false;
+    }
+    if (sid == me) {
+      return true;
+    }
+    if (_isGroup == true) {
+      return _myRole == 'owner' || _myRole == 'moderator';
+    }
+    return false;
+  }
+
+  Future<void> _deleteMessage(String messageId) async {
+    try {
+      await ChatService.softDeleteMessage(messageId);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось удалить')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
@@ -74,6 +141,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
       );
     }
     final String? me = Supabase.instance.client.auth.currentUser?.id;
+    final bool isGroup = _isGroup == true;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -86,7 +154,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          widget.title,
+          _headerTitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -95,6 +163,23 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
+        actions: <Widget>[
+          if (isGroup)
+            IconButton(
+              icon: const Icon(Icons.group_outlined, color: kPrimaryBlue),
+              onPressed: () {
+                Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (BuildContext c) => GroupChatInfoScreen(
+                      conversationId: widget.conversationId,
+                      title: _headerTitle,
+                      isOpen: _isOpen ?? false,
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
       body: Column(
         children: <Widget>[
@@ -103,6 +188,8 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
               conversationId: widget.conversationId,
               me: me,
               timeLabel: _timeLabel,
+              canDeleteMessage: _canDeleteMessage,
+              onDelete: _deleteMessage,
             ),
           ),
           Container(
@@ -117,7 +204,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                     maxLines: 4,
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
-                      hintText: 'Сообщение…',
+                      hintText: isGroup ? 'Сообщение в группе…' : 'Сообщение…',
                       filled: true,
                       fillColor: const Color(0xFFF0F0F0),
                       border: OutlineInputBorder(
@@ -157,11 +244,15 @@ class _MessagesList extends StatelessWidget {
     required this.conversationId,
     required this.me,
     required this.timeLabel,
+    required this.canDeleteMessage,
+    required this.onDelete,
   });
 
   final String conversationId;
   final String? me;
   final String Function(String? iso) timeLabel;
+  final bool Function(Map<String, dynamic> m, String? me) canDeleteMessage;
+  final void Function(String messageId) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +276,7 @@ class _MessagesList extends StatelessWidget {
         if (rows.isEmpty) {
           return const Center(
             child: Text(
-              'Пока нет сообщений — напишите первым',
+              'Пока нет сообщений',
               style: TextStyle(color: Color(0xFF6B6B70)),
             ),
           );
@@ -197,54 +288,88 @@ class _MessagesList extends StatelessWidget {
             final Map<String, dynamic> m = rows[i];
             final String? sid = m['sender_id']?.toString();
             final bool mine = sid == me;
-            final String text = (m['body'] as String?) ?? '';
+            final bool isDeleted = m['deleted_at'] != null;
+            final String text = isDeleted
+                ? 'Сообщение удалено'
+                : (m['body'] as String?) ?? '';
             return Align(
               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width * 0.82,
-                ),
-                decoration: BoxDecoration(
-                  color: mine ? kPrimaryBlue : Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(16),
-                    topRight: const Radius.circular(16),
-                    bottomLeft: Radius.circular(mine ? 16 : 4),
-                    bottomRight: Radius.circular(mine ? 4 : 16),
+              child: GestureDetector(
+                onLongPress: canDeleteMessage(m, me)
+                    ? () {
+                        showModalBottomSheet<void>(
+                          context: context,
+                          builder: (BuildContext bc) {
+                            return SafeArea(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  ListTile(
+                                    leading: const Icon(Icons.delete_outline, color: Color(0xFFC62828)),
+                                    title: const Text('Удалить сообщение'),
+                                    onTap: () {
+                                      Navigator.pop(bc);
+                                      onDelete(m['id']!.toString());
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      }
+                    : null,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.82,
                   ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: const Color(0xFF0A0A0A).withValues(alpha: 0.04),
-                      blurRadius: 2,
-                      offset: const Offset(0, 1),
+                  decoration: BoxDecoration(
+                    color: isDeleted
+                        ? const Color(0xFFE8E8ED)
+                        : (mine ? kPrimaryBlue : Colors.white),
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: Radius.circular(mine ? 16 : 4),
+                      bottomRight: Radius.circular(mine ? 4 : 16),
                     ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      text,
-                      style: TextStyle(
-                        color: mine ? Colors.white : const Color(0xFF1A1A1A),
-                        fontSize: 15,
-                        height: 1.35,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: const Color(0xFF0A0A0A).withValues(alpha: 0.04),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      timeLabel(m['created_at'] as String?),
-                      style: TextStyle(
-                        color: mine
-                            ? Colors.white.withValues(alpha: 0.75)
-                            : const Color(0xFF8A8A8E),
-                        fontSize: 11,
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        text,
+                        style: TextStyle(
+                          color: isDeleted
+                              ? const Color(0xFF6B6B70)
+                              : (mine ? Colors.white : const Color(0xFF1A1C1C)),
+                          fontSize: 15,
+                          fontStyle: isDeleted ? FontStyle.italic : null,
+                          height: 1.35,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        timeLabel(m['created_at'] as String?),
+                        style: TextStyle(
+                          color: mine
+                              ? Colors.white.withValues(alpha: 0.75)
+                              : const Color(0xFF8A8A8E),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
