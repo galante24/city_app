@@ -36,12 +36,13 @@ class ChatService {
       return null;
     }
     try {
-      final PostgrestResponse<dynamic> r = await c.rpc('find_user_id_by_phone_e164',
+      final dynamic r = await c.rpc('find_user_id_by_phone_e164',
           params: <String, dynamic>{'p_phone': phoneE164});
-      if (r.data == null) {
+      final Object? p = _rpcPayload(r);
+      if (p == null) {
         return null;
       }
-      return r.data.toString();
+      return p.toString();
     } on Exception {
       return null;
     }
@@ -53,12 +54,13 @@ class ChatService {
       return null;
     }
     try {
-      final PostgrestResponse<dynamic> r = await c
+      final dynamic r = await c
           .rpc('find_user_id_by_email', params: <String, dynamic>{'lookup': email.trim()});
-      if (r.data == null) {
+      final Object? p = _rpcPayload(r);
+      if (p == null) {
         return null;
       }
-      return r.data.toString();
+      return p.toString();
     } on Exception {
       return null;
     }
@@ -69,15 +71,26 @@ class ChatService {
     if (c == null) {
       throw StateError('Supabase не готов');
     }
-    final PostgrestResponse<dynamic> r = await c.rpc(
+    final dynamic r = await c.rpc(
       'get_or_create_direct_conversation',
       params: <String, dynamic>{'p_other': otherUserId},
     );
-    final Object? id = r.data;
+    final Object? id = _rpcPayload(r);
     if (id == null) {
       throw StateError('Не удалось создать чат');
     }
     return id.toString();
+  }
+
+  /// Без [PostgrestFilterBuilder.count] `rpc` отдаёт payload напрямую, не [PostgrestResponse].
+  static Object? _rpcPayload(dynamic result) {
+    if (result == null) {
+      return null;
+    }
+    if (result is PostgrestResponse) {
+      return result.data;
+    }
+    return result;
   }
 
   static Future<Map<String, Map<String, dynamic>>> _fetchLastMessagePreviews(
@@ -88,11 +101,11 @@ class ChatService {
       return <String, Map<String, dynamic>>{};
     }
     try {
-      final PostgrestResponse<dynamic> r = await c.rpc(
+      final dynamic r = await c.rpc(
         'conversation_last_message_previews',
         params: <String, dynamic>{'p_conv_ids': convIds},
       );
-      final Object? d = r.data;
+      final Object? d = _rpcPayload(r);
       if (d is! List) {
         return <String, Map<String, dynamic>>{};
       }
@@ -365,17 +378,47 @@ class ChatService {
     if (c == null) {
       throw StateError('Supabase не готов');
     }
-    final PostgrestResponse<dynamic> r = await c.rpc(
+    final String trimmed = title.trim();
+    final dynamic r = await c.rpc(
       'create_group_conversation',
       params: <String, dynamic>{'p_title': title, 'p_is_open': isOpen},
     );
-    final String id = _uuidFromRpcData(r.data);
+    String id = _uuidFromRpcData(_rpcPayload(r));
+    if (id.isEmpty) {
+      id = await _recoverNewGroupConversationId(c, trimmed);
+    }
     if (id.isEmpty) {
       throw StateError(
-        'Пустой ответ create_group_conversation. Проверьте, что в Supabase выполнена миграция с функцией create_group_conversation (см. FINAL_all_in_one_chats_and_groups.sql), затем сделайте redeploy веб-версии.',
+        'Пустой ответ create_group_conversation. Проверьте, что в Supabase выполнена миграция (FINAL_all_in_one_chats_and_groups.sql) и веб-версия задеплоена.',
       );
     }
     return id;
+  }
+
+  static Future<String> _recoverNewGroupConversationId(
+    SupabaseClient c,
+    String groupNameTrimmed,
+  ) async {
+    final String? me = c.auth.currentUser?.id;
+    if (me == null) {
+      return '';
+    }
+    try {
+      final List<dynamic> rows = await c
+          .from('conversations')
+          .select('id')
+          .eq('is_group', true)
+          .eq('group_name', groupNameTrimmed)
+          .eq('created_by', me)
+          .order('created_at', ascending: false)
+          .limit(1);
+      if (rows.isEmpty) {
+        return '';
+      }
+      return (rows.first as Map<String, dynamic>)['id']!.toString();
+    } on Object {
+      return '';
+    }
   }
 
   static Future<void> addGroupParticipant(String conversationId, String userId) async {
@@ -435,11 +478,11 @@ class ChatService {
     if (query.trim().isEmpty) {
       return <Map<String, dynamic>>[];
     }
-    final PostgrestResponse<dynamic> r = await c.rpc(
+    final dynamic r = await c.rpc(
       'search_profiles_for_chat',
       params: <String, dynamic>{'p_query': query.trim(), 'p_limit': 20},
     );
-    final Object? d = r.data;
+    final Object? d = _rpcPayload(r);
     if (d is List) {
       return d.cast<Map<String, dynamic>>();
     }
@@ -451,8 +494,8 @@ class ChatService {
     if (c == null) {
       return <String>[];
     }
-    final PostgrestResponse<dynamic> r = await c.rpc('list_direct_partner_user_ids');
-    final Object? d = r.data;
+    final dynamic r = await c.rpc('list_direct_partner_user_ids');
+    final Object? d = _rpcPayload(r);
     if (d is List) {
       return List<String>.from(d.map((dynamic e) => e.toString()));
     }
