@@ -137,10 +137,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 20),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(18),
                   boxShadow: <BoxShadow>[
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.04),
@@ -322,12 +322,44 @@ class _NickBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        LayoutBuilder(
+          builder: (BuildContext c, BoxConstraints b) {
+            final bool narrow = b.maxWidth < 420;
+            final Widget valueRow = Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (username.isNotEmpty) ...<Widget>[
+                  IconButton(
+                    tooltip: 'Скопировать',
+                    onPressed: () => _copy(c, '@$username'),
+                    icon: const Icon(Icons.copy_outlined, size: 22, color: kPrimaryBlue),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
+                  IconButton(
+                    tooltip: 'Поделиться',
+                    onPressed: () => _share('@$username'),
+                    icon: const Icon(Icons.share_outlined, size: 22, color: kPrimaryBlue),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
+                ],
+              ],
+            );
+            final Widget nik = SelectableText(
+              at,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
+              ),
+            );
+            if (narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   const Text(
                     'Ник в чате',
@@ -347,45 +379,76 @@ class _NickBlock extends StatelessWidget {
                       height: 1.2,
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: <Widget>[
-                  Flexible(
-                    child: SelectableText(
-                      at,
-                      textAlign: TextAlign.end,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A1A1A),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: nik,
                       ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Скопировать',
-                    onPressed: username.isEmpty
-                        ? null
-                        : () => _copy(context, '@$username'),
-                    icon: const Icon(Icons.copy_outlined, size: 22, color: kPrimaryBlue),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  IconButton(
-                    tooltip: 'Поделиться',
-                    onPressed: username.isEmpty
-                        ? null
-                        : () => _share('@$username'),
-                    icon: const Icon(Icons.share_outlined, size: 22, color: kPrimaryBlue),
-                    visualDensity: VisualDensity.compact,
+                      valueRow,
+                    ],
                   ),
                 ],
-              ),
-            ),
-          ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const Text(
+                        'Ник в чате',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6C6C70),
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: <Widget>[
+                      Flexible(
+                        child: nik,
+                      ),
+                      IconButton(
+                        tooltip: 'Скопировать',
+                        onPressed: username.isEmpty
+                            ? null
+                            : () => _copy(context, '@$username'),
+                        icon: const Icon(Icons.copy_outlined, size: 22, color: kPrimaryBlue),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      IconButton(
+                        tooltip: 'Поделиться',
+                        onPressed: username.isEmpty
+                            ? null
+                            : () => _share('@$username'),
+                        icon: const Icon(Icons.share_outlined, size: 22, color: kPrimaryBlue),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 10),
         Text(
@@ -438,15 +501,26 @@ class _PhoneBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String display = phoneDisplay.isEmpty ? 'не указан' : phoneDisplay;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        LayoutBuilder(
+          builder: (BuildContext c, BoxConstraints b) {
+            final bool narrow = b.maxWidth < 420;
+            final TextStyle valueStyle = TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: phoneDisplay.isEmpty ? const Color(0xFF8E8E93) : const Color(0xFF1A1A1A),
+            );
+            final Widget phone = SelectableText(
+              display,
+              maxLines: 1,
+              style: valueStyle,
+            );
+            if (narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   const Text(
                     'Телефон',
@@ -466,35 +540,78 @@ class _PhoneBlock extends StatelessWidget {
                       height: 1.2,
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: <Widget>[
+                      Expanded(child: phone),
+                      if (phoneDisplay.isNotEmpty)
+                        IconButton(
+                          tooltip: 'Скопировать',
+                          onPressed: () => _copy(c, phoneDisplay),
+                          icon: const Icon(Icons.copy_outlined, size: 22, color: kPrimaryBlue),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                        ),
+                    ],
+                  ),
                 ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: <Widget>[
-                  Flexible(
-                    child: SelectableText(
-                      phoneDisplay.isEmpty ? 'не указан' : phoneDisplay,
-                      textAlign: TextAlign.end,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: phoneDisplay.isEmpty ? const Color(0xFF8E8E93) : const Color(0xFF1A1A1A),
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const Text(
+                        'Телефон',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF6C6C70),
+                          letterSpacing: 0.2,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Виден только вам. В списке чатов и у других не показывается.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: 'Скопировать',
-                    onPressed: phoneDisplay.isEmpty ? null : () => _copy(context, phoneDisplay),
-                    icon: const Icon(Icons.copy_outlined, size: 22, color: kPrimaryBlue),
-                    visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: <Widget>[
+                      Flexible(
+                        child: SelectableText(
+                          display,
+                          maxLines: 1,
+                          textAlign: TextAlign.end,
+                          style: valueStyle,
+                        ),
+                      ),
+                      if (phoneDisplay.isNotEmpty)
+                        IconButton(
+                          tooltip: 'Скопировать',
+                          onPressed: () => _copy(context, phoneDisplay),
+                          icon: const Icon(Icons.copy_outlined, size: 22, color: kPrimaryBlue),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 10),
         Text(

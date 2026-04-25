@@ -8,6 +8,7 @@ import 'config/supabase_config.dart';
 import 'config/supabase_ready.dart';
 import 'services/city_data_service.dart';
 import 'screens/auth_screen.dart';
+import 'main_tab_index.dart';
 import 'screens/chats_list_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
@@ -91,7 +92,7 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
 
-  static const List<Widget> _pages = <Widget>[
+  static const List<Widget> _stackChildren = <Widget>[
     HomeScreen(),
     ScheduleScreen(),
     ServicesGridScreen(),
@@ -101,18 +102,21 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
-      bottomNavigationBar: NavigationBar(
+    return MainTabIndex(
+      index: _currentIndex,
+      child: Scaffold(
+        body: IndexedStack(
+          index: _currentIndex,
+          children: _stackChildren,
+        ),
+        bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (int i) {
           setState(() => _currentIndex = i);
         },
         indicatorColor: kPrimaryBlue.withValues(alpha: 0.2),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        // На телефоне длинные подписи (Расписание) не ломают строку.
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -141,7 +145,8 @@ class _MainScaffoldState extends State<MainScaffold> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 

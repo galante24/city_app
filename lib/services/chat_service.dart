@@ -93,19 +93,9 @@ class ChatService {
     return result;
   }
 
-  static Future<Map<String, Map<String, dynamic>>> _fetchLastMessagePreviews(
-    SupabaseClient c,
-    List<String> convIds,
-  ) async {
-    if (convIds.isEmpty) {
-      return <String, Map<String, dynamic>>{};
-    }
+  static Map<String, Map<String, dynamic>> _parseLastPreviewRpc(dynamic raw) {
     try {
-      final dynamic r = await c.rpc(
-        'conversation_last_message_previews',
-        params: <String, dynamic>{'p_conv_ids': convIds},
-      );
-      final Object? d = _rpcPayload(r);
+      final Object? d = _rpcPayload(raw);
       if (d is! List) {
         return <String, Map<String, dynamic>>{};
       }
@@ -184,12 +174,15 @@ class ChatService {
     if (convIds.isEmpty) {
       return <ConversationListItem>[];
     }
-    final List<dynamic> convRows =
-        await c.from('conversations').select().inFilter('id', convIds);
-    final List<dynamic> allPart = await c
-        .from('conversation_participants')
-        .select('conversation_id, user_id, role')
-        .inFilter('conversation_id', convIds);
+    final List<dynamic> convAndPart = await Future.wait<dynamic>(<Future<dynamic>>[
+      c.from('conversations').select().inFilter('id', convIds),
+      c
+          .from('conversation_participants')
+          .select('conversation_id, user_id, role')
+          .inFilter('conversation_id', convIds),
+    ]);
+    final List<dynamic> convRows = convAndPart[0] as List<dynamic>;
+    final List<dynamic> allPart = convAndPart[1] as List<dynamic>;
     final Set<String> uids = <String>{};
     for (final dynamic e in allPart) {
       final String? u = (e as Map<String, dynamic>)['user_id']?.toString();
@@ -200,13 +193,22 @@ class ChatService {
     if (uids.isEmpty) {
       return <ConversationListItem>[];
     }
-    // Без phone_e164: номер не подтягивать в списке чатов (только владелец в своём профиле).
-    final List<dynamic> profRows = await c
-        .from('profiles')
-        .select('id, first_name, last_name, username')
-        .inFilter('id', uids.toList());
-    final Map<String, Map<String, dynamic>> lastMsgByConv =
-        await _fetchLastMessagePreviews(c, convIds);
+    final bool anyMissingPreview = convRows.cast<Map<String, dynamic>>().any((Map<String, dynamic> r) {
+      final String? p = r['last_message_preview'] as String?;
+      return p == null || p.trim().isEmpty;
+    });
+    // Без phone_e164: номер не подтягивать в списке чатов; превью по RPC — только если в строке пусто.
+    final List<dynamic> profAndOpt = await Future.wait<dynamic>(<Future<dynamic>>[
+      c.from('profiles').select('id, first_name, last_name, username').inFilter('id', uids.toList()),
+      if (anyMissingPreview)
+        c.rpc('conversation_last_message_previews', params: <String, dynamic>{'p_conv_ids': convIds})
+      else
+        Future<dynamic>.value(null),
+    ]);
+    final List<dynamic> profRows = profAndOpt[0] as List<dynamic>;
+    final Map<String, Map<String, dynamic>> lastMsgByConv = anyMissingPreview
+        ? _parseLastPreviewRpc(profAndOpt[1])
+        : <String, Map<String, dynamic>>{};
     final Map<String, Map<String, dynamic>> profById = <String, Map<String, dynamic>>{
       for (final Map<String, dynamic> p in profRows.cast<Map<String, dynamic>>())
         p['id']!.toString(): p

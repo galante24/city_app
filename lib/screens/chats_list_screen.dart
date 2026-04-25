@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
+import '../main_tab_index.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 import 'contact_picker_page.dart';
@@ -24,13 +25,27 @@ class ChatsListScreen extends StatefulWidget {
 class _ChatsListScreenState extends State<ChatsListScreen> {
   final TextEditingController _search = TextEditingController();
   String _q = '';
-  bool _loading = true;
+  bool _loading = false;
+  /// Чаты грузим только при первом открытии вкладки «Чаты» (не на старте приложения).
+  bool _autoLoadScheduled = false;
   List<ConversationListItem> _all = <ConversationListItem>[];
 
   @override
   void initState() {
     super.initState();
     _search.addListener(_onSearchChange);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!supabaseAppReady || _autoLoadScheduled) {
+      return;
+    }
+    if (MainTabIndex.maybeOf(context) != 3) {
+      return;
+    }
+    _autoLoadScheduled = true;
     _load();
   }
 
