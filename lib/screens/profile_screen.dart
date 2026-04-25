@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_constants.dart';
@@ -77,6 +79,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
         final Map<String, dynamic>? row = snap.data;
         final String fullName = _fullNameFromSources(row, user);
+        final String? rawUser = row?['username'] as String?;
+        final String nickForDisplay = (rawUser == null || rawUser.trim().isEmpty)
+            ? ''
+            : (rawUser.startsWith('@') ? rawUser.substring(1) : rawUser).trim();
+        final String phoneRaw = (row?['phone_e164'] as String?)?.trim() ?? '';
+        final String phoneDisplay = phoneRaw.isEmpty
+            ? ''
+            : (phoneRaw.startsWith('+') ? phoneRaw : '+$phoneRaw');
+
         return Scaffold(
           backgroundColor: const Color(0xFFF2F2F7),
           appBar: AppBar(
@@ -208,32 +219,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                     const SizedBox(height: 8),
                     const Divider(height: 28),
-                    _LabeledField(
-                      label: 'Ник в чате',
-                      hint: 'Латиница, цифры и _; 3–32 символа. Виден всем.',
-                      child: _ProfileUsername(
-                        key: ValueKey<String>(
-                          '${row?['username'] as String? ?? ''}_$user.id$_profileReload',
-                        ),
-                        initial: row?['username'] as String?,
-                        onSaved: () {
-                          setState(() => _profileReload++);
-                        },
-                      ),
+                    _NickBlock(
+                      username: nickForDisplay,
+                      userId: user.id,
+                      profileReload: _profileReload,
+                      initialForEdit: row?['username'] as String?,
+                      onSaved: () => setState(() => _profileReload++),
                     ),
                     const SizedBox(height: 16),
-                    _LabeledField(
-                      label: 'Телефон',
-                      hint: 'Формат +7… — для чатов по контактам',
-                      child: _ProfilePhoneE164(
-                        key: ValueKey<String>(
-                          'ph_${row?['phone_e164'] as String? ?? ''}_$user.id$_profileReload',
-                        ),
-                        initial: row?['phone_e164'] as String?,
-                        onSaved: () {
-                          setState(() => _profileReload++);
-                        },
-                      ),
+                    _PhoneBlock(
+                      phoneDisplay: phoneDisplay,
+                      userId: user.id,
+                      profileReload: _profileReload,
+                      initialForEdit: row?['phone_e164'] as String?,
+                      onSaved: () => setState(() => _profileReload++),
                     ),
                   ],
                 ),
@@ -286,15 +285,246 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+class _NickBlock extends StatelessWidget {
+  const _NickBlock({
+    required this.username,
+    required this.userId,
+    required this.profileReload,
+    required this.initialForEdit,
+    required this.onSaved,
+  });
+
+  final String username;
+  final String userId;
+  final int profileReload;
+  final String? initialForEdit;
+  final VoidCallback onSaved;
+
+  Future<void> _copy(BuildContext context, String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Скопировано в буфер')),
+      );
+    }
+  }
+
+  Future<void> _share(String text) async {
+    await Share.share(
+      'Мой ник в чате: $text',
+      subject: 'Ник',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String at = username.isEmpty ? '—' : '@$username';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text(
+                    'Ник в чате',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6C6C70),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  Flexible(
+                    child: SelectableText(
+                      at,
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Скопировать',
+                    onPressed: username.isEmpty
+                        ? null
+                        : () => _copy(context, '@$username'),
+                    icon: const Icon(Icons.copy_outlined, size: 22, color: kPrimaryBlue),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: 'Поделиться',
+                    onPressed: username.isEmpty
+                        ? null
+                        : () => _share('@$username'),
+                    icon: const Icon(Icons.share_outlined, size: 22, color: kPrimaryBlue),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Изменить ник',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[600],
+          ),
+        ),
+        const SizedBox(height: 6),
+        _ProfileUsername(
+          key: ValueKey<String>(
+            '${initialForEdit ?? ''}_${userId}_$profileReload',
+          ),
+          initial: initialForEdit,
+          onSaved: onSaved,
+        ),
+      ],
+    );
+  }
+}
+
+class _PhoneBlock extends StatelessWidget {
+  const _PhoneBlock({
+    required this.phoneDisplay,
+    required this.userId,
+    required this.profileReload,
+    required this.initialForEdit,
+    required this.onSaved,
+  });
+
+  final String phoneDisplay;
+  final String userId;
+  final int profileReload;
+  final String? initialForEdit;
+  final VoidCallback onSaved;
+
+  Future<void> _copy(BuildContext context, String text) async {
+    if (text.isEmpty) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Номер скопирован')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text(
+                    'Телефон',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6C6C70),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Виден только вам. В списке чатов и у других не показывается.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  Flexible(
+                    child: SelectableText(
+                      phoneDisplay.isEmpty ? 'не указан' : phoneDisplay,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: phoneDisplay.isEmpty ? const Color(0xFF8E8E93) : const Color(0xFF1A1A1A),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Скопировать',
+                    onPressed: phoneDisplay.isEmpty ? null : () => _copy(context, phoneDisplay),
+                    icon: const Icon(Icons.copy_outlined, size: 22, color: kPrimaryBlue),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Изменить номер',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[600],
+          ),
+        ),
+        const SizedBox(height: 6),
+        _ProfilePhoneE164(
+          key: ValueKey<String>(
+            'ph_${initialForEdit ?? ''}_$userId$profileReload',
+          ),
+          initial: initialForEdit,
+          onSaved: onSaved,
+        ),
+      ],
+    );
+  }
+}
+
 class _LabeledField extends StatelessWidget {
   const _LabeledField({
     required this.label,
-    this.hint,
     required this.child,
   });
 
   final String label;
-  final String? hint;
   final Widget child;
 
   @override
@@ -311,17 +541,6 @@ class _LabeledField extends StatelessWidget {
             letterSpacing: 0.2,
           ),
         ),
-        if (hint != null) ...<Widget>[
-          const SizedBox(height: 2),
-          Text(
-            hint!,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              height: 1.2,
-            ),
-          ),
-        ],
         const SizedBox(height: 8),
         child,
       ],

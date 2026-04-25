@@ -126,9 +126,10 @@ class ChatService {
     if (uids.isEmpty) {
       return <ConversationListItem>[];
     }
+    // Без phone_e164: номер не подтягивать в списке чатов (только владелец в своём профиле).
     final List<dynamic> profRows = await c
         .from('profiles')
-        .select('id, first_name, last_name, phone_e164, username')
+        .select('id, first_name, last_name, username')
         .or(_orEqIn('id', uids.toList()));
     final Map<String, Map<String, dynamic>> profById = <String, Map<String, dynamic>>{
       for (final Map<String, dynamic> p in profRows.cast<Map<String, dynamic>>())
