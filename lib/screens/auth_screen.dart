@@ -3,8 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_ready.dart';
 
-/// Фон, заголовок города, карточка: вход [signInWithPassword] / регистрация [signUp] с [first_name].
-/// Администратор: sranometrr@gmail.com (права в приложении по email в сессии).
+const Color kAuthScaffoldFill = Color(0xFF74B9FF);
+
+/// Картинка [fitWidth] + подложка [kAuthScaffoldFill]; карточка внизу.
+/// Вход: [signInWithPassword] / регистрация: [signUp] с [first_name].
 const Color kAuthGreen = Color(0xFF0B723E);
 const Color kAuthVkBlue = Color(0xFF2787F5);
 
@@ -219,137 +221,134 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final double bottomPad = MediaQuery.viewInsetsOf(context).bottom;
     return Scaffold(
+      backgroundColor: kAuthScaffoldFill,
       resizeToAvoidBottomInset: true,
-      body: Stack(
-        fit: StackFit.expand,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/auth_bg.jpg',
-              fit: BoxFit.cover,
-              errorBuilder: (BuildContext c, Object e, StackTrace? st) {
-                return Container(
-                  color: const Color(0xFF0B5C36),
-                );
-              },
+          Expanded(
+            child: ColoredBox(
+              color: kAuthScaffoldFill,
+              child: Stack(
+                clipBehavior: Clip.hardEdge,
+                fit: StackFit.expand,
+                children: <Widget>[
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: Image.asset(
+                      'assets/images/auth_bg.jpg',
+                      fit: BoxFit.fitWidth,
+                      width: double.infinity,
+                      alignment: Alignment.topCenter,
+                      errorBuilder:
+                          (BuildContext c, Object e, StackTrace? st) {
+                        return ColoredBox(
+                          color: kAuthScaffoldFill,
+                          child: const Center(
+                            child: Icon(
+                              Icons.landscape_outlined,
+                              size: 64,
+                              color: Color(0xFF5FA8E6),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                  child: Column(
-                    children: <Widget>[
-                      const Icon(
-                        Icons.location_city,
-                        size: 80,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Лесосибирск',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'город в котором хочется жить!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                          height: 1.25,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+          SafeArea(
+            top: false,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
               ),
-              const Spacer(),
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
-                child: Material(
-                  color: Colors.white,
+              child: Material(
+                color: Colors.white,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+                  ),
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(24, 20, 24, 20 + bottomPad),
+                    padding: EdgeInsets.fromLTRB(20, 16, 20, 12 + bottomPad),
                     child: Form(
                       key: _formKey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          Center(
-                            child: SegmentedButton<bool>(
-                              segments: const <ButtonSegment<bool>>[
-                                ButtonSegment<bool>(
-                                  value: false,
-                                  label: Text('Вход'),
-                                  icon: Icon(Icons.login, size: 18),
-                                ),
-                                ButtonSegment<bool>(
-                                  value: true,
-                                  label: Text('Регистрация'),
-                                  icon: Icon(Icons.person_add_outlined, size: 18),
-                                ),
-                              ],
-                              style: ButtonStyle(
-                                backgroundColor: WidgetStateProperty.resolveWith((
-                                  Set<WidgetState> states,
-                                ) {
-                                  if (states.contains(WidgetState.selected)) {
-                                    return kAuthGreen;
-                                  }
-                                  return const Color(0xFFF2F2F7);
-                                }),
-                                foregroundColor: WidgetStateProperty.resolveWith((
-                                  Set<WidgetState> states,
-                                ) {
-                                  if (states.contains(WidgetState.selected)) {
-                                    return Colors.white;
-                                  }
-                                  return kAuthGreen;
-                                }),
-                              ),
-                              selected: <bool>{_isRegister},
-                              onSelectionChanged: (Set<bool> s) {
-                                setState(() {
-                                  _isRegister = s.first;
-                                  _error = null;
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            _isRegister ? 'Новый аккаунт' : 'Вход в аккаунт',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1C1C1E),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          SingleChildScrollView(
-                            child: Column(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
+                                Center(
+                                  child: SegmentedButton<bool>(
+                                    showSelectedIcon: false,
+                                    segments: const <ButtonSegment<bool>>[
+                                      ButtonSegment<bool>(
+                                        value: false,
+                                        label: Text('Вход'),
+                                        icon: Icon(Icons.login, size: 18),
+                                      ),
+                                      ButtonSegment<bool>(
+                                        value: true,
+                                        label: Text('Регистрация'),
+                                        icon: Icon(
+                                          Icons.person_add_outlined,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ],
+                                    style: ButtonStyle(
+                                      backgroundColor:
+                                          WidgetStateProperty.resolveWith((
+                                        Set<WidgetState> states,
+                                      ) {
+                                        if (states
+                                            .contains(WidgetState.selected)) {
+                                          return kAuthGreen;
+                                        }
+                                        return const Color(0xFFF2F2F7);
+                                      }),
+                                      foregroundColor:
+                                          WidgetStateProperty.resolveWith((
+                                        Set<WidgetState> states,
+                                      ) {
+                                        if (states
+                                            .contains(WidgetState.selected)) {
+                                          return Colors.white;
+                                        }
+                                        return kAuthGreen;
+                                      }),
+                                    ),
+                                    selected: <bool>{_isRegister},
+                                    onSelectionChanged: (Set<bool> s) {
+                                      setState(() {
+                                        _isRegister = s.first;
+                                        _error = null;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _isRegister
+                                      ? 'Новый аккаунт'
+                                      : 'Вход в аккаунт',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1C1C1E),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
                                 if (_isRegister) ...<Widget>[
                                   TextFormField(
                                     controller: _nameController,
                                     textInputAction: TextInputAction.next,
-                                    textCapitalization: TextCapitalization.words,
+                                    textCapitalization:
+                                        TextCapitalization.words,
                                     decoration: _fieldDecoration(
                                       'Имя',
                                       Icons.badge_outlined,
@@ -364,7 +363,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                       return null;
                                     },
                                   ),
-                                  const SizedBox(height: 14),
+                                  const SizedBox(height: 10),
                                 ],
                                 TextFormField(
                                   controller: _loginController,
@@ -388,7 +387,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                     return null;
                                   },
                                 ),
-                                const SizedBox(height: 14),
+                                const SizedBox(height: 10),
                                 TextFormField(
                                   controller: _passwordController,
                                   obscureText: _obscurePassword,
@@ -423,20 +422,27 @@ class _AuthScreenState extends State<AuthScreen> {
                                   },
                                 ),
                                 if (_error != null) ...<Widget>[
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 8),
                                   Text(
                                     _error!,
                                     style: const TextStyle(
                                       color: Color(0xFFC62828),
-                                      fontSize: 14,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ],
                                 if (!_isRegister) ...<Widget>[
-                                  const SizedBox(height: 8),
                                   Align(
                                     alignment: Alignment.centerRight,
                                     child: TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
                                       onPressed: _forgotPassword,
                                       child: const Text(
                                         'Забыли пароль?',
@@ -448,7 +454,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                     ),
                                   ),
                                 ] else
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 4),
                                 const SizedBox(height: 4),
                                 SizedBox(
                                   width: double.infinity,
@@ -462,7 +468,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                       backgroundColor: kAuthGreen,
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(
-                                        vertical: 16,
+                                        vertical: 14,
                                       ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
@@ -490,7 +496,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   ),
                                 ),
                                 if (!_isRegister) ...<Widget>[
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 10),
                                   SizedBox(
                                     width: double.infinity,
                                     child: FilledButton.icon(
@@ -501,7 +507,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                         backgroundColor: kAuthVkBlue,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 14,
+                                          vertical: 12,
                                         ),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(12),
@@ -510,28 +516,27 @@ class _AuthScreenState extends State<AuthScreen> {
                                       ),
                                       icon: const Icon(
                                         Icons.messenger_outlined,
-                                        size: 22,
+                                        size: 20,
                                       ),
                                       label: const Text(
                                         'Вход по VK ID',
                                         style: TextStyle(
-                                          fontSize: 16,
+                                          fontSize: 15,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ),
                                   ),
                                 ],
+                                const SizedBox(height: 4),
                               ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),
