@@ -106,6 +106,9 @@ class _AuthScreenState extends State<AuthScreen> {
   final _lastNameController = TextEditingController();
   final _passwordRepeatController = TextEditingController();
 
+  /// Дата рождения (только при регистрации); уходит в user_metadata и затем в profiles.
+  DateTime? _birthDate;
+
   bool _isRegister = false;
   bool _obscurePassword = true;
   bool _obscurePasswordRepeat = true;
@@ -229,6 +232,14 @@ class _AuthScreenState extends State<AuthScreen> {
       }
       return;
     }
+    if (_birthDate == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Укажите дату рождения')),
+        );
+      }
+      return;
+    }
     if (!supabaseAppReady) {
       setState(() => _error = 'Supabase не инициализирован');
       return;
@@ -245,6 +256,9 @@ class _AuthScreenState extends State<AuthScreen> {
         data: <String, dynamic>{
           'first_name': _firstNameController.text.trim(),
           'last_name': _lastNameController.text.trim(),
+          'birth_date': '${_birthDate!.year.toString().padLeft(4, '0')}-'
+              '${_birthDate!.month.toString().padLeft(2, '0')}-'
+              '${_birthDate!.day.toString().padLeft(2, '0')}',
         },
       );
       if (mounted) {
@@ -270,7 +284,10 @@ class _AuthScreenState extends State<AuthScreen> {
         _passwordController.clear();
         _passwordRepeatController.clear();
         _emailController.clear();
-        setState(() => _isRegister = false);
+        setState(() {
+          _isRegister = false;
+          _birthDate = null;
+        });
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -498,6 +515,55 @@ class _AuthScreenState extends State<AuthScreen> {
                                         }
                                         return null;
                                       },
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Material(
+                                      color: const Color(0xFFF2F2F7),
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: InkWell(
+                                        onTap: () async {
+                                          final DateTime now = DateTime.now();
+                                          final DateTime? d = await showDatePicker(
+                                            context: context,
+                                            initialDate: _birthDate ?? DateTime(now.year - 20, 1, 1),
+                                            firstDate: DateTime(1920, 1, 1),
+                                            lastDate: now,
+                                          );
+                                          if (d != null) {
+                                            setState(() => _birthDate = d);
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                          child: Row(
+                                            children: <Widget>[
+                                              const Icon(
+                                                Icons.calendar_today_outlined,
+                                                size: 20,
+                                                color: Color(0xFF6C6C70),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Text(
+                                                  _birthDate == null
+                                                      ? 'Дата рождения (обязательно)'
+                                                      : '${_birthDate!.day.toString().padLeft(2, '0')}.'
+                                                          '${_birthDate!.month.toString().padLeft(2, '0')}.'
+                                                          '${_birthDate!.year}',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    color: _birthDate == null
+                                                        ? const Color(0xFF8E8E93)
+                                                        : kAuthTitle,
+                                                    fontWeight: _birthDate == null ? FontWeight.w400 : FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                     const SizedBox(height: 10),
                                   ],

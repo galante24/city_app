@@ -30,6 +30,70 @@ class CityDataService {
     }
   }
 
+  /// Копирует в `profiles` имя, фамилию и дату рождения из [User.userMetadata],
+  /// если в БД они ещё пустые (после регистрации Supabase пишет данные в metadata).
+  static Future<bool> syncProfileFromAuthMetadata(User user) async {
+    final c = client;
+    if (c == null) {
+      return false;
+    }
+    final Map<String, dynamic>? m = user.userMetadata;
+    if (m == null) {
+      return false;
+    }
+    final String? fn = (m['first_name'] as String?)?.trim();
+    final String? ln = (m['last_name'] as String?)?.trim();
+    String? bd;
+    final Object? bdo = m['birth_date'];
+    if (bdo != null) {
+      final String s = bdo.toString();
+      if (s.isNotEmpty) {
+        bd = s.length >= 10 ? s.substring(0, 10) : s;
+      }
+    }
+    final Map<String, dynamic>? row = await c
+        .from('profiles')
+        .select('first_name,last_name,birth_date')
+        .eq('id', user.id)
+        .maybeSingle();
+    final String curFn = (row?['first_name'] as String?)?.trim() ?? '';
+    final String curLn = (row?['last_name'] as String?)?.trim() ?? '';
+    final String curBd = row?['birth_date']?.toString() ?? '';
+    final Map<String, dynamic> patch = <String, dynamic>{};
+    if (curFn.isEmpty && fn != null && fn.isNotEmpty) {
+      patch['first_name'] = fn;
+    }
+    if (curLn.isEmpty && ln != null && ln.isNotEmpty) {
+      patch['last_name'] = ln;
+    }
+    if (curBd.isEmpty && bd != null && bd.isNotEmpty) {
+      patch['birth_date'] = bd;
+    }
+    if (patch.isEmpty) {
+      return false;
+    }
+    await c.from('profiles').update(patch).eq('id', user.id);
+    return true;
+  }
+
+  /// Сохранить дату рождения (столбец [birth_date] в [profiles]).
+  static Future<void> setMyBirthDate(DateTime? date) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final String? uid = c.auth.currentUser?.id;
+    if (uid == null) {
+      throw StateError('Нет сессии');
+    }
+    final String? iso = date == null
+        ? null
+        : '${date.year.toString().padLeft(4, '0')}-'
+            '${date.month.toString().padLeft(2, '0')}-'
+            '${date.day.toString().padLeft(2, '0')}';
+    await c.from('profiles').update(<String, dynamic>{'birth_date': iso}).eq('id', uid);
+  }
+
   /// Все публикации; на главной фильтр по [category] — см. `_categoryFromDb` / вкладки.
   static Future<List<Map<String, dynamic>>> fetchNews() async {
     final c = client;

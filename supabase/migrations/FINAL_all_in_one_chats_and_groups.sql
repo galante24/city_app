@@ -186,6 +186,8 @@ grant select on public.conversation_participants to authenticated;
 -- Группы, username, RPC (get_or_create_direct_conversation — одна «полная» версия)
 -- =============================================================================
 alter table public.profiles
+  add column if not exists first_name text;
+alter table public.profiles
   add column if not exists last_name text;
 alter table public.profiles
   add column if not exists username text;
@@ -643,5 +645,27 @@ begin
 end;
 $fill$;
 
--- Проверка: select to_regclass('public.conversations');  select id, username from public.profiles limit 5;
+-- =============================================================================
+-- Профиль: birth_date, RLS UPDATE с WITH CHECK (телефон, ник, ФИО; см. 009)
+-- first_name/last_name см. выше; last_name дублировать не нужно
+-- =============================================================================
+alter table public.profiles
+  add column if not exists birth_date date;
+
+drop policy if exists "profiles self update" on public.profiles;
+create policy "profiles self update" on public.profiles
+  for update
+  to authenticated
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
+drop policy if exists "profiles self read" on public.profiles;
+create policy "profiles self read" on public.profiles
+  for select
+  to authenticated
+  using (auth.uid() = id);
+
+-- Проверка:
+--   select to_regclass('public.conversations');
+--   select id, username, birth_date from public.profiles limit 5;
 -- Готово.
