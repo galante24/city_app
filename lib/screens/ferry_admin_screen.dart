@@ -11,6 +11,7 @@ class FerryAdminScreen extends StatefulWidget {
 
 class _FerryAdminScreenState extends State<FerryAdminScreen> {
   final _textController = TextEditingController();
+  final _timeController = TextEditingController();
   bool _running = true;
   bool _loading = true;
   bool _saving = false;
@@ -35,6 +36,7 @@ class _FerryAdminScreenState extends State<FerryAdminScreen> {
         _row = row;
         if (row != null) {
           _textController.text = row.statusText;
+          _timeController.text = row.timeText ?? '';
           _running = row.isRunning;
         }
       });
@@ -44,6 +46,7 @@ class _FerryAdminScreenState extends State<FerryAdminScreen> {
   @override
   void dispose() {
     _textController.dispose();
+    _timeController.dispose();
     super.dispose();
   }
 
@@ -59,7 +62,7 @@ class _FerryAdminScreenState extends State<FerryAdminScreen> {
       await CityDataService.updateFerryStatus(
         statusText: _textController.text.trim(),
         isRunning: _running,
-        rowId: _row!.id,
+        timeText: _timeController.text,
       );
       if (mounted) {
         Navigator.of(context).pop(true);
@@ -106,6 +109,15 @@ class _FerryAdminScreenState extends State<FerryAdminScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Статус (например, ходит по расписанию / задержка)',
                     border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _timeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Время (подпись, например ближайший рейс)',
+                    border: OutlineInputBorder(),
+                    hintText: '12:00 — 12:20',
                   ),
                 ),
                 const SizedBox(height: 20),

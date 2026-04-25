@@ -159,8 +159,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         padding: const EdgeInsets.all(20),
         children: <Widget>[
           const Text(
-            'Войдите по номеру телефона, чтобы публиковать новости и менять расписание парома. '
-            'В панели Supabase включите SMS-провайдера и RLS, как в supabase/001_init.sql',
+            'Публикация новостей и настройка парома в приложении доступны только с аккаунта '
+            'администратора по email (см. Профиль). Вход по телефону — для обычных пользователей. '
+            'В Supabase включите SMS и настройки RLS по вашему сценарию.',
             style: TextStyle(color: _kText, fontSize: 14, height: 1.4),
           ),
           const SizedBox(height: 20),

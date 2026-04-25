@@ -1,6 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/admin_config.dart';
 import '../config/supabase_ready.dart';
+
+/// Фиксированная строка расписания парома в `public.schedules`.
+const String kFerryScheduleRowId = '00000000-0000-0000-0000-000000000001';
 
 /// Loads news and ferry status; admin-only write operations.
 class CityDataService {
@@ -30,50 +34,70 @@ class CityDataService {
     }
   }
 
-  /// Статус парома: строка из [schedules] (по id=1, иначе первая запись).
+  /// Статус парома: одна запись [schedules] с `id` = [kFerryScheduleRowId].
   static Future<FerryStatusRow?> fetchFerryStatus() async {
     final c = client;
     if (c == null) {
       return null;
     }
     try {
-      Map<String, dynamic>? data = await c
+      final Map<String, dynamic>? data = await c
           .from('schedules')
           .select()
-          .eq('id', 1)
-          .maybeSingle();
-      data ??= await c
-          .from('schedules')
-          .select()
-          .order('id', ascending: true)
-          .limit(1)
+          .eq('id', kFerryScheduleRowId)
           .maybeSingle();
       if (data == null) {
         return null;
       }
-      return _ferryFromScheduleRow(data);
+      return ferryFromScheduleRow(data);
     } on Exception {
       return null;
     }
   }
 
+  /// Подписка на ленту новостей (Realtime + PostgREST).
+  static Stream<List<Map<String, dynamic>>>? watchNewsList() {
+    final c = client;
+    if (c == null) {
+      return null;
+    }
+    return c
+        .from('news')
+        .stream(primaryKey: const <String>['id'])
+        .order('created_at', ascending: false);
+  }
+
+  /// Подписка на строку парома в [schedules].
+  static Stream<List<Map<String, dynamic>>>? watchFerrySchedule() {
+    final c = client;
+    if (c == null) {
+      return null;
+    }
+    return c
+        .from('schedules')
+        .stream(primaryKey: const <String>['id'])
+        .eq('id', kFerryScheduleRowId);
+  }
+
   static Future<void> updateFerryStatus({
     required String statusText,
     required bool isRunning,
-    required Object rowId,
+    required String timeText,
   }) async {
     final c = client;
     if (c == null) {
       throw StateError('Supabase не готов');
     }
+    final String t = timeText.trim();
     await c.from('schedules').update(<String, dynamic>{
       'status_text': statusText,
       'is_running': isRunning,
+      'time_text': t.isEmpty ? null : t,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', rowId);
+    }).eq('id', kFerryScheduleRowId);
   }
 
-  static FerryStatusRow? _ferryFromScheduleRow(Map<String, dynamic> m) {
+  static FerryStatusRow? ferryFromScheduleRow(Map<String, dynamic> m) {
     final Object? id = m['id'];
     final String text = (m['status_text'] as String?) ??
         (m['title'] as String?) ??
@@ -86,6 +110,11 @@ class CityDataService {
         (m['is_active'] as bool?) ??
         (m['active'] as bool?) ??
         true;
+    String? timeStr;
+    final Object? t0 = m['time_text'];
+    if (t0 is String && t0.trim().isNotEmpty) {
+      timeStr = t0.trim();
+    }
     if (id == null) {
       return null;
     }
@@ -93,39 +122,108 @@ class CityDataService {
       id: id,
       statusText: text,
       isRunning: run,
+      timeText: timeStr,
     );
   }
 
+  /// Только [kAdministratorEmail] в `auth.users` / JWT.
+  static bool isCurrentUserAdminSync() {
+    return _isAdministratorEmail(client?.auth.currentUser?.email);
+  }
+
   static Future<bool> isCurrentUserAdmin() async {
-    final c = client;
-    if (c == null) {
+    return isCurrentUserAdminSync();
+  }
+
+  static bool _isAdministratorEmail(String? email) {
+    if (email == null) {
       return false;
     }
-    final user = c.auth.currentUser;
-    if (user == null) {
-      return false;
-    }
-    try {
-      final row = await c
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .maybeSingle();
-      if (row == null) {
-        return false;
-      }
-      return (row['is_admin'] as bool?) ?? false;
-    } on Exception {
-      return false;
-    }
+    return email.toLowerCase().trim() == kAdministratorEmail;
   }
 
   static const String newsImagesBucket = 'news-images';
 
+  /// Все маршруты автобусов, по номеру маршрута.
+  static Future<List<BusScheduleRow>> fetchBusSchedules() async {
+    final c = client;
+    if (c == null) {
+      return <BusScheduleRow>[];
+    }
+    try {
+      final List<dynamic> res = await c
+          .from('bus_schedules')
+          .select()
+          .order('route_number', ascending: true);
+      return res
+          .cast<Map<String, dynamic>>()
+          .map(BusScheduleRow.fromMap)
+          .whereType<BusScheduleRow>()
+          .toList();
+    } on Exception {
+      return <BusScheduleRow>[];
+    }
+  }
+
+  static Stream<List<Map<String, dynamic>>>? watchBusSchedules() {
+    final c = client;
+    if (c == null) {
+      return null;
+    }
+    return c
+        .from('bus_schedules')
+        .stream(primaryKey: const <String>['id'])
+        .order('route_number', ascending: true);
+  }
+
+  static Future<void> insertBusSchedule({
+    required String routeNumber,
+    required String destination,
+    required List<String> departureTimes,
+  }) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не инициализирован');
+    }
+    await c.from('bus_schedules').insert(<String, dynamic>{
+      'route_number': routeNumber,
+      'destination': destination,
+      'departure_times': departureTimes,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  static Future<void> updateBusSchedule({
+    required Object id,
+    required String routeNumber,
+    required String destination,
+    required List<String> departureTimes,
+  }) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не инициализирован');
+    }
+    await c.from('bus_schedules').update(<String, dynamic>{
+      'route_number': routeNumber,
+      'destination': destination,
+      'departure_times': departureTimes,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', id);
+  }
+
+  static Future<void> deleteBusSchedule(Object id) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не инициализирован');
+    }
+    await c.from('bus_schedules').delete().eq('id', id);
+  }
+
   static Future<void> insertNewsRow({
     required String category,
-    required String author,
     required String title,
+    required String body,
+    String? author,
     String? imageUrl,
     String? videoUrl,
     int likes = 0,
@@ -137,8 +235,9 @@ class CityDataService {
     }
     await c.from('news').insert(<String, dynamic>{
       'category': category,
-      'author': author,
+      'author': author ?? kAdministratorEmail,
       'title': title,
+      'body': body,
       'image_url': imageUrl,
       'video_url': videoUrl,
       'likes': likes,
@@ -152,9 +251,56 @@ class FerryStatusRow {
     required this.id,
     required this.statusText,
     required this.isRunning,
+    this.timeText,
   });
   /// id строки в [schedules] (int или uuid) — для .update
   final Object id;
   final String statusText;
   final bool isRunning;
+  /// Подпись времени (колонка `time_text` в `schedules`), например ближайший рейс.
+  final String? timeText;
+}
+
+class BusScheduleRow {
+  const BusScheduleRow({
+    required this.id,
+    required this.routeNumber,
+    required this.destination,
+    required this.departureTimes,
+  });
+
+  final Object id;
+  final String routeNumber;
+  final String destination;
+  final List<String> departureTimes;
+
+  static BusScheduleRow? fromMap(Map<String, dynamic> m) {
+    final Object? id = m['id'];
+    if (id == null) {
+      return null;
+    }
+    return BusScheduleRow(
+      id: id,
+      routeNumber: (m['route_number'] as String?)?.trim() ?? '',
+      destination: (m['destination'] as String?)?.trim() ?? '',
+      departureTimes: _parseStringList(m['departure_times']),
+    );
+  }
+}
+
+List<String> _parseStringList(Object? v) {
+  if (v == null) {
+    return <String>[];
+  }
+  if (v is List) {
+    return v.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+  }
+  if (v is String && v.isNotEmpty) {
+    return v
+        .split(RegExp(r'[\n,;]+'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+  return <String>[];
 }

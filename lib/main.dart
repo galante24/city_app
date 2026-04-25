@@ -1,17 +1,18 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:video_player/video_player.dart';
 
+import 'app_constants.dart';
+import 'config/admin_config.dart';
 import 'config/supabase_config.dart';
 import 'config/supabase_ready.dart';
 import 'data/city_data_service.dart';
+import 'screens/admin_email_auth_screen.dart';
 import 'screens/ferry_admin_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/phone_auth_screen.dart';
+import 'screens/schedule_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,9 +23,6 @@ Future<void> main() async {
   supabaseAppReady = true;
   runApp(const CityApp());
 }
-
-/// Основной цвет интерфейса
-const Color kPrimaryBlue = Color(0xFF1976D2);
 
 class CityApp extends StatelessWidget {
   const CityApp({super.key});
@@ -68,6 +66,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   static const List<Widget> _pages = <Widget>[
     HomeScreen(),
+    ScheduleScreen(),
     ServicesGridScreen(),
     ChatsScreen(),
     ProfileScreen(),
@@ -92,6 +91,11 @@ class _MainScaffoldState extends State<MainScaffold> {
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home, color: kPrimaryBlue),
             label: 'Главная',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.schedule_outlined),
+            selectedIcon: Icon(Icons.schedule, color: kPrimaryBlue),
+            label: 'Расписание',
           ),
           NavigationDestination(
             icon: Icon(Icons.grid_view_outlined),
@@ -119,6 +123,9 @@ class _MainScaffoldState extends State<MainScaffold> {
 // ---------------------------------------------------------------------------
 
 const Color _kBentoScaffoldBg = Color(0xFFF5F5F7);
+const Color _kServiceFerryCardBg = Color(0xFFFFFFFF);
+const Color _kServiceFerryTextSecondary = Color(0xFF6C6C70);
+const Color _kServiceFerryTextPrimary = Color(0xFF1C1C1E);
 
 class _ServiceCategory {
   const _ServiceCategory({
@@ -229,6 +236,7 @@ class _ServicesGridScreenState extends State<ServicesGridScreen> {
             ? 'Загрузка расписания...'
             : 'Нет данных в таблице schedules')
         : _ferry!.statusText;
+    final String? ferryTime = _ferry?.timeText;
     final bool ferryRun = _ferry == null || _ferry!.isRunning;
 
     return Scaffold(
@@ -240,7 +248,7 @@ class _ServicesGridScreenState extends State<ServicesGridScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Material(
-            color: _kNewsCardBg,
+            color: _kServiceFerryCardBg,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               child: Row(
@@ -249,7 +257,7 @@ class _ServicesGridScreenState extends State<ServicesGridScreen> {
                     ferryRun
                         ? Icons.directions_boat_filled
                         : Icons.portable_wifi_off,
-                    color: ferryRun ? const Color(0xFF2ECC71) : Colors.orange[800],
+                    color: ferryRun ? const Color(0xFF2ECC71) : Colors.orange[800]!,
                     size: 28,
                   ),
                   const SizedBox(width: 12),
@@ -261,7 +269,7 @@ class _ServicesGridScreenState extends State<ServicesGridScreen> {
                           'Паром (из schedules)',
                           style: TextStyle(
                             fontSize: 12,
-                            color: _kNewsTextSecondary,
+                            color: _kServiceFerryTextSecondary,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -271,9 +279,21 @@ class _ServicesGridScreenState extends State<ServicesGridScreen> {
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: _kNewsTextPrimary,
+                            color: _kServiceFerryTextPrimary,
                           ),
                         ),
+                        if (ferryTime != null && ferryTime.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 2),
+                          Text(
+                            ferryTime,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -401,945 +421,6 @@ class FoodPlacesScreen extends StatelessWidget {
             color: Color(0xFF6C6C70),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Главная — лента новостей (СМИ / Администрация / Обсуждение)
-// ---------------------------------------------------------------------------
-
-/// Если `true` — публикация с главной без входа (только отладка). В проде оставьте `false`.
-const bool kUserIsNewsAdmin = false;
-
-/// Мягкие нейтральные тона ленты (без «синей полосы» у карточек)
-const Color _kNewsScaffoldBg = Color(0xFFF2F2F7);
-const Color _kNewsCardBg = Color(0xFFFFFFFF);
-const Color _kNewsTextPrimary = Color(0xFF1C1C1E);
-const Color _kNewsTextSecondary = Color(0xFF6C6C70);
-
-List<BoxShadow> _cardFloatingShadows() {
-  return [
-    BoxShadow(
-      color: const Color(0xFF0A0A0A).withValues(alpha: 0.06),
-      blurRadius: 20,
-      offset: const Offset(0, 6),
-    ),
-    BoxShadow(
-      color: const Color(0xFF0A0A0A).withValues(alpha: 0.04),
-      blurRadius: 4,
-      offset: const Offset(0, 1),
-    ),
-  ];
-}
-
-/// Категория ленты: СМИ / власти / жители
-enum _NewsCategory {
-  smi,
-  administration,
-  discussion,
-}
-
-String _defaultAuthorForTabIndex(int i) {
-  return switch (i) {
-    0 => 'СМИ «Город»',
-    1 => 'Администрация города',
-    _ => 'Житель города',
-  };
-}
-
-String _categoryToDb(_NewsCategory c) {
-  return switch (c) {
-    _NewsCategory.smi => 'smi',
-    _NewsCategory.administration => 'administration',
-    _NewsCategory.discussion => 'discussion',
-  };
-}
-
-_NewsCategory _categoryFromDb(String? s) {
-  switch (s) {
-    case 'administration':
-      return _NewsCategory.administration;
-    case 'discussion':
-      return _NewsCategory.discussion;
-    case 'smi':
-    default:
-      return _NewsCategory.smi;
-  }
-}
-
-String _formatPostTime(String? iso) {
-  if (iso == null) {
-    return '';
-  }
-  final d = DateTime.tryParse(iso);
-  if (d == null) {
-    return '';
-  }
-  final now = DateTime.now();
-  final local = d.toLocal();
-  final diff = now.difference(d);
-  if (diff.inMinutes < 1) {
-    return 'только что';
-  }
-  if (diff.inMinutes < 60) {
-    return '${diff.inMinutes} мин. назад';
-  }
-  if (diff.inHours < 24) {
-    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-  }
-  if (diff.inDays < 7) {
-    return '${diff.inDays} дн. назад';
-  }
-  return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}.${local.year}';
-}
-
-_SocialPost _socialPostFromMap(Map<String, dynamic> m) {
-  return _SocialPost(
-    id: m['id']?.toString() ?? '',
-    author: m['author'] as String? ?? '',
-    time: _formatPostTime(
-      m['created_at'] as String? ??
-          m['published_at'] as String? ??
-          m['inserted_at'] as String?,
-    ),
-    title: m['title'] as String? ?? '',
-    category: _categoryFromDb(m['category'] as String?),
-    imageUrl: m['image_url'] as String?,
-    videoUrl: m['video_url'] as String?,
-    likes: (m['likes'] as num?)?.toInt() ?? 0,
-    comments: (m['comments'] as num?)?.toInt() ?? 0,
-  );
-}
-
-class _SocialPost {
-  _SocialPost({
-    required this.id,
-    required this.author,
-    required this.time,
-    required this.title,
-    required this.category,
-    this.imageUrl,
-    this.videoUrl,
-    this.likes = 0,
-    this.comments = 0,
-  });
-
-  final String id;
-  String author;
-  String time;
-  String title;
-  final _NewsCategory category;
-  final String? imageUrl;
-  final String? videoUrl;
-  String? localImagePath;
-  int likes;
-  int comments;
-  bool isLiked = false;
-}
-
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-  List<_SocialPost> _posts = <_SocialPost>[];
-  final ImagePicker _picker = ImagePicker();
-  StreamSubscription<AuthState>? _authSub;
-  FerryStatusRow? _ferry;
-  bool _loading = true;
-  bool _isAdmin = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    if (supabaseAppReady) {
-      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
-        (AuthState data) {
-          if (data.event == AuthChangeEvent.signedIn ||
-              data.event == AuthChangeEvent.signedOut) {
-            unawaited(_refreshFromServer());
-          }
-        },
-      );
-    }
-    unawaited(_refreshFromServer());
-  }
-
-  Future<void> _refreshFromServer() async {
-    final bool admin = await CityDataService.isCurrentUserAdmin();
-    final List<Map<String, dynamic>> rows = await CityDataService.fetchNews();
-    final FerryStatusRow? ferry = await CityDataService.fetchFerryStatus();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _isAdmin = admin;
-      _ferry = ferry;
-      _posts = rows.map(_socialPostFromMap).toList();
-      _loading = false;
-    });
-  }
-
-  @override
-  void dispose() {
-    _authSub?.cancel();
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  List<_SocialPost> _postsInCategory(_NewsCategory c) {
-    return _posts.where((p) => p.category == c).toList();
-  }
-
-  Widget _buildCategoryFeed(List<_SocialPost> items) {
-    if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            'Пока нет публикаций',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
-          ),
-        ),
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-      itemCount: items.length,
-      separatorBuilder: (BuildContext context, int index) =>
-          const SizedBox(height: 20),
-      itemBuilder: (BuildContext context, int index) {
-        final p = items[index];
-        return _SocialNewsCard(
-          post: p,
-          onLike: () {
-            setState(() {
-              if (p.isLiked) {
-                p.likes = (p.likes - 1).clamp(0, 1 << 30);
-              } else {
-                p.likes += 1;
-              }
-              p.isLiked = !p.isLiked;
-            });
-          },
-          onComment: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Комментарии — в разработке')),
-            );
-          },
-          onShare: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Поделиться в чате — в разработке'),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _openCreateSheet() async {
-    final formKey = GlobalKey<FormState>();
-    String title = '';
-    final int tabIndex = _tabController.index;
-    String author = _defaultAuthorForTabIndex(tabIndex);
-    final _NewsCategory targetCategory = _NewsCategory.values[tabIndex];
-    XFile? picked;
-
-    if (!context.mounted) {
-      return;
-    }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: _kNewsCardBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 16,
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
-          ),
-          child: StatefulBuilder(
-            builder: (BuildContext context, void Function(void Function()) setModal) {
-              return Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Новая публикация',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: _kNewsTextPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      key: ValueKey<String>('author-$tabIndex'),
-                      initialValue: author,
-                      decoration: const InputDecoration(
-                        labelText: 'Автор / подпись',
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: _kNewsScaffoldBg,
-                      ),
-                      onChanged: (v) => author = v,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      decoration: const InputDecoration(
-                        labelText: 'Заголовок',
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: _kNewsScaffoldBg,
-                      ),
-                      maxLines: 2,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Введите заголовок';
-                        }
-                        return null;
-                      },
-                      onSaved: (v) => title = v?.trim() ?? '',
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final img = await _picker.pickImage(
-                          source: ImageSource.gallery,
-                          maxWidth: 2000,
-                          imageQuality: 88,
-                        );
-                        setModal(() {
-                          picked = img;
-                        });
-                      },
-                      icon: const Icon(Icons.add_photo_alternate_outlined),
-                      label: Text(
-                        picked == null
-                            ? 'Выбрать фото'
-                            : 'Другое фото: ${picked!.name}',
-                      ),
-                    ),
-                    if (picked != null) ...[
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: kIsWeb
-                            ? const SizedBox(
-                                height: 120,
-                                child: Center(
-                                  child: Text('Предпросмотр в web отдельно'),
-                                ),
-                              )
-                            : Image.file(
-                                File(picked!.path),
-                                height: 180,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: () async {
-                        if (!formKey.currentState!.validate()) {
-                          return;
-                        }
-                        if (picked == null) {
-                          ScaffoldMessenger.of(sheetContext).showSnackBar(
-                            const SnackBar(
-                              content: Text('Выберите фото'),
-                            ),
-                          );
-                          return;
-                        }
-                        if (!kUserIsNewsAdmin) {
-                          final bool ok = await CityDataService.isCurrentUserAdmin();
-                          if (!ok) {
-                            if (sheetContext.mounted) {
-                              ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Войдите как админ (Профиль)'),
-                                ),
-                              );
-                            }
-                            return;
-                          }
-                        }
-                        formKey.currentState!.save();
-                        String? publicUrl;
-                        if (!kIsWeb && CityDataService.client != null) {
-                          try {
-                            final SupabaseClient c = CityDataService.client!;
-                            final String path =
-                                'n/${c.auth.currentUser?.id ?? "u"}/p_${DateTime.now().millisecondsSinceEpoch}.jpg';
-                            await c.storage
-                                .from(CityDataService.newsImagesBucket)
-                                .upload(
-                                  path,
-                                  File(picked!.path),
-                                  fileOptions: const FileOptions(upsert: true),
-                                );
-                            publicUrl = c.storage
-                                .from(CityDataService.newsImagesBucket)
-                                .getPublicUrl(path);
-                          } on Object catch (e) {
-                            if (sheetContext.mounted) {
-                              ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                SnackBar(
-                                  content: Text('Ошибка загрузки фото: $e'),
-                                ),
-                              );
-                            }
-                            return;
-                          }
-                        }
-                        try {
-                          await CityDataService.insertNewsRow(
-                            category: _categoryToDb(targetCategory),
-                            author: author.trim().isEmpty
-                                ? _defaultAuthorForTabIndex(tabIndex)
-                                : author.trim(),
-                            title: title,
-                            imageUrl: publicUrl,
-                          );
-                        } on Object catch (e) {
-                          if (sheetContext.mounted) {
-                            ScaffoldMessenger.of(sheetContext).showSnackBar(
-                              SnackBar(
-                                content: Text('Сохранение: $e'),
-                              ),
-                            );
-                          }
-                          return;
-                        }
-                        if (sheetContext.mounted) {
-                          Navigator.pop(sheetContext);
-                        }
-                        await _refreshFromServer();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Публикация в базе'),
-                            ),
-                          );
-                        }
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: kPrimaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text('Опубликовать'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _kNewsScaffoldBg,
-      appBar: AppBar(
-        backgroundColor: kPrimaryBlue,
-        foregroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        title: const Text(
-          'Главная',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(130),
-          child: Material(
-            color: _kNewsCardBg,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                _ferryStatusStrip(),
-                TabBar(
-                  controller: _tabController,
-                  labelColor: kPrimaryBlue,
-                  unselectedLabelColor: _kNewsTextSecondary,
-                  indicatorColor: kPrimaryBlue,
-                  indicatorWeight: 3,
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    height: 1.2,
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12,
-                    height: 1.2,
-                  ),
-                  indicatorSize: TabBarIndicatorSize.label,
-                  tabs: const <Widget>[
-                    Tab(
-                      height: 58,
-                      icon: Icon(Icons.newspaper, size: 22),
-                      text: 'СМИ',
-                    ),
-                    Tab(
-                      height: 58,
-                      icon: Icon(Icons.account_balance, size: 22),
-                      text: 'Администрация',
-                    ),
-                    Tab(
-                      height: 58,
-                      icon: Icon(Icons.forum, size: 22),
-                      text: 'Обсуждение',
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      floatingActionButton: (_isAdmin || kUserIsNewsAdmin)
-          ? FloatingActionButton(
-              onPressed: _openCreateSheet,
-              backgroundColor: kPrimaryBlue,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add, size: 30),
-            )
-          : null,
-      body: Column(
-        children: <Widget>[
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              physics: const BouncingScrollPhysics(),
-              children: <Widget>[
-                _buildCategoryFeed(_postsInCategory(_NewsCategory.smi)),
-                _buildCategoryFeed(
-                  _postsInCategory(_NewsCategory.administration),
-                ),
-                _buildCategoryFeed(
-                  _postsInCategory(_NewsCategory.discussion),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _ferryStatusStrip() {
-    final FerryStatusRow? f = _ferry;
-    final String text = f == null
-        ? (_loading
-            ? 'Загрузка статуса парома...'
-            : 'Нет данных: выполните SQL в Supabase (файл supabase/001_init.sql)')
-        : f.statusText;
-    final bool run = f == null || f.isRunning;
-    return Material(
-      color: _kNewsCardBg,
-      child: InkWell(
-        onTap: _isAdmin
-            ? () async {
-                final bool? ok = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute<bool>(
-                    builder: (BuildContext c) => const FerryAdminScreen(),
-                  ),
-                );
-                if (ok == true && mounted) {
-                  await _refreshFromServer();
-                }
-              }
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            children: <Widget>[
-              Icon(
-                run ? Icons.directions_boat_filled : Icons.portable_wifi_off,
-                color: run ? const Color(0xFF2ECC71) : Colors.orange[800],
-                size: 26,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Text(
-                      'Паром',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: _kNewsTextSecondary,
-                      ),
-                    ),
-                    Text(
-                      text,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: _kNewsTextPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_isAdmin)
-                const Text(
-                  'изм.',
-                  style: TextStyle(
-                    color: kPrimaryBlue,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SocialNewsCard extends StatelessWidget {
-  const _SocialNewsCard({
-    required this.post,
-    required this.onLike,
-    required this.onComment,
-    required this.onShare,
-  });
-
-  final _SocialPost post;
-  final VoidCallback onLike;
-  final VoidCallback onComment;
-  final VoidCallback onShare;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _kNewsCardBg,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: _cardFloatingShadows(),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: kPrimaryBlue.withValues(alpha: 0.12),
-                  child: const Icon(
-                    Icons.campaign_outlined,
-                    color: kPrimaryBlue,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        post.author,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: _kNewsTextPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        post.time,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: _kNewsTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              post.title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                height: 1.25,
-                color: _kNewsTextPrimary,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (post.videoUrl != null)
-            _InlineVideoBlock(url: post.videoUrl!)
-          else if (post.localImagePath != null)
-            kIsWeb
-                ? const SizedBox.shrink()
-                : Image.file(
-                    File(post.localImagePath!),
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  )
-          else if (post.imageUrl != null)
-            Image.network(
-              post.imageUrl!,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                  _mediaPlaceholder(Icons.broken_image_outlined),
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) {
-                  return child;
-                }
-                return SizedBox(
-                  height: 220,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      value: progress.expectedTotalBytes != null
-                          ? progress.cumulativeBytesLoaded /
-                              progress.expectedTotalBytes!
-                          : null,
-                      color: kPrimaryBlue,
-                    ),
-                  ),
-                );
-              },
-            ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Row(
-              children: [
-                _ActionChip(
-                  icon: post.isLiked
-                      ? Icons.favorite
-                      : Icons.favorite_border,
-                  label: post.likes.toString(),
-                  iconColor: post.isLiked
-                      ? const Color(0xFFE91E63)
-                      : _kNewsTextSecondary,
-                  onPressed: onLike,
-                ),
-                _ActionChip(
-                  icon: Icons.chat_bubble_outline,
-                  label: post.comments.toString(),
-                  onPressed: onComment,
-                ),
-                _ActionChip(
-                  icon: Icons.send_outlined,
-                  label: '',
-                  onPressed: onShare,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _mediaPlaceholder(IconData icon) {
-    return Container(
-      height: 200,
-      color: const Color(0xFFE5E5EA),
-      child: Center(
-        child: Icon(icon, size: 48, color: _kNewsTextSecondary),
-      ),
-    );
-  }
-}
-
-class _ActionChip extends StatelessWidget {
-  const _ActionChip({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.iconColor,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 24,
-                color: iconColor ?? _kNewsTextSecondary,
-              ),
-              if (label.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: _kNewsTextSecondary,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InlineVideoBlock extends StatefulWidget {
-  const _InlineVideoBlock({required this.url});
-
-  final String url;
-
-  @override
-  State<_InlineVideoBlock> createState() => _InlineVideoBlockState();
-}
-
-class _InlineVideoBlockState extends State<_InlineVideoBlock> {
-  late final VideoPlayerController _controller;
-  bool _inited = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
-      ..addListener(_tick)
-      ..initialize().then((_) {
-        if (mounted) {
-          setState(() {
-            _inited = true;
-            _error = null;
-          });
-        }
-      }).catchError((Object e) {
-        if (mounted) {
-          setState(() {
-            _error = 'Видео не загружено';
-            _inited = false;
-          });
-        }
-      });
-  }
-
-  void _tick() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.removeListener(_tick);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_error != null) {
-      return Container(
-        height: 200,
-        color: const Color(0xFFE5E5EA),
-        child: const Center(
-          child: Text(
-            'Видео недоступно',
-            style: TextStyle(color: _kNewsTextSecondary),
-          ),
-        ),
-      );
-    }
-    if (!_inited || !_controller.value.isInitialized) {
-      return const SizedBox(
-        height: 220,
-        child: Center(
-          child: CircularProgressIndicator(color: kPrimaryBlue),
-        ),
-      );
-    }
-    return AspectRatio(
-      aspectRatio: _controller.value.aspectRatio,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          VideoPlayer(_controller),
-          Material(
-            color: Colors.black26,
-            type: MaterialType.transparency,
-            child: IconButton(
-              onPressed: () {
-                if (_controller.value.isPlaying) {
-                  _controller.pause();
-                } else {
-                  _controller.play();
-                }
-                setState(() {});
-              },
-              icon: Icon(
-                _controller.value.isPlaying
-                    ? Icons.pause_circle_filled
-                    : Icons.play_circle_fill,
-                size: 64,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -2052,6 +1133,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final User? user =
         supabaseAppReady ? Supabase.instance.client.auth.currentUser : null;
     final String? phone = user?.phone;
+    final String? email = user?.email;
+    final bool isEmailAdmin = CityDataService.isCurrentUserAdminSync();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Профиль'),
@@ -2101,14 +1184,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Text(
                       'Телефон: $phone',
                       style: TextStyle(color: Colors.grey[700], fontSize: 14),
-                    )
-                  else
+                    ),
+                  if (email != null) ...<Widget>[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Email: $email',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                    ),
+                  ],
+                  if (phone == null && email == null)
                     const Text(
-                      'Войдите по SMS, чтобы публиковать новости и менять расписание парома.',
+                      'Войдите по SMS или email администратора, чтобы публиковать новости и менять расписание.',
                       style: TextStyle(fontSize: 14),
                     ),
+                  if (isEmailAdmin)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Роль администратора активна ($kAdministratorEmail).',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF2E7D32),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 10),
-                  if (user == null)
+                  if (user == null) ...<Widget>[
                     FilledButton(
                       onPressed: () async {
                         final bool? ok = await Navigator.of(context).push<bool>(
@@ -2121,28 +1223,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         }
                       },
                       child: const Text('Войти по номеру телефона'),
-                    )
-                  else ...<Widget>[
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () async {
+                        final bool? ok = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute<bool>(
+                            builder: (BuildContext c) =>
+                                const AdminEmailAuthScreen(),
+                          ),
+                        );
+                        if (ok == true && mounted) {
+                          setState(() {});
+                        }
+                      },
+                      child: const Text('Войти (email администратора)'),
+                    ),
+                  ] else ...<Widget>[
                     OutlinedButton(
                       onPressed: _signOut,
                       child: const Text('Выйти'),
                     ),
                     const SizedBox(height: 8),
+                    if (email == null)
+                      OutlinedButton(
+                        onPressed: () async {
+                          final bool? ok = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute<bool>(
+                              builder: (BuildContext c) =>
+                                  const AdminEmailAuthScreen(),
+                            ),
+                          );
+                          if (ok == true && mounted) {
+                            setState(() {});
+                          }
+                        },
+                        child: const Text('Сменить на вход по email (админ)'),
+                      ),
+                    if (email == null) const SizedBox(height: 8),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.directions_boat, color: kPrimaryBlue),
-                      title: const Text('Расписание парома'),
-                      subtitle: const Text('Доступно после is_admin в Supabase'),
+                      title: const Text('Расписание парома (полный экран)'),
+                      subtitle: const Text('То же, что и «карандаш» на главной'),
                       onTap: () async {
-                        final bool admin = await CityDataService.isCurrentUserAdmin();
-                        if (!context.mounted) {
-                          return;
-                        }
-                        if (!admin) {
+                        if (!CityDataService.isCurrentUserAdminSync()) {
+                          if (!context.mounted) {
+                            return;
+                          }
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
+                            SnackBar(
                               content: Text(
-                                'Нужен флаг is_admin в таблице profiles (см. supabase/001_init.sql)',
+                                'Нужен вход под $kAdministratorEmail (Профиль → email)',
                               ),
                             ),
                           );
