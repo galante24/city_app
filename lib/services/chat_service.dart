@@ -111,14 +111,37 @@ class ChatService {
     }
   }
 
+  /// PostgREST у RPC со скаляром (uuid) обычно отдаёт строку; в редких случаях — [uuid] или map.
   static String _uuidFromRpcData(Object? data) {
     if (data == null) {
       return '';
     }
     if (data is String) {
-      return data;
+      final String s = data.trim();
+      return (s == 'null' || s.isEmpty) ? '' : s;
     }
-    return data.toString();
+    if (data is List) {
+      if (data.isEmpty) {
+        return '';
+      }
+      return _uuidFromRpcData(data.first);
+    }
+    if (data is Map) {
+      for (final String k in <String>['id', 'create_group_conversation', 'get_or_create_direct_conversation']) {
+        final Object? v = data[k];
+        if (v != null) {
+          final String s = _uuidFromRpcData(v);
+          if (s.isNotEmpty) {
+            return s;
+          }
+        }
+      }
+    }
+    final String t = data.toString().trim();
+    if (t.isEmpty || t == 'null') {
+      return '';
+    }
+    return t;
   }
 
   /// PostgREST `.or('id.eq.uuid,...')` с UUID ломает разбор; используем [PostgrestFilterBuilder.inFilter].
@@ -348,7 +371,9 @@ class ChatService {
     );
     final String id = _uuidFromRpcData(r.data);
     if (id.isEmpty) {
-      throw StateError('Не удалось создать группу');
+      throw StateError(
+        'Пустой ответ create_group_conversation. Проверьте, что в Supabase выполнена миграция с функцией create_group_conversation (см. FINAL_all_in_one_chats_and_groups.sql), затем сделайте redeploy веб-версии.',
+      );
     }
     return id;
   }

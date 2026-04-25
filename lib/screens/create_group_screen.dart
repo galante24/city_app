@@ -26,6 +26,13 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     super.dispose();
   }
 
+  void _showErr(String text) {
+    final String t = text.length > 220 ? '${text.substring(0, 220)}…' : text;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(t)),
+    );
+  }
+
   Future<void> _create() async {
     if (!supabaseAppReady) {
       return;
@@ -70,19 +77,23 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       );
     } on PostgrestException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e.message.isNotEmpty ? e.message : 'Не удалось создать группу',
-            ),
-          ),
+        _showErr(
+          e.message.isNotEmpty
+              ? e.message
+              : (e.details != null && e.details.toString().trim().isNotEmpty
+                  ? e.details.toString()
+                  : (e.hint != null && e.hint!.trim().isNotEmpty
+                      ? e.hint!
+                      : 'Ошибка сервера при создании группы')),
         );
       }
-    } on Object {
+    } on StateError catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось создать группу')),
-        );
+        _showErr(e.message);
+      }
+    } on Object catch (e) {
+      if (mounted) {
+        _showErr('Не удалось создать: $e');
       }
     } finally {
       if (mounted) {
