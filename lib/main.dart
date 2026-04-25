@@ -4,14 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_constants.dart';
-import 'config/admin_config.dart';
 import 'config/supabase_config.dart';
 import 'config/supabase_ready.dart';
 import 'data/city_data_service.dart';
-import 'screens/admin_email_auth_screen.dart';
-import 'screens/ferry_admin_screen.dart';
+import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/phone_auth_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/schedule_screen.dart';
 
 Future<void> main() async {
@@ -49,10 +47,38 @@ class CityApp extends StatelessWidget {
           foregroundColor: Colors.white,
         ),
       ),
-      home: const MainScaffold(),
+      home: const _AuthStateGate(),
     );
   }
 }
+
+class _AuthStateGate extends StatelessWidget {
+  const _AuthStateGate();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!supabaseAppReady) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (BuildContext context, AsyncSnapshot<AuthState> snap) {
+        final Session? session = Supabase.instance.client.auth.currentSession;
+        if (session == null) {
+          return const AuthScreen();
+        }
+        return const MainNavigation();
+      },
+    );
+  }
+}
+
+/// Главный экран с нижними табами (после авторизации).
+typedef MainNavigation = MainScaffold;
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -1092,344 +1118,6 @@ class _MessageBubble extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Профиль
-// ---------------------------------------------------------------------------
-
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
-
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  String firstName = 'Иван';
-  String lastName = 'Иванов';
-  String birthDate = '15.05.1990';
-
-  Future<void> _signOut() async {
-    if (!supabaseAppReady) {
-      return;
-    }
-    await Supabase.instance.client.auth.signOut();
-    if (mounted) {
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Вы вышли из аккаунта')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final User? user =
-        supabaseAppReady ? Supabase.instance.client.auth.currentUser : null;
-    final String? phone = user?.phone;
-    final String? email = user?.email;
-    final bool isEmailAdmin = CityDataService.isCurrentUserAdminSync();
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Профиль'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Center(
-            child: CircleAvatar(
-              radius: 48,
-              backgroundColor: kPrimaryBlue,
-              child: Icon(Icons.person, size: 56, color: Colors.white),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              '$firstName $lastName',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Center(
-            child: Text(
-              birthDate,
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  const Text(
-                    'Аккаунт администратора',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (phone != null)
-                    Text(
-                      'Телефон: $phone',
-                      style: TextStyle(color: Colors.grey[700], fontSize: 14),
-                    ),
-                  if (email != null) ...<Widget>[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Email: $email',
-                      style: TextStyle(color: Colors.grey[700], fontSize: 14),
-                    ),
-                  ],
-                  if (phone == null && email == null)
-                    const Text(
-                      'Войдите по SMS или email администратора, чтобы публиковать новости и менять расписание.',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  if (isEmailAdmin)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        'Роль администратора активна ($kAdministratorEmail).',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF2E7D32),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 10),
-                  if (user == null) ...<Widget>[
-                    FilledButton(
-                      onPressed: () async {
-                        final bool? ok = await Navigator.of(context).push<bool>(
-                          MaterialPageRoute<bool>(
-                            builder: (BuildContext c) => const PhoneAuthScreen(),
-                          ),
-                        );
-                        if (ok == true && mounted) {
-                          setState(() {});
-                        }
-                      },
-                      child: const Text('Войти по номеру телефона'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: () async {
-                        final bool? ok = await Navigator.of(context).push<bool>(
-                          MaterialPageRoute<bool>(
-                            builder: (BuildContext c) =>
-                                const AdminEmailAuthScreen(),
-                          ),
-                        );
-                        if (ok == true && mounted) {
-                          setState(() {});
-                        }
-                      },
-                      child: const Text('Войти (email администратора)'),
-                    ),
-                  ] else ...<Widget>[
-                    OutlinedButton(
-                      onPressed: _signOut,
-                      child: const Text('Выйти'),
-                    ),
-                    const SizedBox(height: 8),
-                    if (email == null)
-                      OutlinedButton(
-                        onPressed: () async {
-                          final bool? ok = await Navigator.of(context).push<bool>(
-                            MaterialPageRoute<bool>(
-                              builder: (BuildContext c) =>
-                                  const AdminEmailAuthScreen(),
-                            ),
-                          );
-                          if (ok == true && mounted) {
-                            setState(() {});
-                          }
-                        },
-                        child: const Text('Сменить на вход по email (админ)'),
-                      ),
-                    if (email == null) const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.directions_boat, color: kPrimaryBlue),
-                      title: const Text('Расписание парома (полный экран)'),
-                      subtitle: const Text('То же, что и «карандаш» на главной'),
-                      onTap: () async {
-                        if (!CityDataService.isCurrentUserAdminSync()) {
-                          if (!context.mounted) {
-                            return;
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Нужен вход под $kAdministratorEmail (Профиль → email)',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        final bool? saved = await Navigator.of(context).push<bool>(
-                          MaterialPageRoute<bool>(
-                            builder: (BuildContext c) => const FerryAdminScreen(),
-                          ),
-                        );
-                        if (saved == true && mounted) {
-                          setState(() {});
-                        }
-                      },
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Данные',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: kPrimaryBlue,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _ProfileRow(label: 'Имя', value: firstName),
-          _ProfileRow(label: 'Фамилия', value: lastName),
-          _ProfileRow(label: 'Дата рождения', value: birthDate),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () {
-                showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  showDragHandle: true,
-                  builder: (ctx) {
-                    final fn = TextEditingController(text: firstName);
-                    final ln = TextEditingController(text: lastName);
-                    final bd = TextEditingController(text: birthDate);
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        left: 16,
-                        right: 16,
-                        top: 8,
-                        bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'Изменить данные',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: fn,
-                            decoration: const InputDecoration(
-                              labelText: 'Имя',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: ln,
-                            decoration: const InputDecoration(
-                              labelText: 'Фамилия',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: bd,
-                            decoration: const InputDecoration(
-                              labelText: 'Дата рождения',
-                              border: OutlineInputBorder(),
-                              hintText: 'ДД.ММ.ГГГГ',
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          FilledButton(
-                            onPressed: () {
-                              setState(() {
-                                firstName = fn.text.trim().isEmpty
-                                    ? firstName
-                                    : fn.text.trim();
-                                lastName = ln.text.trim().isEmpty
-                                    ? lastName
-                                    : ln.text.trim();
-                                birthDate = bd.text.trim().isEmpty
-                                    ? birthDate
-                                    : bd.text.trim();
-                              });
-                              Navigator.pop(ctx);
-                            },
-                            child: const Text('Сохранить'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: kPrimaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text('Изменить', style: TextStyle(fontSize: 16)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
-        subtitle: Text(
-          value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
           ),
         ),
       ),

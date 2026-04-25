@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
@@ -91,11 +92,86 @@ String formatPostTime(String? iso) {
   return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}.${local.year}';
 }
 
+String _fileExtFromName(String name) {
+  final int i = name.lastIndexOf('.');
+  if (i < 0 || i >= name.length - 1) {
+    return 'jpg';
+  }
+  return name.substring(i + 1).toLowerCase();
+}
+
+String _contentTypeForMedia(String kind, String ext) {
+  if (kind == 'video') {
+    return switch (ext) {
+      'webm' => 'video/webm',
+      'mov' => 'video/quicktime',
+      _ => 'video/mp4',
+    };
+  }
+  return switch (ext) {
+    'png' => 'image/png',
+    'gif' => 'image/gif',
+    'webp' => 'image/webp',
+    _ => 'image/jpeg',
+  };
+}
+
+/// Загрузка в бакет [CityDataService.cityMediaBucket], возвращает публичный URL.
+Future<String> _uploadCityMediaFile(
+  XFile file, {
+  required String mediaKind,
+}) async {
+  final c = CityDataService.client;
+  if (c == null) {
+    throw StateError('Supabase не инициализирован');
+  }
+  final String ext = _fileExtFromName(file.name);
+  final String uid = c.auth.currentUser?.id ?? 'anon';
+  final String path =
+      'news/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+  final String contentType = _contentTypeForMedia(mediaKind, ext);
+  final bucket = c.storage.from(CityDataService.cityMediaBucket);
+  if (kIsWeb) {
+    final bytes = await file.readAsBytes();
+    await bucket.uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(
+        upsert: true,
+        contentType: contentType,
+      ),
+    );
+  } else {
+    await bucket.upload(
+      path,
+      File(file.path),
+      fileOptions: FileOptions(
+        upsert: true,
+        contentType: contentType,
+      ),
+    );
+  }
+  return bucket.getPublicUrl(path);
+}
+
 SocialPost socialPostFromMap(Map<String, dynamic> m) {
   final String bodyRaw = (m['body'] as String?)?.trim() ??
       (m['content'] as String?)?.trim() ??
       (m['text'] as String?)?.trim() ??
       '';
+  String? mediaUrl = (m['media_url'] as String?)?.trim();
+  String? mediaType = (m['media_type'] as String?)?.trim();
+  if (mediaUrl == null || mediaUrl.isEmpty) {
+    final String? vu = m['video_url'] as String?;
+    final String? iu = m['image_url'] as String?;
+    if (vu != null && vu.isNotEmpty) {
+      mediaUrl = vu;
+      mediaType = 'video';
+    } else if (iu != null && iu.isNotEmpty) {
+      mediaUrl = iu;
+      mediaType = 'image';
+    }
+  }
   return SocialPost(
     id: m['id']?.toString() ?? '',
     author: m['author'] as String? ?? '',
@@ -107,8 +183,8 @@ SocialPost socialPostFromMap(Map<String, dynamic> m) {
     title: m['title'] as String? ?? '',
     body: bodyRaw,
     category: categoryFromDb(m['category'] as String?),
-    imageUrl: m['image_url'] as String?,
-    videoUrl: m['video_url'] as String?,
+    mediaUrl: mediaUrl,
+    mediaType: mediaType,
     likes: (m['likes'] as num?)?.toInt() ?? 0,
     comments: (m['comments'] as num?)?.toInt() ?? 0,
   );
@@ -122,8 +198,8 @@ class SocialPost {
     required this.title,
     this.body = '',
     required this.category,
-    this.imageUrl,
-    this.videoUrl,
+    this.mediaUrl,
+    this.mediaType,
     this.likes = 0,
     this.comments = 0,
   });
@@ -134,9 +210,10 @@ class SocialPost {
   String title;
   String body;
   final NewsCategory category;
-  final String? imageUrl;
-  final String? videoUrl;
-  String? localImagePath;
+  /// Публичный URL из [city_media] или старые поля.
+  final String? mediaUrl;
+  /// `image` или `video`.
+  final String? mediaType;
   int likes;
   int comments;
   bool isLiked = false;
@@ -152,6 +229,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final ImagePicker _mediaPicker = ImagePicker();
   StreamSubscription<AuthState>? _authSub;
   Stream<List<Map<String, dynamic>>>? _newsStream;
 
@@ -243,6 +321,8 @@ class _HomeScreenState extends State<HomeScreen>
     final formKey = GlobalKey<FormState>();
     String title = '';
     String body = '';
+    XFile? pickedFile;
+    String? pickedKind; // 'image' | 'video'
     var targetCategory = NewsCategory.values[_tabController.index];
 
     if (!context.mounted) {
@@ -345,6 +425,76 @@ class _HomeScreenState extends State<HomeScreen>
                       },
                       onSaved: (String? v) => body = v?.trim() ?? '',
                     ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        IconButton(
+                          icon: Icon(
+                            Icons.photo_camera_outlined,
+                            color: pickedFile != null && pickedKind == 'image'
+                                ? kPrimaryBlue
+                                : kNewsTextSecondary,
+                            size: 28,
+                          ),
+                          tooltip: 'Фото',
+                          onPressed: () async {
+                            final XFile? x = await _mediaPicker.pickImage(
+                              source: ImageSource.gallery,
+                              maxWidth: 1920,
+                              imageQuality: 85,
+                            );
+                            if (x == null) {
+                              return;
+                            }
+                            setModal(() {
+                              pickedFile = x;
+                              pickedKind = 'image';
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.videocam_outlined,
+                            color: pickedFile != null && pickedKind == 'video'
+                                ? kPrimaryBlue
+                                : kNewsTextSecondary,
+                            size: 28,
+                          ),
+                          tooltip: 'Видео',
+                          onPressed: () async {
+                            final XFile? x = await _mediaPicker.pickVideo(
+                              source: ImageSource.gallery,
+                            );
+                            if (x == null) {
+                              return;
+                            }
+                            setModal(() {
+                              pickedFile = x;
+                              pickedKind = 'video';
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    if (pickedFile != null) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          pickedKind == 'video'
+                              ? 'Видео: ${pickedFile!.name}'
+                              : 'Фото: ${pickedFile!.name}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: kNewsTextSecondary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     FilledButton(
                       onPressed: () async {
@@ -364,11 +514,33 @@ class _HomeScreenState extends State<HomeScreen>
                           return;
                         }
                         formKey.currentState!.save();
+                        String? mediaUrl;
+                        String? mediaType;
+                        if (pickedFile != null && pickedKind != null) {
+                          try {
+                            mediaUrl = await _uploadCityMediaFile(
+                              pickedFile!,
+                              mediaKind: pickedKind!,
+                            );
+                            mediaType = pickedKind;
+                          } on Object catch (e) {
+                            if (sheetContext.mounted) {
+                              ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                SnackBar(
+                                  content: Text('Загрузка файла: $e'),
+                                ),
+                              );
+                            }
+                            return;
+                          }
+                        }
                         try {
                           await CityDataService.insertNewsRow(
                             category: categoryToDb(targetCategory),
                             title: title,
                             body: body,
+                            mediaUrl: mediaUrl,
+                            mediaType: mediaType,
                           );
                         } on Object catch (e) {
                           if (sheetContext.mounted) {
@@ -648,41 +820,35 @@ class SocialNewsCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          if (post.videoUrl != null)
-            InlineVideoBlock(url: post.videoUrl!)
-          else if (post.localImagePath != null)
-            kIsWeb
-                ? const SizedBox.shrink()
-                : Image.file(
-                    File(post.localImagePath!),
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  )
-          else if (post.imageUrl != null)
-            Image.network(
-              post.imageUrl!,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                  _brokenImagePlaceholder(),
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) {
-                  return child;
-                }
-                return SizedBox(
-                  height: 220,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      value: progress.expectedTotalBytes != null
-                          ? progress.cumulativeBytesLoaded /
-                              progress.expectedTotalBytes!
-                          : null,
-                      color: kPrimaryBlue,
+          if (post.mediaUrl != null && post.mediaUrl!.isNotEmpty) ...<Widget>[
+            if (post.mediaType == 'video')
+              InlineVideoBlock(url: post.mediaUrl!)
+            else
+              Image.network(
+                post.mediaUrl!,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
+                    _brokenImagePlaceholder(),
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) {
+                    return child;
+                  }
+                  return SizedBox(
+                    height: 220,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: progress.expectedTotalBytes != null
+                            ? progress.cumulativeBytesLoaded /
+                                progress.expectedTotalBytes!
+                            : null,
+                        color: kPrimaryBlue,
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+          ],
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Row(

@@ -15,21 +15,21 @@ drop policy if exists "schedules admin update by email" on public.schedules;
 drop policy if exists "admin upload news images" on storage.objects;
 drop policy if exists "admin upload news images by email" on storage.objects;
 
--- Вставка новостей: только sranometr@gmail.com
+-- Вставка новостей: только sranometrr@gmail.com
 create policy "news admin insert by email" on public.news
   for insert to authenticated
   with check (
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometr@gmail.com'
+    lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometrr@gmail.com'
   );
 
 -- Обновление парома
 create policy "schedules admin update by email" on public.schedules
   for update to authenticated
   using (
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometr@gmail.com'
+    lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometrr@gmail.com'
   )
   with check (
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometr@gmail.com'
+    lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometrr@gmail.com'
   );
 
 -- Картинки к новостям
@@ -37,5 +37,5 @@ create policy "admin upload news images by email" on storage.objects
   for insert to authenticated
   with check (
     bucket_id = 'news-images' and
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometr@gmail.com'
+    lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometrr@gmail.com'
   );

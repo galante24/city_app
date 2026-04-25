@@ -16,7 +16,7 @@ create policy "bus schedules public read" on public.bus_schedules
 drop policy if exists "bus schedules admin all" on public.bus_schedules;
 create policy "bus schedules admin all" on public.bus_schedules
   for all to authenticated
-  using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometr@gmail.com')
-  with check (lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometr@gmail.com');
+  using (lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometrr@gmail.com')
+  with check (lower(coalesce(auth.jwt() ->> 'email', '')) = 'sranometrr@gmail.com');
 
 -- Realtime: включите public.bus_schedules в Database → Replication

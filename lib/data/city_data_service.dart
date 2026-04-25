@@ -17,6 +17,19 @@ class CityDataService {
     return Supabase.instance.client;
   }
 
+  /// Строка [profiles] по id пользователя (читать [first_name] и т.д.).
+  static Future<Map<String, dynamic>?> fetchProfileRow(String userId) async {
+    final c = client;
+    if (c == null) {
+      return null;
+    }
+    try {
+      return await c.from('profiles').select().eq('id', userId).maybeSingle();
+    } on Exception {
+      return null;
+    }
+  }
+
   /// Все публикации; на главной фильтр по [category] — см. `_categoryFromDb` / вкладки.
   static Future<List<Map<String, dynamic>>> fetchNews() async {
     final c = client;
@@ -144,6 +157,9 @@ class CityDataService {
 
   static const String newsImagesBucket = 'news-images';
 
+  /// Медиа для новостей (фото и видео).
+  static const String cityMediaBucket = 'city_media';
+
   /// Все маршруты автобусов, по номеру маршрута.
   static Future<List<BusScheduleRow>> fetchBusSchedules() async {
     final c = client;
@@ -224,8 +240,8 @@ class CityDataService {
     required String title,
     required String body,
     String? author,
-    String? imageUrl,
-    String? videoUrl,
+    String? mediaUrl,
+    String? mediaType,
     int likes = 0,
     int comments = 0,
   }) async {
@@ -238,8 +254,8 @@ class CityDataService {
       'author': author ?? kAdministratorEmail,
       'title': title,
       'body': body,
-      'image_url': imageUrl,
-      'video_url': videoUrl,
+      'media_url': mediaUrl,
+      'media_type': mediaType,
       'likes': likes,
       'comments': comments,
     });
