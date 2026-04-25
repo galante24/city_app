@@ -113,6 +113,14 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
+    if (_passwordController.text != _passwordRepeatController.text) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Пароли не совпадают')),
+        );
+      }
+      return;
+    }
     if (!supabaseAppReady) {
       setState(() => _error = 'Supabase не инициализирован');
       return;
@@ -248,12 +256,10 @@ class _AuthScreenState extends State<AuthScreen> {
     return null;
   }
 
+  /// Непустой пароль (допустима длина от 1 символа).
   String? _validatePassword(String? v) {
     if (v == null || v.isEmpty) {
       return 'Введите пароль';
-    }
-    if (v.length < 6) {
-      return 'Минимум 6 символов';
     }
     return null;
   }
@@ -431,9 +437,6 @@ class _AuthScreenState extends State<AuthScreen> {
                                       validator: (String? v) {
                                         if (v == null || v.isEmpty) {
                                           return 'Повторите пароль';
-                                        }
-                                        if (v != _passwordController.text) {
-                                          return 'Пароли не совпадают';
                                         }
                                         return null;
                                       },
