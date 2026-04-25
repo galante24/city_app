@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../data/city_data_service.dart';
+import '../services/city_data_service.dart';
 
 class FerryAdminScreen extends StatefulWidget {
   const FerryAdminScreen({super.key});

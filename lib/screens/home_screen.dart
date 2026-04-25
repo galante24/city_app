@@ -9,7 +9,7 @@ import 'package:video_player/video_player.dart';
 
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
-import '../data/city_data_service.dart';
+import '../services/city_data_service.dart';
 
 /// Мягкие нейтральные тона ленты
 const Color kNewsScaffoldBg = Color(0xFFF2F2F7);

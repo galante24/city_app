@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
-import '../data/city_data_service.dart';
+import '../services/city_data_service.dart';
 
 const Color _kPanelBg = Color(0xFFFFFFFF);
 const Color _kTextSecondary = Color(0xFF6C6C70);

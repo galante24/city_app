@@ -4,7 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../app_constants.dart';
 import '../config/admin_config.dart';
 import '../config/supabase_ready.dart';
-import '../data/city_data_service.dart';
+import '../services/chat_service.dart';
+import '../services/city_data_service.dart';
+import '../utils/phone_normalize.dart';
 import 'ferry_admin_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -149,6 +151,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Телефон в формате +7 (для чатов с контактов)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6C6C70),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _ProfilePhoneE164(
+                        key: ValueKey(
+                          (row?['phone_e164'] as String? ?? '_')
+                              + user.id,
+                        ),
+                        initial: (row?['phone_e164'] as String?),
+                        onSaved: () {
+                          setState(() {});
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -197,6 +218,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ProfilePhoneE164 extends StatefulWidget {
+  const _ProfilePhoneE164({super.key, this.initial, required this.onSaved});
+
+  final String? initial;
+  final VoidCallback onSaved;
+
+  @override
+  State<_ProfilePhoneE164> createState() => _ProfilePhoneE164State();
+}
+
+class _ProfilePhoneE164State extends State<_ProfilePhoneE164> {
+  late final TextEditingController _c = TextEditingController(text: widget.initial ?? '');
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final String? n = normalizePhoneToE164Ru(_c.text);
+    if (n == null && _c.text.trim().isNotEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Введите номер, например +79991234567'),
+          ),
+        );
+      }
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ChatService.setMyPhoneE164(n);
+      if (mounted) {
+        widget.onSaved();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Телефон сохранён')),
+        );
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось сохранить')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: <Widget>[
+        Expanded(
+          child: TextField(
+            controller: _c,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              hintText: '+79991234567',
+              isDense: true,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('OK'),
+        ),
+      ],
     );
   }
 }

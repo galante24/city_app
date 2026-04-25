@@ -24,6 +24,28 @@ const Color kAuthVkBlue = Color(0xFF2787F5);
 const Color kAuthFieldBorder = Color(0xFFD1D1D6);
 const Color kAuthTitle = Color(0xFF1C1C1E);
 
+/// Сообщения GoTrue/Supabase на английском — показ пользователю по-русски.
+String _ruAuthErrorMessage(String? message) {
+  if (message == null || message.trim().isEmpty) {
+    return 'Произошла ошибка. Повторите попытку.';
+  }
+  final String m = message.trim();
+  final String l = m.toLowerCase();
+  if (l.contains('invalid login credentials')) {
+    return 'Неверный email или пароль';
+  }
+  if (l.contains('email not confirmed') || l.contains('email not verified')) {
+    return 'Сначала подтвердите email по ссылке из письма';
+  }
+  if (l.contains('user already registered') || l.contains('already registered')) {
+    return 'Этот email уже зарегистрирован. Войдите или сбросьте пароль';
+  }
+  if (l.contains('email rate limit') || l.contains('rate limit')) {
+    return 'Слишком много писем или попыток. Подождите немного и повторите';
+  }
+  return m;
+}
+
 /// Первая буква слова (после пробела, дефиса, апострофа) — заглавная; остальные без насильного смена регистра.
 class _CapitalizeNameWordStartsFormatter extends TextInputFormatter {
   const _CapitalizeNameWordStartsFormatter();
@@ -154,7 +176,7 @@ class _AuthScreenState extends State<AuthScreen> {
       );
     } on AuthException catch (e) {
       if (mounted) {
-        setState(() => _error = e.message);
+        setState(() => _error = _ruAuthErrorMessage(e.message));
       }
     } on Object catch (e) {
       if (mounted) {
@@ -226,12 +248,20 @@ class _AuthScreenState extends State<AuthScreen> {
         },
       );
       if (mounted) {
+        // Если в Supabase выключено «Confirm email», с session не null — вход сразу.
         if (r.session == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Аккаунт создан. Подтвердите email, если требуется, затем войдите.',
+                'Аккаунт создан. Подтвердите email, если в проекте включено '
+                'подтверждение (Auth → Email), затем войдите.',
               ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Регистрация прошла успешно, вы вошли в аккаунт.'),
             ),
           );
         }
@@ -244,7 +274,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } on AuthException catch (e) {
       if (mounted) {
-        setState(() => _error = e.message);
+        setState(() => _error = _ruAuthErrorMessage(e.message));
       }
     } on Object catch (e) {
       if (mounted) {
@@ -292,7 +322,7 @@ class _AuthScreenState extends State<AuthScreen> {
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
+          SnackBar(content: Text(_ruAuthErrorMessage(e.message))),
         );
       }
     }
