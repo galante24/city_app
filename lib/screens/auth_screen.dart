@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_ready.dart';
@@ -22,6 +23,49 @@ const Color kAuthGreen = Color(0xFF0B723E);
 const Color kAuthVkBlue = Color(0xFF2787F5);
 const Color kAuthFieldBorder = Color(0xFFD1D1D6);
 const Color kAuthTitle = Color(0xFF1C1C1E);
+
+/// Первая буква слова (после пробела, дефиса, апострофа) — заглавная; остальные без насильного смена регистра.
+class _CapitalizeNameWordStartsFormatter extends TextInputFormatter {
+  const _CapitalizeNameWordStartsFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+    final String t = newValue.text;
+    final StringBuffer out = StringBuffer();
+    bool capNext = true;
+    for (int i = 0; i < t.length; i++) {
+      final String ch = t[i];
+      if (ch == ' ' || ch == '-' || ch == '\'') {
+        out.write(ch);
+        capNext = true;
+        continue;
+      }
+      if (capNext) {
+        out.write(ch.toUpperCase());
+        capNext = false;
+      } else {
+        out.write(ch);
+      }
+    }
+    final String result = out.toString();
+    int offset = newValue.selection.end;
+    if (offset < 0) {
+      offset = 0;
+    } else if (offset > result.length) {
+      offset = result.length;
+    }
+    return TextEditingValue(
+      text: result,
+      selection: TextSelection.collapsed(offset: offset),
+    );
+  }
+}
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -123,13 +167,18 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  /// Пароль при регистрации: [kRegisterPasswordMinLength] и RegExp-правила.
+  /// Пароль при регистрации: длина [kRegisterPasswordMinLength], ≥1 заглавная, ≥1 спецсимвол (безопасность).
   bool _isPasswordValidForRegistration(String password) {
     if (password.length < kRegisterPasswordMinLength) {
       return false;
     }
-    return kRegisterPasswordHasUpper.hasMatch(password) &&
-        kRegisterPasswordHasSpecial.hasMatch(password);
+    if (!kRegisterPasswordHasUpper.hasMatch(password)) {
+      return false;
+    }
+    if (!kRegisterPasswordHasSpecial.hasMatch(password)) {
+      return false;
+    }
+    return true;
   }
 
   Future<void> _signUp() async {
@@ -142,7 +191,8 @@ class _AuthScreenState extends State<AuthScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Пароль должен содержать хотя бы одну заглавную букву и один специальный символ',
+              'Пароль: минимум 6 символов, обязательно одна заглавная буква '
+              'и минимум один спецсимвол (! @ # % ^ & * и т. п.)',
             ),
           ),
         );
@@ -297,8 +347,16 @@ class _AuthScreenState extends State<AuthScreen> {
     if (v == null || v.isEmpty) {
       return 'Введите пароль';
     }
-    if (_isRegister && v.length < kRegisterPasswordMinLength) {
-      return 'Минимум $kRegisterPasswordMinLength символов';
+    if (_isRegister) {
+      if (v.length < kRegisterPasswordMinLength) {
+        return 'Минимум $kRegisterPasswordMinLength символов';
+      }
+      if (!kRegisterPasswordHasUpper.hasMatch(v)) {
+        return 'Нужна минимум одна заглавная буква';
+      }
+      if (!kRegisterPasswordHasSpecial.hasMatch(v)) {
+        return 'Нужен минимум один спецсимвол (! @ # % ^ & * и т. п.)';
+      }
     }
     return null;
   }
@@ -376,7 +434,10 @@ class _AuthScreenState extends State<AuthScreen> {
                                       controller: _firstNameController,
                                       textInputAction: TextInputAction.next,
                                       textCapitalization:
-                                          TextCapitalization.words,
+                                          TextCapitalization.none,
+                                      inputFormatters: const <TextInputFormatter>[
+                                        _CapitalizeNameWordStartsFormatter(),
+                                      ],
                                       decoration: _fieldDecoration(
                                         'Имя',
                                         icon: Icons.badge_outlined,
@@ -393,7 +454,10 @@ class _AuthScreenState extends State<AuthScreen> {
                                       controller: _lastNameController,
                                       textInputAction: TextInputAction.next,
                                       textCapitalization:
-                                          TextCapitalization.words,
+                                          TextCapitalization.none,
+                                      inputFormatters: const <TextInputFormatter>[
+                                        _CapitalizeNameWordStartsFormatter(),
+                                      ],
                                       decoration: _fieldDecoration(
                                         'Фамилия',
                                         icon: Icons.badge_outlined,
