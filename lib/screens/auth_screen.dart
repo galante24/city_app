@@ -6,7 +6,8 @@ import '../config/supabase_ready.dart';
 /// Админ: sranometrr@gmail.com (роли в JWT / RLS).
 ///
 /// Redirect из письма подтверждения (должен быть в Supabase Auth → URL Configuration).
-const String kAuthEmailRedirectTo = 'https://galante24.github.io/city_app/ ';
+/// Полный путь GitHub Pages, включая `/city_app/`, иначе возможен 404.
+const String kAuthEmailRedirectTo = 'https://galante24.github.io/city_app/';
 
 /// Минимальная длина пароля при регистрации (нужна для сочетания с правилами).
 const int kRegisterPasswordMinLength = 6;
