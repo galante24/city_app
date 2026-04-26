@@ -173,6 +173,17 @@ List<String> get route7NorthSport => parseTimesString(_r7NorthSportRaw);
 List<String> get route7SouthMkr => parseTimesString(_r7SouthMkrRaw);
 List<String> get route7SouthSport => parseTimesString(_r7SouthSportRaw);
 
+/// Диапазон часов работы по всем колонкам маршрута №7 (для строки в списке).
+String? get lesosibirskRoute7WorkHoursLabel => timeRangeLabel(<String>[
+      ...route7NorthVoen,
+      ...route7NorthSport,
+      ...route7SouthMkr,
+      ...route7SouthSport,
+    ]);
+
+/// Цвет значка маршрута №7 в списке (как у других линий).
+const Color kLesosibirskRoute7Color = Color(0xFF00897B);
+
 // --- остальные маршруты (два конца или две крупные остановки) ---
 
 const String _r1Voen =

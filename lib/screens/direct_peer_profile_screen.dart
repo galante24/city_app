@@ -9,6 +9,7 @@ import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../services/notification_prefs.dart';
 import '../utils/chat_links.dart';
+import '../utils/image_cache_extent.dart';
 import '../utils/phone_normalize.dart';
 /// Профиль собеседника в личном чате (шапка-галерея, действия, вкладки медиа/файлы/ссылки).
 class DirectPeerProfileScreen extends StatefulWidget {
@@ -171,11 +172,16 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
                                 setState(() => _photoIndex = i);
                               },
                               itemBuilder: (BuildContext ctx, int i) {
+                                final double bannerW =
+                                    MediaQuery.sizeOf(ctx).width;
+                                final double bannerH = bannerW * 0.55;
                                 return Image.network(
                                   photos[i],
                                   fit: BoxFit.cover,
+                                  cacheWidth: imageCacheExtentPx(ctx, bannerW),
+                                  cacheHeight: imageCacheExtentPx(ctx, bannerH),
                                   errorBuilder:
-                                      (BuildContext _, Object __, StackTrace? ___) {
+                                      (BuildContext _, Object _, StackTrace? _) {
                                     return ColoredBox(color: cs.surfaceContainerHigh);
                                   },
                                 );
@@ -526,6 +532,8 @@ class _MediaTab extends StatelessWidget {
       itemCount: items.length,
       itemBuilder: (BuildContext c, int i) {
         final _MediaItem it = items[i];
+        final double thumb =
+            (MediaQuery.sizeOf(c).width - 8 * 2 - 4 * 2) / 3;
         return GestureDetector(
           onTap: () => shareNetworkFileToDevice(
             context: context,
@@ -553,7 +561,9 @@ class _MediaTab extends StatelessWidget {
                   Image.network(
                     it.url,
                     fit: BoxFit.cover,
-                    errorBuilder: (BuildContext _, Object __, StackTrace? ___) =>
+                    cacheWidth: imageCacheExtentPx(c, thumb),
+                    cacheHeight: imageCacheExtentPx(c, thumb),
+                    errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
                         ColoredBox(
                       color:
                           Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -620,7 +630,7 @@ class _FilesTab extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: files.length,
-      separatorBuilder: (_, int __) => const Divider(height: 1),
+      separatorBuilder: (_, int _) => const Divider(height: 1),
       itemBuilder: (BuildContext c, int i) {
         final ChatFileMeta f = files[i];
         return ListTile(

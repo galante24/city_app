@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_constants.dart';
+import '../utils/image_cache_extent.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import '../services/chat_service.dart';
@@ -213,6 +214,8 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     final Color textPrimary = cs.onSurface;
     final Color textSecondary = cs.onSurfaceVariant;
     final Color bodyTextColor = cs.onSurface.withValues(alpha: 0.92);
+    final double detailImgW = MediaQuery.sizeOf(context).width - 32;
+    final double detailImgH = detailImgW * 9 / 16;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -250,6 +253,8 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                 child: Image.network(
                   imageUrl,
                   fit: BoxFit.cover,
+                  cacheWidth: imageCacheExtentPx(context, detailImgW),
+                  cacheHeight: imageCacheExtentPx(context, detailImgH),
                   errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
                       Container(
                         color: widget.accent.withValues(alpha: 0.12),

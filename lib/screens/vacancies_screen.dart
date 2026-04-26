@@ -1,8 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+
 import '../app_constants.dart';
+import '../main_shell_navigation.dart';
 import '../services/job_vacancy_service.dart';
+import '../widgets/city_main_navigation_bar.dart';
+import '../utils/image_cache_extent.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'vacancy_detail_screen.dart';
@@ -19,6 +24,8 @@ class VacanciesScreen extends StatefulWidget {
 
 class _VacanciesScreenState extends State<VacanciesScreen> {
   final TextEditingController _search = TextEditingController();
+  /// Поиск: обновление только списка без полного пересборки экрана.
+  final ValueNotifier<String> _searchQuery = ValueNotifier<String>('');
   _VacancySort _sort = _VacancySort.newest;
   List<Map<String, dynamic>> _rows = <Map<String, dynamic>>[];
   bool _loading = true;
@@ -34,11 +41,12 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
   void dispose() {
     _search.removeListener(_onSearchChanged);
     _search.dispose();
+    _searchQuery.dispose();
     super.dispose();
   }
 
   void _onSearchChanged() {
-    setState(() {});
+    _searchQuery.value = _search.text.trim().toLowerCase();
   }
 
   Future<void> _load() async {
@@ -52,8 +60,7 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
     }
   }
 
-  List<Map<String, dynamic>> get _filteredAndSorted {
-    final String q = _search.text.trim().toLowerCase();
+  List<Map<String, dynamic>> _filteredAndSorted(String q) {
     List<Map<String, dynamic>> list = _rows.where((Map<String, dynamic> m) {
       if (q.isEmpty) {
         return true;
@@ -106,12 +113,34 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
     return palette[h % palette.length];
   }
 
+  void _onMainBottomNav(int index) {
+    Navigator.of(context).popUntil((Route<dynamic> route) => route.isFirst);
+    MainShellNavigation.goToTab(index);
+  }
+
+  Future<void> _shareVacancy(Map<String, dynamic> m) async {
+    final String title = m['title'] as String? ?? 'Вакансия';
+    final String salary = m['salary'] as String? ?? '';
+    final String addr = m['work_address'] as String? ?? '';
+    final List<String> lines = <String>['Вакансия: $title'];
+    if (salary.isNotEmpty) {
+      lines.add('Зарплата: $salary');
+    }
+    if (addr.isNotEmpty) {
+      lines.add('Адрес: $addr');
+    }
+    await Share.share(lines.join('\n'), subject: title);
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final List<Map<String, dynamic>> shown = _filteredAndSorted;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      bottomNavigationBar: CityMainNavigationBar(
+        selectedIndex: 2,
+        onDestinationSelected: _onMainBottomNav,
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -174,30 +203,48 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                   'Сортировка: ',
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 ),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<_VacancySort>(
-                    value: _sort,
-                    isDense: true,
-                    style: const TextStyle(
-                      color: kPrimaryBlue,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    items: const <DropdownMenuItem<_VacancySort>>[
-                      DropdownMenuItem(
+                PopupMenuButton<_VacancySort>(
+                  initialValue: _sort,
+                  tooltip: 'Порядок сортировки',
+                  position: PopupMenuPosition.under,
+                  offset: const Offset(0, 4),
+                  onSelected: (_VacancySort v) {
+                    setState(() => _sort = v);
+                  },
+                  itemBuilder: (BuildContext context) {
+                    return <PopupMenuEntry<_VacancySort>>[
+                      const PopupMenuItem<_VacancySort>(
                         value: _VacancySort.newest,
                         child: Text('сначала новые'),
                       ),
-                      DropdownMenuItem(
+                      const PopupMenuItem<_VacancySort>(
                         value: _VacancySort.oldest,
                         child: Text('сначала старые'),
                       ),
-                    ],
-                    onChanged: (_VacancySort? v) {
-                      if (v != null) {
-                        setState(() => _sort = v);
-                      }
-                    },
+                    ];
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          _sort == _VacancySort.newest
+                              ? 'сначала новые'
+                              : 'сначала старые',
+                          style: const TextStyle(
+                            color: kPrimaryBlue,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_drop_down_rounded,
+                          color: kPrimaryBlue,
+                          size: 22,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -217,17 +264,23 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : shown.isEmpty
-                ? Center(
-                    child: Text(
-                      'Пока нет вакансий',
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 16,
-                      ),
-                    ),
-                  )
-                : ListView.separated(
+                : ValueListenableBuilder<String>(
+                    valueListenable: _searchQuery,
+                    builder: (BuildContext context, String q, Widget? _) {
+                      final List<Map<String, dynamic>> shown =
+                          _filteredAndSorted(q);
+                      if (shown.isEmpty) {
+                        return Center(
+                          child: Text(
+                            'Пока нет вакансий',
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 16,
+                            ),
+                          ),
+                        );
+                      }
+                      return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                     itemCount: shown.length,
                     separatorBuilder: (BuildContext c, int i) =>
@@ -250,6 +303,7 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                         dateLabel: _formatDate(created),
                         imageUrl: imageUrl,
                         accent: accent,
+                        onShare: () => unawaited(_shareVacancy(m)),
                         onTap: () async {
                           await Navigator.of(context).push<void>(
                             MaterialPageRoute<void>(
@@ -262,6 +316,8 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                           }
                         },
                       );
+                    },
+                  );
                     },
                   ),
           ),
@@ -345,6 +401,7 @@ class _VacancyListTile extends StatelessWidget {
     required this.dateLabel,
     required this.imageUrl,
     required this.accent,
+    required this.onShare,
     required this.onTap,
   });
 
@@ -354,6 +411,7 @@ class _VacancyListTile extends StatelessWidget {
   final String dateLabel;
   final String? imageUrl;
   final Color accent;
+  final VoidCallback onShare;
   final VoidCallback onTap;
 
   @override
@@ -378,6 +436,8 @@ class _VacancyListTile extends StatelessWidget {
                         width: 64,
                         height: 64,
                         fit: BoxFit.cover,
+                        cacheWidth: imageCacheExtentPx(context, 64),
+                        cacheHeight: imageCacheExtentPx(context, 64),
                         errorBuilder:
                             (BuildContext c, Object e, StackTrace? st) =>
                                 _vacancyImagePlaceholder(accent, 64),
@@ -446,6 +506,16 @@ class _VacancyListTile extends StatelessWidget {
                       ),
                     ],
                   ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.share_outlined, color: cs.primary),
+                tooltip: 'Поделиться',
+                onPressed: onShare,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
                 ),
               ),
               Icon(

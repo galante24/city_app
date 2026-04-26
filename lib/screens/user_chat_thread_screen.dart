@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
+import '../utils/image_cache_extent.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_download_share.dart';
 import '../services/open_chat_tracker.dart';
@@ -17,6 +18,14 @@ import '../services/city_data_service.dart';
 import 'direct_peer_profile_screen.dart';
 import 'forward_conversation_picker_screen.dart';
 import 'group_chat_info_screen.dart';
+
+(int, int) _bubbleImageCachePx(BuildContext context) {
+  final Size sz = MediaQuery.sizeOf(context);
+  return (
+    imageCacheExtentPx(context, sz.width * 0.7),
+    imageCacheExtentPx(context, sz.height * 0.28),
+  );
+}
 
 class UserChatThreadScreen extends StatefulWidget {
   const UserChatThreadScreen({
@@ -1247,35 +1256,45 @@ class _MessagesListState extends State<_MessagesList> {
                                               ).width *
                                               0.7,
                                         ),
-                                        child: Image.network(
-                                          displayImageUrl,
-                                          fit: BoxFit.cover,
-                                          loadingBuilder: (
-                                            BuildContext _,
-                                            Widget child,
-                                            ImageChunkEvent? loadingProgress,
-                                          ) {
-                                            if (loadingProgress == null) {
-                                              return child;
-                                            }
-                                            return const Padding(
-                                              padding: EdgeInsets.all(24),
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
+                                        child: Builder(
+                                          builder: (BuildContext imgCtx) {
+                                            final (int iw, int ih) =
+                                                _bubbleImageCachePx(imgCtx);
+                                            return Image.network(
+                                              displayImageUrl,
+                                              fit: BoxFit.cover,
+                                              cacheWidth: iw,
+                                              cacheHeight: ih,
+                                              loadingBuilder: (
+                                                BuildContext _,
+                                                Widget child,
+                                                ImageChunkEvent?
+                                                    loadingProgress,
+                                              ) {
+                                                if (loadingProgress == null) {
+                                                  return child;
+                                                }
+                                                return const Padding(
+                                                  padding: EdgeInsets.all(24),
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                  ),
+                                                );
+                                              },
+                                              errorBuilder: (
+                                                BuildContext context,
+                                                Object error,
+                                                StackTrace? st,
+                                              ) =>
+                                                  const Padding(
+                                                padding: EdgeInsets.all(8),
+                                                child: Text(
+                                                  'не удалось загрузить фото',
+                                                ),
                                               ),
                                             );
                                           },
-                                          errorBuilder: (
-                                            BuildContext context,
-                                            Object error,
-                                            StackTrace? st,
-                                          ) =>
-                                              const Padding(
-                                            padding: EdgeInsets.all(8),
-                                            child: Text(
-                                              'не удалось загрузить фото',
-                                            ),
-                                          ),
                                         ),
                                       ),
                                     )
@@ -1428,34 +1447,42 @@ class _MessagesListState extends State<_MessagesList> {
                                   MediaQuery.sizeOf(context).height * 0.28,
                               maxWidth: MediaQuery.sizeOf(context).width * 0.7,
                             ),
-                            child: Image.network(
-                              displayImageUrl,
-                              fit: BoxFit.cover,
-                              loadingBuilder:
-                                  (
-                                    BuildContext _,
-                                    Widget child,
-                                    ImageChunkEvent? loadingProgress,
-                                  ) {
-                                    if (loadingProgress == null) {
-                                      return child;
-                                    }
-                                    return const Padding(
-                                      padding: EdgeInsets.all(24),
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                            child: Builder(
+                              builder: (BuildContext imgCtx) {
+                                final (int iw, int ih) =
+                                    _bubbleImageCachePx(imgCtx);
+                                return Image.network(
+                                  displayImageUrl,
+                                  fit: BoxFit.cover,
+                                  cacheWidth: iw,
+                                  cacheHeight: ih,
+                                  loadingBuilder:
+                                      (
+                                        BuildContext _,
+                                        Widget child,
+                                        ImageChunkEvent? loadingProgress,
+                                      ) {
+                                        if (loadingProgress == null) {
+                                          return child;
+                                        }
+                                        return const Padding(
+                                          padding: EdgeInsets.all(24),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        );
+                                      },
+                                  errorBuilder:
+                                      (
+                                        BuildContext context,
+                                        Object error,
+                                        StackTrace? st,
+                                      ) => const Padding(
+                                        padding: EdgeInsets.all(8),
+                                        child: Text('не удалось загрузить фото'),
                                       ),
-                                    );
-                                  },
-                              errorBuilder:
-                                  (
-                                    BuildContext context,
-                                    Object error,
-                                    StackTrace? st,
-                                  ) => const Padding(
-                                    padding: EdgeInsets.all(8),
-                                    child: Text('не удалось загрузить фото'),
-                                  ),
+                                );
+                              },
                             ),
                           ),
                         )

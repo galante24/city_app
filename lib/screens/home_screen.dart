@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../services/city_data_service.dart';
+import '../utils/image_cache_extent.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 
@@ -62,6 +63,39 @@ NewsCategory categoryFromDb(String? s) {
     default:
       return NewsCategory.smi;
   }
+}
+
+class _PostsBuckets {
+  const _PostsBuckets({
+    required this.smi,
+    required this.administration,
+    required this.discussion,
+  });
+
+  final List<SocialPost> smi;
+  final List<SocialPost> administration;
+  final List<SocialPost> discussion;
+}
+
+_PostsBuckets _splitPostsByCategory(List<SocialPost> posts) {
+  final List<SocialPost> smi = <SocialPost>[];
+  final List<SocialPost> administration = <SocialPost>[];
+  final List<SocialPost> discussion = <SocialPost>[];
+  for (final SocialPost p in posts) {
+    switch (p.category) {
+      case NewsCategory.smi:
+        smi.add(p);
+      case NewsCategory.administration:
+        administration.add(p);
+      case NewsCategory.discussion:
+        discussion.add(p);
+    }
+  }
+  return _PostsBuckets(
+    smi: smi,
+    administration: administration,
+    discussion: discussion,
+  );
 }
 
 String formatPostTime(String? iso) {
@@ -253,11 +287,10 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  List<SocialPost> postsInCategory(List<SocialPost> all, NewsCategory c) {
-    return all.where((p) => p.category == c).toList();
-  }
-
-  Widget buildCategoryFeed(List<SocialPost> items) {
+  Widget buildCategoryFeed(
+    List<SocialPost> items,
+    List<BoxShadow> cardShadows,
+  ) {
     if (items.isEmpty) {
       return Center(
         child: Padding(
@@ -283,6 +316,7 @@ class _HomeScreenState extends State<HomeScreen>
         final p = items[index];
         return SocialNewsCard(
           post: p,
+          cardShadows: cardShadows,
           onLike: () {
             setState(() {
               if (p.isLiked) {
@@ -620,6 +654,8 @@ class _HomeScreenState extends State<HomeScreen>
             final List<Map<String, dynamic>> raw =
                 newsSnap.data ?? <Map<String, dynamic>>[];
             final List<SocialPost> posts = raw.map(socialPostFromMap).toList();
+            final _PostsBuckets byCat = _splitPostsByCategory(posts);
+            final List<BoxShadow> newsCardShadows = cardFloatingShadows(context);
 
             return Scaffold(
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -682,14 +718,23 @@ class _HomeScreenState extends State<HomeScreen>
                       controller: _tabController,
                       physics: const BouncingScrollPhysics(),
                       children: <Widget>[
-                        buildCategoryFeed(
-                          postsInCategory(posts, NewsCategory.smi),
+                        _KeepAliveFeed(
+                          child: buildCategoryFeed(
+                            byCat.smi,
+                            newsCardShadows,
+                          ),
                         ),
-                        buildCategoryFeed(
-                          postsInCategory(posts, NewsCategory.administration),
+                        _KeepAliveFeed(
+                          child: buildCategoryFeed(
+                            byCat.administration,
+                            newsCardShadows,
+                          ),
                         ),
-                        buildCategoryFeed(
-                          postsInCategory(posts, NewsCategory.discussion),
+                        _KeepAliveFeed(
+                          child: buildCategoryFeed(
+                            byCat.discussion,
+                            newsCardShadows,
+                          ),
                         ),
                       ],
                     ),
@@ -702,16 +747,39 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
+class _KeepAliveFeed extends StatefulWidget {
+  const _KeepAliveFeed({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveFeed> createState() => _KeepAliveFeedState();
+}
+
+class _KeepAliveFeedState extends State<_KeepAliveFeed>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+
 class SocialNewsCard extends StatelessWidget {
   const SocialNewsCard({
     super.key,
     required this.post,
+    required this.cardShadows,
     required this.onLike,
     required this.onComment,
     required this.onShare,
   });
 
   final SocialPost post;
+  final List<BoxShadow> cardShadows;
   final VoidCallback onLike;
   final VoidCallback onComment;
   final VoidCallback onShare;
@@ -721,16 +789,21 @@ class SocialNewsCard extends StatelessWidget {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final Color onSurface = cs.onSurface;
     final Color muted = onSurface.withValues(alpha: 0.65);
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: cardFloatingShadows(context),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    final double feedImageW =
+        MediaQuery.sizeOf(context).width - 2 * kScreenHorizontalPadding;
+    final int imgCacheW = imageCacheExtentPx(context, feedImageW);
+    final int imgCacheH = imageCacheExtentPx(context, 260);
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: cardShadows,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
@@ -806,6 +879,8 @@ class SocialNewsCard extends StatelessWidget {
                 post.mediaUrl!,
                 width: double.infinity,
                 fit: BoxFit.cover,
+                cacheWidth: imgCacheW,
+                cacheHeight: imgCacheH,
                 errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
                     _brokenImagePlaceholder(context),
                 loadingBuilder: (context, child, progress) {
@@ -854,6 +929,7 @@ class SocialNewsCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }
