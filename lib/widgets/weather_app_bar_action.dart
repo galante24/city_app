@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../app_constants.dart';
@@ -81,7 +82,7 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
     if (!WeatherService.hasApiKey) {
       return IconButton(
         icon: const Icon(Icons.cloud_off, size: 22),
-        tooltip: 'Погода: задайте OPENWEATHER_API_KEY',
+        tooltip: 'Погода недоступна',
         onPressed: () {
           showModalBottomSheet<void>(
             context: context,
@@ -110,16 +111,26 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        Text(
-                          'Добавьте API-ключ OpenWeatherMap при сборке:\n'
-                          'flutter run --dart-define=OPENWEATHER_API_KEY=ваш_ключ\n'
-                          'или: flutter run --dart-define-from-file=api_keys.json',
+                        const Text(
+                          'Сейчас прогноз погоды недоступен. Попробуйте позже.',
                           style: TextStyle(
-                            fontSize: 14,
-                            color: kNewsTextSecondary,
-                            height: 1.4,
+                            fontSize: 15,
+                            color: kNewsTextPrimary,
+                            height: 1.35,
                           ),
                         ),
+                        if (kDebugMode) ...<Widget>[
+                          const SizedBox(height: 12),
+                          Text(
+                            'Для разработчика: задайте OPENWEATHER_API_KEY при сборке '
+                            '(dart-define или api_keys.json).',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: kNewsTextSecondary,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         FilledButton(
                           onPressed: () => Navigator.pop(c),

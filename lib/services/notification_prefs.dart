@@ -29,6 +29,10 @@ class NotificationPrefs {
     return s.contains(conversationId);
   }
 
+  static Future<Set<String>> allMutedConversationIds() async {
+    return _mutedSet();
+  }
+
   static Future<void> setConversationMuted(
     String conversationId,
     bool muted,

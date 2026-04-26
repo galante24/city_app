@@ -34,6 +34,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   /// Чаты грузим только при первом открытии вкладки «Чаты» (не на старте приложения).
   bool _autoLoadScheduled = false;
   List<ConversationListItem> _all = <ConversationListItem>[];
+  Set<String> _mutedIds = <String>{};
 
   @override
   void initState() {
@@ -70,6 +71,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       setState(() {
         _loading = false;
         _all = <ConversationListItem>[];
+        _mutedIds = <String>{};
       });
       return;
     }
@@ -77,8 +79,12 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     try {
       final List<ConversationListItem> r =
           await ChatService.listConversations();
+      final Set<String> muted = await NotificationPrefs.allMutedConversationIds();
       if (mounted) {
-        setState(() => _all = r);
+        setState(() {
+          _all = r;
+          _mutedIds = muted;
+        });
       }
     } on PostgrestException catch (e) {
       if (mounted) {
@@ -131,6 +137,15 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                 ),
                 onTap: () async {
                   await NotificationPrefs.setConversationMuted(item.id, !muted);
+                  if (mounted) {
+                    setState(() {
+                      if (!muted) {
+                        _mutedIds.add(item.id);
+                      } else {
+                        _mutedIds.remove(item.id);
+                      }
+                    });
+                  }
                   if (c.mounted) {
                     Navigator.of(c).pop();
                   }
@@ -644,6 +659,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                               final ConversationListItem item = _filtered[i];
                               return _ChatListTile(
                                 item: item,
+                                notificationsMuted: _mutedIds.contains(item.id),
                                 onLongPress: () {
                                   unawaited(_onChatLongPress(item));
                                 },
@@ -682,11 +698,13 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 class _ChatListTile extends StatelessWidget {
   const _ChatListTile({
     required this.item,
+    required this.notificationsMuted,
     required this.onTap,
     required this.onLongPress,
   });
 
   final ConversationListItem item;
+  final bool notificationsMuted;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
@@ -747,6 +765,14 @@ class _ChatListTile extends StatelessWidget {
                               shape: BoxShape.circle,
                             ),
                           ),
+                        if (notificationsMuted) ...<Widget>[
+                          const Icon(
+                            Icons.notifications_off_outlined,
+                            size: 20,
+                            color: Color(0xFF8A8A8E),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         if (item.timeText.isNotEmpty)
                           Text(
                             item.timeText,

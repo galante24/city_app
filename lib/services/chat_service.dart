@@ -306,14 +306,15 @@ class ChatService {
           sortMs = 0;
         }
       }
+      final String subtitleText = (preview != null && preview.isNotEmpty)
+          ? previewTextForList(preview)
+          : 'Нет сообщений';
       if (isGroup) {
         out.add(
           ConversationListItem(
             id: cid,
             title: (gname != null && gname.isNotEmpty) ? gname : 'Группа',
-            subtitle: (preview != null && preview.isNotEmpty)
-                ? preview
-                : 'Нет сообщений',
+            subtitle: subtitleText,
             timeText: _formatListTime(updated),
             sortKeyMs: sortMs,
             isGroup: true,
@@ -328,9 +329,7 @@ class ChatService {
           ConversationListItem(
             id: cid,
             title: _titleForOther(otherId, profById),
-            subtitle: (preview != null && preview.isNotEmpty)
-                ? preview
-                : 'Нет сообщений',
+            subtitle: subtitleText,
             timeText: _formatListTime(updated),
             sortKeyMs: sortMs,
             otherUserId: otherId,
@@ -366,6 +365,18 @@ class ChatService {
       return t;
     }
     return 'Пользователь';
+  }
+
+  /// Подзаголовок в списке чатов (картинка вместо `!img:https://...`).
+  static String previewTextForList(String? raw) {
+    final String t = (raw ?? '').trim();
+    if (t.isEmpty) {
+      return '';
+    }
+    if (t.startsWith(imageMessagePrefix)) {
+      return 'Изображение';
+    }
+    return t;
   }
 
   static String _formatListTime(String? iso) {
