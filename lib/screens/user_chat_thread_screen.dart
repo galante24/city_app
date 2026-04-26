@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -5,6 +7,7 @@ import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
+import '../services/chat_unread_badge.dart';
 import 'group_chat_info_screen.dart';
 
 class UserChatThreadScreen extends StatefulWidget {
@@ -30,6 +33,10 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   bool? _isGroup;
   bool? _isOpen;
   String? _myRole;
+  Timer? _readDebounce;
+  /// Курсор «прочитано до» (для стиля входящих + галочек исходящих).
+  DateTime? _myReadCursor;
+  Map<String, DateTime?> _otherReadByUser = <String, DateTime?>{};
 
   @override
   void initState() {
@@ -39,6 +46,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     _isOpen = widget.listItem?.isOpen;
     _myRole = widget.listItem?.myRole;
     _loadMeta();
+    unawaited(_bootstrapReadState());
   }
 
   Future<void> _loadMeta() async {
@@ -62,8 +70,54 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
 
   @override
   void dispose() {
+    _readDebounce?.cancel();
     _input.dispose();
+    unawaited(ChatUnreadBadge.refresh());
     super.dispose();
+  }
+
+  Future<void> _bootstrapReadState() async {
+    if (!supabaseAppReady) {
+      return;
+    }
+    final DateTime? first = await ChatService.getMyLastReadInConversation(widget.conversationId);
+    if (mounted) {
+      setState(() => _myReadCursor = first);
+    }
+    await ChatService.markConversationRead(widget.conversationId);
+    final DateTime? after = await ChatService.getMyLastReadInConversation(widget.conversationId);
+    final Map<String, DateTime?> other =
+        await ChatService.getOtherParticipantsLastReadMap(widget.conversationId);
+    if (mounted) {
+      setState(() {
+        _myReadCursor = after ?? _myReadCursor;
+        _otherReadByUser = other;
+      });
+    }
+    await ChatUnreadBadge.refresh();
+  }
+
+  void _scheduleReadSync() {
+    _readDebounce?.cancel();
+    _readDebounce = Timer(const Duration(milliseconds: 300), () async {
+      if (!supabaseAppReady) {
+        return;
+      }
+      await ChatService.markConversationRead(widget.conversationId);
+      if (!mounted) {
+        return;
+      }
+      final DateTime? after = await ChatService.getMyLastReadInConversation(widget.conversationId);
+      final Map<String, DateTime?> other =
+          await ChatService.getOtherParticipantsLastReadMap(widget.conversationId);
+      if (mounted) {
+        setState(() {
+          _myReadCursor = after ?? _myReadCursor;
+          _otherReadByUser = other;
+        });
+      }
+      await ChatUnreadBadge.refresh();
+    });
   }
 
   String _timeLabel(String? iso) {
@@ -190,6 +244,9 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
               timeLabel: _timeLabel,
               canDeleteMessage: _canDeleteMessage,
               onDelete: _deleteMessage,
+              myReadAt: _myReadCursor,
+              otherReadByUser: _otherReadByUser,
+              onStreamChanged: _scheduleReadSync,
             ),
           ),
           Container(
@@ -239,13 +296,16 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   }
 }
 
-class _MessagesList extends StatelessWidget {
+class _MessagesList extends StatefulWidget {
   const _MessagesList({
     required this.conversationId,
     required this.me,
     required this.timeLabel,
     required this.canDeleteMessage,
     required this.onDelete,
+    required this.myReadAt,
+    required this.otherReadByUser,
+    required this.onStreamChanged,
   });
 
   final String conversationId;
@@ -253,13 +313,24 @@ class _MessagesList extends StatelessWidget {
   final String Function(String? iso) timeLabel;
   final bool Function(Map<String, dynamic> m, String? me) canDeleteMessage;
   final void Function(String messageId) onDelete;
+  final DateTime? myReadAt;
+  final Map<String, DateTime?> otherReadByUser;
+  final VoidCallback onStreamChanged;
+
+  @override
+  State<_MessagesList> createState() => _MessagesListState();
+}
+
+class _MessagesListState extends State<_MessagesList> {
+  String? _dataSig;
 
   @override
   Widget build(BuildContext context) {
-    if (me == null) {
+    if (widget.me == null) {
       return const Center(child: Text('Нет сессии'));
     }
-    final Stream<List<Map<String, dynamic>>>? stream = ChatService.watchMessages(conversationId);
+    final String me = widget.me!;
+    final Stream<List<Map<String, dynamic>>>? stream = ChatService.watchMessages(widget.conversationId);
     if (stream == null) {
       return const Center(child: Text('Нет соединения'));
     }
@@ -272,7 +343,17 @@ class _MessagesList extends StatelessWidget {
         if (!s.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final List<Map<String, dynamic>> rows = s.data ?? <Map<String, dynamic>>[];
+        final List<Map<String, dynamic>> raw = s.data ?? <Map<String, dynamic>>[];
+        final List<Map<String, dynamic>> rows = ChatService.dedupeChatMessagesById(raw);
+        final String sig = rows.isEmpty
+            ? '0'
+            : '${rows.length}:${rows.last['id']}:${rows.first['id']}';
+        if (sig != _dataSig) {
+          _dataSig = sig;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onStreamChanged();
+          });
+        }
         if (rows.isEmpty) {
           return const Center(
             child: Text(
@@ -292,10 +373,19 @@ class _MessagesList extends StatelessWidget {
             final String text = isDeleted
                 ? 'Сообщение удалено'
                 : (m['body'] as String?) ?? '';
+            final DateTime? createdAt = _tryParse(m['created_at'] as String?);
+            final bool incomingUnread = !mine &&
+                !isDeleted &&
+                createdAt != null &&
+                widget.myReadAt != null &&
+                createdAt.isAfter(widget.myReadAt!);
+            final bool myReadByPeer = mine && !isDeleted && createdAt != null
+                ? _peersReadMessage(widget.otherReadByUser, createdAt)
+                : false;
             return Align(
               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
               child: GestureDetector(
-                onLongPress: canDeleteMessage(m, me)
+                onLongPress: widget.canDeleteMessage(m, me)
                     ? () {
                         showModalBottomSheet<void>(
                           context: context,
@@ -309,7 +399,7 @@ class _MessagesList extends StatelessWidget {
                                     title: const Text('Удалить сообщение'),
                                     onTap: () {
                                       Navigator.pop(bc);
-                                      onDelete(m['id']!.toString());
+                                      widget.onDelete(m['id']!.toString());
                                     },
                                   ),
                                 ],
@@ -328,7 +418,17 @@ class _MessagesList extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: isDeleted
                         ? const Color(0xFFE8E8ED)
-                        : (mine ? kPrimaryBlue : Colors.white),
+                        : (mine
+                            ? kPrimaryBlue
+                            : (incomingUnread ? const Color(0xFFF0F7FF) : Colors.white)),
+                    border: incomingUnread
+                        ? const Border(
+                            left: BorderSide(
+                              color: kPrimaryBlue,
+                              width: 3,
+                            ),
+                          )
+                        : null,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -354,19 +454,36 @@ class _MessagesList extends StatelessWidget {
                               ? const Color(0xFF6B6B70)
                               : (mine ? Colors.white : const Color(0xFF1A1C1C)),
                           fontSize: 15,
+                          fontWeight: incomingUnread ? FontWeight.w600 : null,
                           fontStyle: isDeleted ? FontStyle.italic : null,
                           height: 1.35,
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        timeLabel(m['created_at'] as String?),
-                        style: TextStyle(
-                          color: mine
-                              ? Colors.white.withValues(alpha: 0.75)
-                              : const Color(0xFF8A8A8E),
-                          fontSize: 11,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          if (mine && !isDeleted) ...<Widget>[
+                            Icon(
+                              myReadByPeer ? Icons.done_all : Icons.done,
+                              size: 15,
+                              color: myReadByPeer
+                                  ? const Color(0xFFB3E0FF)
+                                  : Colors.white.withValues(alpha: 0.7),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(
+                            widget.timeLabel(m['created_at'] as String?),
+                            style: TextStyle(
+                              color: mine
+                                  ? Colors.white.withValues(alpha: 0.75)
+                                  : const Color(0xFF8A8A8E),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -378,4 +495,24 @@ class _MessagesList extends StatelessWidget {
       },
     );
   }
+}
+
+DateTime? _tryParse(String? iso) {
+  if (iso == null || iso.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(iso);
+}
+
+/// Хотя бы один собеседник «дочитал» до [msgAt].
+bool _peersReadMessage(Map<String, DateTime?> otherReadByUser, DateTime msgAt) {
+  if (otherReadByUser.isEmpty) {
+    return false;
+  }
+  for (final DateTime? t in otherReadByUser.values) {
+    if (t != null && !t.isBefore(msgAt)) {
+      return true;
+    }
+  }
+  return false;
 }

@@ -1,26 +1,26 @@
 # Сборка release APK, GitHub Release и запись version_code + download_url в public.app_config.
 #
-# Секреты репозитория (Settings → Secrets and variables → Actions):
-#   SUPABASE_URL                — https://xxxxx.supabase.co
-#   SUPABASE_SERVICE_ROLE_KEY   — service_role (Settings → API → service_role, не anon)
+# Секреты (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                 — https://xxxxx.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY    — service_role (API → service_role, не публиковать)
 #
-# SQL: supabase/migrations/013_app_config_ci.sql
+# Схема: supabase/migrations/013_app_config_ci.sql
 #
-# Realtime: не обязателен для app_config.
+# Перед релизом увеличьте build number в pubspec, например: version: 1.0.0+3
+# (CI берёт version_code из числа после «+»).
 
 name: Release APK
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-apk-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,14 +49,10 @@ jobs:
           PUB_VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}')
           BUILD_CODE=$(echo "$PUB_VERSION" | cut -d+ -f2)
           if [[ -z "$BUILD_CODE" || "$BUILD_CODE" == "$PUB_VERSION" ]]; then
-            echo "Error: expected pubspec version like 1.0.0+NN" >&2
+            echo "Error: ожидается pubspec version вида 1.0.0+NN" >&2
             exit 1
           fi
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            TAG="${{ github.ref_name }}"
-          else
-            TAG="v${PUB_VERSION}"
-          fi
+          TAG="v${PUB_VERSION}"
           echo "full=${PUB_VERSION}" >> "$GITHUB_OUTPUT"
           echo "code=${BUILD_CODE}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
@@ -90,7 +86,7 @@ jobs:
         run: |
           set -e
           if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]; then
-            echo "Skip: задайте секреты SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в настройках репозитория."
+            echo "Пропуск: задайте секреты SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY."
             exit 0
           fi
           PAYLOAD=$(python3 << 'PY'
@@ -100,15 +96,15 @@ jobs:
           repo = os.environ["REPO"]
           enc = urllib.parse.quote(tag, safe="")
           url = f"https://github.com/{repo}/releases/download/{enc}/app-release.apk"
-          print(json.dumps([{"id": "default", "version_code": code, "download_url": url}]))
+          print(json.dumps({"version_code": code, "download_url": url}))
           PY
           )
-          echo "$PAYLOAD"
-          curl -sS -f -X POST "${SUPABASE_URL}/rest/v1/app_config" \
+          echo "PATCH app_config: ${PAYLOAD}"
+          curl -sS -f -X PATCH "${SUPABASE_URL}/rest/v1/app_config?id=eq.default" \
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
-            -H "Prefer: resolution=merge-duplicates" \
+            -H "Prefer: return=minimal" \
             -d "$PAYLOAD"
           echo
           echo "Supabase app_config: version_code=${CODE} обновлён"

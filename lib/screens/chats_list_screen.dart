@@ -10,6 +10,7 @@ import '../config/supabase_ready.dart';
 import '../main_tab_index.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
+import '../services/chat_unread_badge.dart';
 import 'contact_picker_page.dart';
 import 'create_group_screen.dart';
 import 'user_chat_thread_screen.dart';
@@ -271,6 +272,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           ),
         ),
       );
+      if (mounted) {
+        await _load();
+        await ChatUnreadBadge.refresh();
+      }
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -304,6 +309,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         ),
       );
     await _load();
+    await ChatUnreadBadge.refresh();
   }
 
   @override
@@ -397,8 +403,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                               final ConversationListItem item = _filtered[i];
                               return _ChatListTile(
                                 item: item,
-                                onTap: () {
-                                  Navigator.of(context).push<void>(
+                                onTap: () async {
+                                  await Navigator.of(context).push<void>(
                                     MaterialPageRoute<void>(
                                       builder: (BuildContext c) => UserChatThreadScreen(
                                         conversationId: item.id,
@@ -407,6 +413,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                       ),
                                     ),
                                   );
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  await _load();
+                                  await ChatUnreadBadge.refresh();
                                 },
                               );
                             },
@@ -466,13 +477,23 @@ class _ChatListTile extends StatelessWidget {
                             item.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1A1A1A),
+                              fontWeight: item.hasUnread ? FontWeight.w700 : FontWeight.w600,
+                              color: const Color(0xFF1A1A1A),
                             ),
                           ),
                         ),
+                        if (item.hasUnread)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE53935),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
                         if (item.timeText.isNotEmpty)
                           Text(
                             item.timeText,

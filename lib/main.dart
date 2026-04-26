@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_constants.dart';
+import 'app_update_check.dart';
 import 'config/supabase_config.dart';
 import 'config/supabase_ready.dart';
 import 'services/city_data_service.dart';
 import 'screens/auth_screen.dart';
 import 'main_tab_index.dart';
 import 'screens/chats_list_screen.dart';
+import 'services/chat_unread_badge.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/schedule_screen.dart';
@@ -92,6 +94,17 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    ChatUnreadBadge.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(checkForAppUpdates(context));
+      }
+    });
+  }
+
   static const List<Widget> _stackChildren = <Widget>[
     HomeScreen(),
     ScheduleScreen(),
@@ -113,32 +126,53 @@ class _MainScaffoldState extends State<MainScaffold> {
         selectedIndex: _currentIndex,
         onDestinationSelected: (int i) {
           setState(() => _currentIndex = i);
+          if (i == 3) {
+            unawaited(ChatUnreadBadge.refresh());
+          }
         },
         indicatorColor: kPrimaryBlue.withValues(alpha: 0.2),
         // На телефоне длинные подписи (Расписание) не ломают строку.
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-        destinations: const [
-          NavigationDestination(
+        destinations: <Widget>[
+          const NavigationDestination(
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home, color: kPrimaryBlue),
             label: 'Главная',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.schedule_outlined),
             selectedIcon: Icon(Icons.schedule, color: kPrimaryBlue),
             label: 'Расписание',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.grid_view_outlined),
             selectedIcon: Icon(Icons.grid_view, color: kPrimaryBlue),
             label: 'Сервисы',
           ),
           NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            selectedIcon: Icon(Icons.chat_bubble, color: kPrimaryBlue),
+            icon: ValueListenableBuilder<bool>(
+              valueListenable: ChatUnreadBadge.hasUnread,
+              builder: (BuildContext context, bool v, _) {
+                return Badge(
+                  isLabelVisible: v,
+                  backgroundColor: const Color(0xFFE53935),
+                  child: const Icon(Icons.chat_bubble_outline),
+                );
+              },
+            ),
+            selectedIcon: ValueListenableBuilder<bool>(
+              valueListenable: ChatUnreadBadge.hasUnread,
+              builder: (BuildContext context, bool v, _) {
+                return Badge(
+                  isLabelVisible: v,
+                  backgroundColor: const Color(0xFFE53935),
+                  child: const Icon(Icons.chat_bubble, color: kPrimaryBlue),
+                );
+              },
+            ),
             label: 'Чаты',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person, color: kPrimaryBlue),
             label: 'Профиль',

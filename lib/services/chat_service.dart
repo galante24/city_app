@@ -180,9 +180,21 @@ class ChatService {
           .from('conversation_participants')
           .select('conversation_id, user_id, role')
           .inFilter('conversation_id', convIds),
+      fetchUnreadConversationIds(),
     ]);
     final List<dynamic> convRows = convAndPart[0] as List<dynamic>;
     final List<dynamic> allPart = convAndPart[1] as List<dynamic>;
+    final Set<String> unreadIds = <String>{};
+    if (convAndPart.length > 2) {
+      final Object? u = convAndPart[2];
+      if (u is Set) {
+        for (final Object? e in u) {
+          if (e != null) {
+            unreadIds.add(e.toString());
+          }
+        }
+      }
+    }
     final Set<String> uids = <String>{};
     for (final dynamic e in allPart) {
       final String? u = (e as Map<String, dynamic>)['user_id']?.toString();
@@ -277,6 +289,7 @@ class ChatService {
             isOpen: row['is_open'] as bool?,
             myRole: myRole,
             groupName: gname,
+            hasUnread: unreadIds.contains(cid),
           ),
         );
       } else {
@@ -290,6 +303,7 @@ class ChatService {
             otherUserId: otherId,
             isGroup: false,
             myRole: myRole,
+            hasUnread: unreadIds.contains(cid),
           ),
         );
       }
@@ -330,6 +344,143 @@ class ChatService {
     } on Object {
       return '';
     }
+  }
+
+  /// Realtime-стрим иногда дублирует строки — оставляем по одной записи на [id], порядок по [created_at].
+  static List<Map<String, dynamic>> dedupeChatMessagesById(
+    List<Map<String, dynamic>>? rows,
+  ) {
+    if (rows == null || rows.isEmpty) {
+      return <Map<String, dynamic>>[];
+    }
+    final Map<String, Map<String, dynamic>> byId = <String, Map<String, dynamic>>{};
+    for (final Map<String, dynamic> m in rows) {
+      final String? id = m['id']?.toString();
+      if (id != null) {
+        byId[id] = m;
+      }
+    }
+    final List<Map<String, dynamic>> out = byId.values.toList();
+    out.sort((Map<String, dynamic> a, Map<String, dynamic> b) {
+      final String? ca = a['created_at'] as String?;
+      final String? cb = b['created_at'] as String?;
+      if (ca == null) {
+        return -1;
+      }
+      if (cb == null) {
+        return 1;
+      }
+      try {
+        return DateTime.parse(ca).compareTo(DateTime.parse(cb));
+      } on Object {
+        return 0;
+      }
+    });
+    return out;
+  }
+
+  static Future<Set<String>> fetchUnreadConversationIds() async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return <String>{};
+    }
+    try {
+      final dynamic r = await c.rpc('get_unread_conversation_ids');
+      if (r is List) {
+        return r.map((dynamic e) => e.toString()).toSet();
+      }
+      if (r is String) {
+        // редко: пустой массив
+        return <String>{};
+      }
+    } on Object {
+      return <String>{};
+    }
+    return <String>{};
+  }
+
+  static Future<bool> fetchHasUnreadMessages() async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return false;
+    }
+    try {
+      final dynamic r = await c.rpc('has_unread_messages_for_me');
+      if (r is bool) {
+        return r;
+      }
+    } on Object {
+      return false;
+    }
+    return false;
+  }
+
+  static Future<DateTime?> getMyLastReadInConversation(String conversationId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return null;
+    }
+    final String? me = c.auth.currentUser?.id;
+    if (me == null) {
+      return null;
+    }
+    final Map<String, dynamic>? row = await c
+        .from('conversation_participants')
+        .select('last_read_at')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', me)
+        .maybeSingle();
+    final Object? raw = row?['last_read_at'];
+    if (raw is String) {
+      return DateTime.tryParse(raw);
+    }
+    return null;
+  }
+
+  static Future<void> markConversationRead(String conversationId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return;
+    }
+    try {
+      await c.rpc('mark_conversation_read', params: <String, dynamic>{
+        'p_conversation_id': conversationId,
+      });
+    } on Object {
+      // миграция ещё не на сервере — тихо
+    }
+  }
+
+  /// [user_id] остальных участников → время их last_read (для «галочек»).
+  static Future<Map<String, DateTime?>> getOtherParticipantsLastReadMap(String conversationId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return <String, DateTime?>{};
+    }
+    final String? me = c.auth.currentUser?.id;
+    if (me == null) {
+      return <String, DateTime?>{};
+    }
+    final List<dynamic> rows = await c
+        .from('conversation_participants')
+        .select('user_id, last_read_at')
+        .eq('conversation_id', conversationId)
+        .neq('user_id', me);
+    final Map<String, DateTime?> out = <String, DateTime?>{};
+    for (final dynamic e in rows) {
+      final Map<String, dynamic> m = e as Map<String, dynamic>;
+      final String? uid = m['user_id']?.toString();
+      if (uid == null) {
+        continue;
+      }
+      final Object? raw = m['last_read_at'];
+      if (raw is String) {
+        out[uid] = DateTime.tryParse(raw);
+      } else {
+        out[uid] = null;
+      }
+    }
+    return out;
   }
 
   static Stream<List<Map<String, dynamic>>>? watchMessages(String conversationId) {

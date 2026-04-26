@@ -11,6 +11,7 @@ class ConversationListItem {
     this.isOpen,
     this.myRole,
     this.groupName,
+    this.hasUnread = false,
   });
 
   final String id;
@@ -26,6 +27,8 @@ class ConversationListItem {
   /// Роль текущего пользователя: owner | moderator | member.
   final String? myRole;
   final String? groupName;
+  /// Входящие непрочитанные (есть сообщения от других после [last_read_at]).
+  final bool hasUnread;
 
   bool get canModerate =>
       myRole == 'owner' || myRole == 'moderator';

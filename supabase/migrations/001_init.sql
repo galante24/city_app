@@ -9,6 +9,10 @@ create table if not exists public.profiles (
   updated_at timestamptz
 );
 
+-- Старая БД могла создать profiles без is_admin — иначе INSERT ниже падает (42703).
+alter table public.profiles
+  add column if not exists is_admin boolean not null default false;
+
 insert into public.profiles (id, is_admin)
 select u.id, false from auth.users u
 on conflict (id) do nothing;
