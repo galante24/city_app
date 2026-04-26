@@ -208,8 +208,10 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     final String? imageUrl = widget.row['image_url'] as String?;
     final String? me = Supabase.instance.client.auth.currentUser?.id;
     final bool isOwner = me != null && me == _authorId;
-    const Color textPrimary = Color(0xFF1C1C1E);
-    const Color textSecondary = Color(0xFF6C6C70);
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final Color textPrimary = cs.onSurface;
+    final Color textSecondary = cs.onSurfaceVariant;
+    final Color bodyTextColor = cs.onSurface.withValues(alpha: 0.92);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -263,7 +265,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
           ],
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
               color: textPrimary,
@@ -310,14 +312,17 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        const Text(
+                        Text(
                           'Адрес',
-                          style: TextStyle(fontSize: 13, color: textSecondary),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: textSecondary,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           addr,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
                             color: textPrimary,
@@ -336,7 +341,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Text(
+                Text(
                   'Описание',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
@@ -347,10 +352,10 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                 const SizedBox(height: 8),
                 Text(
                   desc,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     height: 1.45,
-                    color: Color(0xFF3C3C43),
+                    color: bodyTextColor,
                   ),
                 ),
               ],
@@ -361,7 +366,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Text(
+                Text(
                   'Контакты',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
@@ -395,7 +400,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                               ),
                             ),
                           ),
-                          const Icon(Icons.chevron_right, color: textSecondary),
+                          Icon(Icons.chevron_right, color: textSecondary),
                         ],
                       ),
                     ),
@@ -444,7 +449,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
               ),
             ),
           ] else if (isOwner) ...<Widget>[
-            const Center(
+            Center(
               child: Text(
                 'Это ваша вакансия',
                 style: TextStyle(color: textSecondary, fontSize: 14),

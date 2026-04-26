@@ -385,10 +385,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Center(
+                Center(
                   child: Text(
                     'Новый чат',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(c).colorScheme.onSurface,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -424,17 +428,29 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                 OutlinedButton.icon(
                   onPressed: () {
                     Navigator.of(c).pop();
-                    _openAddByEmail();
+                    _openNicknameSearch();
                   },
                   icon: const Icon(Icons.alternate_email_outlined),
+                  label: const Text('Найти по нику (@)'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(c).pop();
+                    _openAddByEmail();
+                  },
+                  icon: const Icon(Icons.mail_outline),
                   label: const Text('Найти по email'),
                 ),
                 if (!_isMobile)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'С телефона: откроется список контактов. В веб-версии — только по email.',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF6B6B70)),
+                      'С телефона: контакты или ник. В веб-версии — по нику или email.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(c).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
               ],
@@ -443,6 +459,17 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         );
       },
     );
+  }
+
+  Future<void> _openNicknameSearch() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext c) =>
+            const ContactPickerPage(initialNickMode: true),
+      ),
+    );
+    await _load();
+    await ChatUnreadBadge.refresh();
   }
 
   Future<void> _openAddByEmail() async {
@@ -620,12 +647,21 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                   child: TextField(
                     controller: _search,
                     textInputAction: TextInputAction.search,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Поиск по чатам',
-                      prefixIcon:
-                          const Icon(Icons.search, color: Color(0xFF8E8E93)),
+                      hintStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                       filled: true,
-                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      fillColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -650,7 +686,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                     Icon(
                                       Icons.chat_bubble_outline,
                                       size: 56,
-                                      color: Colors.grey[400],
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant
+                                          .withValues(alpha: 0.5),
                                     ),
                                     const SizedBox(height: 16),
                                     Center(
@@ -659,9 +698,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                             ? 'Нет чатов. Нажмите «+» сверху, чтобы написать кому-то'
                                             : 'Ничего не найдено',
                                         textAlign: TextAlign.center,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 15,
-                                          color: Color(0xFF6B6B70),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
                                         ),
                                       ),
                                     ),
@@ -672,12 +713,15 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                   padding:
                                       const EdgeInsets.only(top: 4, bottom: 80),
                                   separatorBuilder: (BuildContext c, int i) =>
-                                      const Padding(
-                                        padding: EdgeInsets.only(left: 80),
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 80),
                                         child: Divider(
                                           height: 1,
                                           thickness: 1,
-                                          color: Color(0xFFE8E8ED),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outlineVariant
+                                              .withValues(alpha: 0.5),
                                         ),
                                       ),
                                   itemBuilder: (BuildContext c, int i) {
@@ -736,8 +780,9 @@ class _ChatListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     return Material(
-      color: Theme.of(context).colorScheme.surface,
+      color: cs.surface,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -777,7 +822,7 @@ class _ChatListTile extends StatelessWidget {
                               fontWeight: item.hasUnread
                                   ? FontWeight.w700
                                   : FontWeight.w600,
-                              color: const Color(0xFF1A1A1A),
+                              color: cs.onSurface,
                             ),
                           ),
                         ),
@@ -792,19 +837,19 @@ class _ChatListTile extends StatelessWidget {
                             ),
                           ),
                         if (notificationsMuted) ...<Widget>[
-                          const Icon(
+                          Icon(
                             Icons.notifications_off_outlined,
                             size: 20,
-                            color: Color(0xFF8A8A8E),
+                            color: cs.onSurfaceVariant,
                           ),
                           const SizedBox(width: 4),
                         ],
                         if (item.timeText.isNotEmpty)
                           Text(
                             item.timeText,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
-                              color: Color(0xFF8A8A8E),
+                              color: cs.onSurfaceVariant,
                             ),
                           ),
                       ],
@@ -814,9 +859,9 @@ class _ChatListTile extends StatelessWidget {
                       item.subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF6B6B70),
+                        color: cs.onSurfaceVariant,
                         height: 1.25,
                       ),
                     ),

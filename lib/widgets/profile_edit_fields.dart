@@ -11,7 +11,6 @@ import '../utils/phone_normalize.dart';
 class NickBlock extends StatelessWidget {
   const NickBlock({
     super.key,
-    this.dark = false,
     required this.username,
     required this.userId,
     required this.profileReload,
@@ -19,7 +18,6 @@ class NickBlock extends StatelessWidget {
     required this.onSaved,
   });
 
-  final bool dark;
   final String username;
   final String userId;
   final int profileReload;
@@ -42,8 +40,9 @@ class NickBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String at = username.isEmpty ? '—' : '@$username';
-    final Color sub = dark ? const Color(0xFF8E9EAE) : const Color(0xFF6C6C70);
-    final Color val = dark ? Colors.white : const Color(0xFF1A1A1A);
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final Color sub = cs.onSurfaceVariant;
+    final Color val = cs.onSurface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -210,7 +209,6 @@ class NickBlock extends StatelessWidget {
 class PhoneBlock extends StatelessWidget {
   const PhoneBlock({
     super.key,
-    this.dark = false,
     required this.phoneDisplay,
     required this.userId,
     required this.profileReload,
@@ -218,7 +216,6 @@ class PhoneBlock extends StatelessWidget {
     required this.onSaved,
   });
 
-  final bool dark;
   final String phoneDisplay;
   final String userId;
   final int profileReload;
@@ -240,7 +237,8 @@ class PhoneBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String display = phoneDisplay.isEmpty ? 'не указан' : phoneDisplay;
-    final Color sub = dark ? const Color(0xFF8E9EAE) : const Color(0xFF6C6C70);
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final Color sub = cs.onSurfaceVariant;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -251,8 +249,8 @@ class PhoneBlock extends StatelessWidget {
               fontSize: 16,
               fontWeight: FontWeight.w500,
               color: phoneDisplay.isEmpty
-                  ? (dark ? const Color(0xFF8E9EAE) : const Color(0xFF8E8E93))
-                  : (dark ? Colors.white : const Color(0xFF1A1A1A)),
+                  ? cs.onSurfaceVariant
+                  : cs.onSurface,
             );
             final Widget phone = SelectableText(
               display,
@@ -373,7 +371,6 @@ class PhoneBlock extends StatelessWidget {
           ),
           initial: initialForEdit,
           onSaved: onSaved,
-          dark: dark,
         ),
       ],
     );
@@ -524,11 +521,14 @@ class _ProfileUsernameState extends State<ProfileUsername> {
     }
   }
 
-  InputDecoration _deco(String hint) {
+  InputDecoration _deco(BuildContext context, String hint) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       hintText: hint,
+      hintStyle: TextStyle(color: cs.onSurfaceVariant),
       filled: true,
-      fillColor: const Color(0xFFF2F2F7),
+      fillColor: isDark ? cs.surfaceContainerHigh : const Color(0xFFF2F2F7),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -536,7 +536,12 @@ class _ProfileUsernameState extends State<ProfileUsername> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE5E5EA), width: 1),
+        borderSide: BorderSide(
+          color: isDark
+              ? cs.outline.withValues(alpha: 0.45)
+              : const Color(0xFFE5E5EA),
+          width: 1,
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -547,6 +552,7 @@ class _ProfileUsernameState extends State<ProfileUsername> {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: <Widget>[
@@ -556,8 +562,12 @@ class _ProfileUsernameState extends State<ProfileUsername> {
             textCapitalization: TextCapitalization.none,
             autocorrect: false,
             keyboardType: TextInputType.text,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            decoration: _deco('@nickname'),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: cs.onSurface,
+            ),
+            decoration: _deco(context, '@nickname'),
             onSubmitted: (_) => _save(),
           ),
         ),
@@ -591,12 +601,10 @@ class ProfilePhoneE164 extends StatefulWidget {
     super.key,
     this.initial,
     required this.onSaved,
-    this.dark = false,
   });
 
   final String? initial;
   final VoidCallback onSaved;
-  final bool dark;
 
   @override
   State<ProfilePhoneE164> createState() => _ProfilePhoneE164State();
@@ -674,14 +682,14 @@ class _ProfilePhoneE164State extends State<ProfilePhoneE164> {
     }
   }
 
-  InputDecoration _deco() {
+  InputDecoration _deco(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       hintText: '+79991234567',
       filled: true,
-      fillColor: widget.dark
-          ? const Color(0xFF131B24)
-          : const Color(0xFFF2F2F7),
-      hintStyle: TextStyle(color: widget.dark ? const Color(0xFF8E9EAE) : null),
+      fillColor: isDark ? cs.surfaceContainerHigh : const Color(0xFFF2F2F7),
+      hintStyle: TextStyle(color: cs.onSurfaceVariant),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -690,8 +698,8 @@ class _ProfilePhoneE164State extends State<ProfilePhoneE164> {
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
-          color: widget.dark
-              ? const Color(0xFF3A4553)
+          color: isDark
+              ? cs.outline.withValues(alpha: 0.45)
               : const Color(0xFFE5E5EA),
           width: 1,
         ),
@@ -705,6 +713,7 @@ class _ProfilePhoneE164State extends State<ProfilePhoneE164> {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: <Widget>[
@@ -715,9 +724,9 @@ class _ProfilePhoneE164State extends State<ProfilePhoneE164> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: widget.dark ? Colors.white : const Color(0xFF1A1A1A),
+              color: cs.onSurface,
             ),
-            decoration: _deco(),
+            decoration: _deco(context),
             onSubmitted: (_) => _save(),
           ),
         ),
@@ -873,12 +882,16 @@ class _ProfileBirthDateState extends State<ProfileBirthDate> {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color tileBg =
+        isDark ? cs.surfaceContainerHigh : const Color(0xFFF2F2F7);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         Expanded(
           child: Material(
-            color: const Color(0xFFF2F2F7),
+            color: tileBg,
             borderRadius: BorderRadius.circular(12),
             child: InkWell(
               onTap: _saving ? null : _pick,
@@ -890,18 +903,18 @@ class _ProfileBirthDateState extends State<ProfileBirthDate> {
                 ),
                 child: Row(
                   children: <Widget>[
-                    const Icon(
+                    Icon(
                       Icons.calendar_today_outlined,
                       size: 20,
-                      color: Color(0xFF6C6C70),
+                      color: cs.onSurfaceVariant,
                     ),
                     const SizedBox(width: 10),
                     Text(
                       _label(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF1A1A1A),
+                        color: cs.onSurface,
                       ),
                     ),
                   ],

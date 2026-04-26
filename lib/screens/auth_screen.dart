@@ -21,6 +21,7 @@ final RegExp kRegisterPasswordHasSpecial = RegExp(r'[!@#$%^&*]');
 
 const Color kAuthGreen = Color(0xFF0B723E);
 const Color kAuthVkBlue = Color(0xFF2787F5);
+
 /// Фон под фото при [BoxFit.cover] и запасной цвет (не чёрный — иначе «полосы» по краям).
 const Color kAuthScaffoldFill = Color(0xFF4A7BA7);
 const Color kAuthFieldBorder = Color(0xFFD1D1D6);
@@ -427,428 +428,461 @@ class _AuthScreenState extends State<AuthScreen> {
         systemNavigationBarContrastEnforced: false,
       ),
       child: Scaffold(
-      backgroundColor: kAuthScaffoldFill,
-      resizeToAvoidBottomInset: true,
-      body: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/auth_bg.jpg',
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (BuildContext c, Object e, StackTrace? st) {
-                return const ColoredBox(color: kAuthScaffoldFill);
-              },
-            ),
-          ),
-          SafeArea(
-            top: false,
-            bottom: false,
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints box) {
-                final double maxCardH = (box.maxHeight * 0.7).clamp(
-                  220.0,
-                  520.0,
-                );
-                return Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: box.maxWidth,
-                        maxHeight: maxCardH,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(30),
-                        ),
-                        child: ColoredBox(
-                          color: kAuthPanelBackground,
-                          child: SingleChildScrollView(
-                            padding: EdgeInsets.fromLTRB(
-                              24,
-                              20,
-                              24,
-                              20 + bottomPad,
+        backgroundColor: kAuthScaffoldFill,
+        resizeToAvoidBottomInset: true,
+        body: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double w = constraints.maxWidth;
+            final double h = constraints.maxHeight;
+            return Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                Positioned.fill(
+                  child: Image.asset(
+                    'assets/images/auth_bg.jpg',
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    width: w,
+                    height: h,
+                    filterQuality: FilterQuality.medium,
+                    errorBuilder: (BuildContext c, Object e, StackTrace? st) {
+                      return const ColoredBox(color: kAuthScaffoldFill);
+                    },
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: LayoutBuilder(
+                    builder: (BuildContext context, BoxConstraints box) {
+                      final double maxCardH = (box.maxHeight * 0.7).clamp(
+                        220.0,
+                        520.0,
+                      );
+                      return Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: box.maxWidth,
+                              maxHeight: maxCardH,
                             ),
-                            keyboardDismissBehavior:
-                                ScrollViewKeyboardDismissBehavior.onDrag,
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: <Widget>[
-                                  Text(
-                                    _isRegister
-                                        ? 'Регистрация'
-                                        : 'Вход в аккаунт',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w700,
-                                      color: kAuthTitle,
-                                    ),
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(30),
+                              ),
+                              child: ColoredBox(
+                                color: kAuthPanelBackground,
+                                child: SingleChildScrollView(
+                                  padding: EdgeInsets.fromLTRB(
+                                    24,
+                                    20,
+                                    24,
+                                    20 + bottomPad,
                                   ),
-                                  const SizedBox(height: 18),
-                                  if (_isRegister) ...<Widget>[
-                                    TextFormField(
-                                      controller: _firstNameController,
-                                      textInputAction: TextInputAction.next,
-                                      textCapitalization:
-                                          TextCapitalization.none,
-                                      inputFormatters:
-                                          const <TextInputFormatter>[
-                                            _CapitalizeNameWordStartsFormatter(),
-                                          ],
-                                      decoration: _fieldDecoration(
-                                        'Имя',
-                                        icon: Icons.badge_outlined,
-                                      ),
-                                      validator: (String? v) {
-                                        if (v == null || v.trim().isEmpty) {
-                                          return 'Введите имя';
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                    const SizedBox(height: 10),
-                                    TextFormField(
-                                      controller: _lastNameController,
-                                      textInputAction: TextInputAction.next,
-                                      textCapitalization:
-                                          TextCapitalization.none,
-                                      inputFormatters:
-                                          const <TextInputFormatter>[
-                                            _CapitalizeNameWordStartsFormatter(),
-                                          ],
-                                      decoration: _fieldDecoration(
-                                        'Фамилия',
-                                        icon: Icons.badge_outlined,
-                                      ),
-                                      validator: (String? v) {
-                                        if (v == null || v.trim().isEmpty) {
-                                          return 'Введите фамилию';
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Material(
-                                      color: const Color(0xFFF2F2F7),
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: InkWell(
-                                        onTap: () async {
-                                          final DateTime now = DateTime.now();
-                                          final DateTime? d =
-                                              await showDatePicker(
-                                                context: context,
-                                                initialDate:
-                                                    _birthDate ??
-                                                    DateTime(
-                                                      now.year - 20,
-                                                      1,
-                                                      1,
-                                                    ),
-                                                firstDate: DateTime(1920, 1, 1),
-                                                lastDate: now,
-                                              );
-                                          if (d != null) {
-                                            setState(() => _birthDate = d);
-                                          }
-                                        },
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 14,
+                                  keyboardDismissBehavior:
+                                      ScrollViewKeyboardDismissBehavior.onDrag,
+                                  child: Form(
+                                    key: _formKey,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: <Widget>[
+                                        Text(
+                                          _isRegister
+                                              ? 'Регистрация'
+                                              : 'Вход в аккаунт',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w700,
+                                            color: kAuthTitle,
                                           ),
-                                          child: Row(
-                                            children: <Widget>[
-                                              const Icon(
-                                                Icons.calendar_today_outlined,
-                                                size: 20,
-                                                color: Color(0xFF6C6C70),
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Text(
-                                                  _birthDate == null
-                                                      ? 'Дата рождения (обязательно)'
-                                                      : '${_birthDate!.day.toString().padLeft(2, '0')}.'
-                                                            '${_birthDate!.month.toString().padLeft(2, '0')}.'
-                                                            '${_birthDate!.year}',
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    color: _birthDate == null
-                                                        ? const Color(
-                                                            0xFF8E8E93,
-                                                          )
-                                                        : kAuthTitle,
-                                                    fontWeight:
+                                        ),
+                                        const SizedBox(height: 18),
+                                        if (_isRegister) ...<Widget>[
+                                          TextFormField(
+                                            controller: _firstNameController,
+                                            textInputAction:
+                                                TextInputAction.next,
+                                            textCapitalization:
+                                                TextCapitalization.none,
+                                            inputFormatters:
+                                                const <TextInputFormatter>[
+                                                  _CapitalizeNameWordStartsFormatter(),
+                                                ],
+                                            decoration: _fieldDecoration(
+                                              'Имя',
+                                              icon: Icons.badge_outlined,
+                                            ),
+                                            validator: (String? v) {
+                                              if (v == null ||
+                                                  v.trim().isEmpty) {
+                                                return 'Введите имя';
+                                              }
+                                              return null;
+                                            },
+                                          ),
+                                          const SizedBox(height: 10),
+                                          TextFormField(
+                                            controller: _lastNameController,
+                                            textInputAction:
+                                                TextInputAction.next,
+                                            textCapitalization:
+                                                TextCapitalization.none,
+                                            inputFormatters:
+                                                const <TextInputFormatter>[
+                                                  _CapitalizeNameWordStartsFormatter(),
+                                                ],
+                                            decoration: _fieldDecoration(
+                                              'Фамилия',
+                                              icon: Icons.badge_outlined,
+                                            ),
+                                            validator: (String? v) {
+                                              if (v == null ||
+                                                  v.trim().isEmpty) {
+                                                return 'Введите фамилию';
+                                              }
+                                              return null;
+                                            },
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Material(
+                                            color: const Color(0xFFF2F2F7),
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            child: InkWell(
+                                              onTap: () async {
+                                                final DateTime now =
+                                                    DateTime.now();
+                                                final DateTime? d =
+                                                    await showDatePicker(
+                                                      context: context,
+                                                      initialDate:
+                                                          _birthDate ??
+                                                          DateTime(
+                                                            now.year - 20,
+                                                            1,
+                                                            1,
+                                                          ),
+                                                      firstDate: DateTime(
+                                                        1920,
+                                                        1,
+                                                        1,
+                                                      ),
+                                                      lastDate: now,
+                                                    );
+                                                if (d != null) {
+                                                  setState(
+                                                    () => _birthDate = d,
+                                                  );
+                                                }
+                                              },
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 14,
+                                                    ),
+                                                child: Row(
+                                                  children: <Widget>[
+                                                    const Icon(
+                                                      Icons
+                                                          .calendar_today_outlined,
+                                                      size: 20,
+                                                      color: Color(0xFF6C6C70),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Expanded(
+                                                      child: Text(
                                                         _birthDate == null
-                                                        ? FontWeight.w400
-                                                        : FontWeight.w500,
-                                                  ),
+                                                            ? 'Дата рождения (обязательно)'
+                                                            : '${_birthDate!.day.toString().padLeft(2, '0')}.'
+                                                                  '${_birthDate!.month.toString().padLeft(2, '0')}.'
+                                                                  '${_birthDate!.year}',
+                                                        style: TextStyle(
+                                                          fontSize: 16,
+                                                          color:
+                                                              _birthDate == null
+                                                              ? const Color(
+                                                                  0xFF8E8E93,
+                                                                )
+                                                              : kAuthTitle,
+                                                          fontWeight:
+                                                              _birthDate == null
+                                                              ? FontWeight.w400
+                                                              : FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ],
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                  ],
-                                  TextFormField(
-                                    controller: _emailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    textInputAction: TextInputAction.next,
-                                    autocorrect: false,
-                                    autofillHints: const <String>[
-                                      AutofillHints.email,
-                                    ],
-                                    decoration: _fieldDecoration(
-                                      'Ваша почта',
-                                      icon: Icons.email_outlined,
-                                    ),
-                                    validator: _validateEmail,
-                                  ),
-                                  const SizedBox(height: 10),
-                                  TextFormField(
-                                    controller: _passwordController,
-                                    obscureText: _obscurePassword,
-                                    autofillHints: _isRegister
-                                        ? const <String>[]
-                                        : const <String>[
-                                            AutofillHints.password,
+                                          const SizedBox(height: 10),
+                                        ],
+                                        TextFormField(
+                                          controller: _emailController,
+                                          keyboardType:
+                                              TextInputType.emailAddress,
+                                          textInputAction: TextInputAction.next,
+                                          autocorrect: false,
+                                          autofillHints: const <String>[
+                                            AutofillHints.email,
                                           ],
-                                    decoration: _fieldDecoration(
-                                      'Пароль',
-                                      icon: Icons.lock_outline,
-                                      suffix: IconButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            _obscurePassword =
-                                                !_obscurePassword;
-                                          });
-                                        },
-                                        icon: Icon(
-                                          _obscurePassword
-                                              ? Icons.visibility_outlined
-                                              : Icons.visibility_off_outlined,
-                                        ),
-                                        color: const Color(0xFF8E8E93),
-                                      ),
-                                    ),
-                                    validator: _validatePassword,
-                                  ),
-                                  if (_isRegister) ...<Widget>[
-                                    const SizedBox(height: 10),
-                                    TextFormField(
-                                      controller: _passwordRepeatController,
-                                      obscureText: _obscurePasswordRepeat,
-                                      decoration: _fieldDecoration(
-                                        'Повторите пароль',
-                                        icon: Icons.lock_outline,
-                                        suffix: IconButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              _obscurePasswordRepeat =
-                                                  !_obscurePasswordRepeat;
-                                            });
-                                          },
-                                          icon: Icon(
-                                            _obscurePasswordRepeat
-                                                ? Icons.visibility_outlined
-                                                : Icons.visibility_off_outlined,
+                                          decoration: _fieldDecoration(
+                                            'Ваша почта',
+                                            icon: Icons.email_outlined,
                                           ),
-                                          color: const Color(0xFF8E8E93),
+                                          validator: _validateEmail,
                                         ),
-                                      ),
-                                      validator: (String? v) {
-                                        if (v == null || v.isEmpty) {
-                                          return 'Повторите пароль';
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                  ],
-                                  if (_error != null) ...<Widget>[
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      _error!,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Color(0xFFC62828),
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 14),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: FilledButton(
-                                      onPressed: _loading
-                                          ? null
-                                          : _isRegister
-                                          ? _signUp
-                                          : _signIn,
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: kAuthGreen,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        elevation: 0,
-                                      ),
-                                      child: _loading
-                                          ? const SizedBox(
-                                              height: 22,
-                                              width: 22,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
+                                        const SizedBox(height: 10),
+                                        TextFormField(
+                                          controller: _passwordController,
+                                          obscureText: _obscurePassword,
+                                          autofillHints: _isRegister
+                                              ? const <String>[]
+                                              : const <String>[
+                                                  AutofillHints.password,
+                                                ],
+                                          decoration: _fieldDecoration(
+                                            'Пароль',
+                                            icon: Icons.lock_outline,
+                                            suffix: IconButton(
+                                              onPressed: () {
+                                                setState(() {
+                                                  _obscurePassword =
+                                                      !_obscurePassword;
+                                                });
+                                              },
+                                              icon: Icon(
+                                                _obscurePassword
+                                                    ? Icons.visibility_outlined
+                                                    : Icons
+                                                          .visibility_off_outlined,
                                               ),
-                                            )
-                                          : Text(
-                                              _isRegister
-                                                  ? 'Зарегистрироваться'
-                                                  : 'Войти',
-                                              style: const TextStyle(
+                                              color: const Color(0xFF8E8E93),
+                                            ),
+                                          ),
+                                          validator: _validatePassword,
+                                        ),
+                                        if (_isRegister) ...<Widget>[
+                                          const SizedBox(height: 10),
+                                          TextFormField(
+                                            controller:
+                                                _passwordRepeatController,
+                                            obscureText: _obscurePasswordRepeat,
+                                            decoration: _fieldDecoration(
+                                              'Повторите пароль',
+                                              icon: Icons.lock_outline,
+                                              suffix: IconButton(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _obscurePasswordRepeat =
+                                                        !_obscurePasswordRepeat;
+                                                  });
+                                                },
+                                                icon: Icon(
+                                                  _obscurePasswordRepeat
+                                                      ? Icons
+                                                            .visibility_outlined
+                                                      : Icons
+                                                            .visibility_off_outlined,
+                                                ),
+                                                color: const Color(0xFF8E8E93),
+                                              ),
+                                            ),
+                                            validator: (String? v) {
+                                              if (v == null || v.isEmpty) {
+                                                return 'Повторите пароль';
+                                              }
+                                              return null;
+                                            },
+                                          ),
+                                        ],
+                                        if (_error != null) ...<Widget>[
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            _error!,
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              color: Color(0xFFC62828),
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                        const SizedBox(height: 14),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton(
+                                            onPressed: _loading
+                                                ? null
+                                                : _isRegister
+                                                ? _signUp
+                                                : _signIn,
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: kAuthGreen,
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 16,
+                                                  ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              elevation: 0,
+                                            ),
+                                            child: _loading
+                                                ? const SizedBox(
+                                                    height: 22,
+                                                    width: 22,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: Colors.white,
+                                                        ),
+                                                  )
+                                                : Text(
+                                                    _isRegister
+                                                        ? 'Зарегистрироваться'
+                                                        : 'Войти',
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        if (!_isRegister)
+                                          OutlinedButton(
+                                            onPressed: _loading
+                                                ? null
+                                                : () {
+                                                    setState(() {
+                                                      _isRegister = true;
+                                                      _error = null;
+                                                      _passwordRepeatController
+                                                          .clear();
+                                                    });
+                                                  },
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: kAuthGreen,
+                                              side: const BorderSide(
+                                                color: kAuthGreen,
+                                                width: 1.2,
+                                              ),
+                                              backgroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 16,
+                                                  ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'Регистрация',
+                                              style: TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  if (!_isRegister)
-                                    OutlinedButton(
-                                      onPressed: _loading
-                                          ? null
-                                          : () {
-                                              setState(() {
-                                                _isRegister = true;
-                                                _error = null;
-                                                _passwordRepeatController
-                                                    .clear();
-                                              });
-                                            },
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: kAuthGreen,
-                                        side: const BorderSide(
-                                          color: kAuthGreen,
-                                          width: 1.2,
-                                        ),
-                                        backgroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                      ),
-                                      child: const Text(
-                                        'Регистрация',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    )
-                                  else
-                                    TextButton(
-                                      onPressed: _loading
-                                          ? null
-                                          : () {
-                                              setState(() {
-                                                _isRegister = false;
-                                                _error = null;
-                                                _passwordRepeatController
-                                                    .clear();
-                                              });
-                                            },
-                                      child: const Text(
-                                        'Уже есть аккаунт? Войти',
-                                        style: TextStyle(
-                                          color: kAuthGreen,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  if (!_isRegister) ...<Widget>[
-                                    const SizedBox(height: 2),
-                                    Center(
-                                      child: TextButton(
-                                        onPressed: _forgotPassword,
-                                        child: const Text(
-                                          'Забыли пароль?',
-                                          style: TextStyle(
-                                            color: kAuthGreen,
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: FilledButton.icon(
-                                        onPressed: _loading
-                                            ? null
-                                            : _signInWithVk,
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: kAuthVkBlue,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 14,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
+                                          )
+                                        else
+                                          TextButton(
+                                            onPressed: _loading
+                                                ? null
+                                                : () {
+                                                    setState(() {
+                                                      _isRegister = false;
+                                                      _error = null;
+                                                      _passwordRepeatController
+                                                          .clear();
+                                                    });
+                                                  },
+                                            child: const Text(
+                                              'Уже есть аккаунт? Войти',
+                                              style: TextStyle(
+                                                color: kAuthGreen,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
-                                          elevation: 0,
-                                        ),
-                                        icon: const Icon(
-                                          Icons.messenger_outlined,
-                                          size: 20,
-                                        ),
-                                        label: const Text(
-                                          'Вход по VK ID',
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w600,
+                                        if (!_isRegister) ...<Widget>[
+                                          const SizedBox(height: 2),
+                                          Center(
+                                            child: TextButton(
+                                              onPressed: _forgotPassword,
+                                              child: const Text(
+                                                'Забыли пароль?',
+                                                style: TextStyle(
+                                                  color: kAuthGreen,
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ),
+                                          const SizedBox(height: 4),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: FilledButton.icon(
+                                              onPressed: _loading
+                                                  ? null
+                                                  : _signInWithVk,
+                                              style: FilledButton.styleFrom(
+                                                backgroundColor: kAuthVkBlue,
+                                                foregroundColor: Colors.white,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 14,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                elevation: 0,
+                                              ),
+                                              icon: const Icon(
+                                                Icons.messenger_outlined,
+                                                size: 20,
+                                              ),
+                                              label: const Text(
+                                                'Вход по VK ID',
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
-                                  ],
-                                ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

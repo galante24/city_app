@@ -73,9 +73,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               onChanged: (bool v) {
                 unawaited(appThemeController.setDarkTheme(v));
               },
-              title: const Text('Тёмная тема'),
-              subtitle: const Text(
+              title: Text(
+                'Тёмная тема',
+                style: TextStyle(color: cs.onSurface),
+              ),
+              subtitle: Text(
                 'Оформление приложения в тёмных тонах (сохраняется на устройстве)',
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
               activeThumbColor: cs.primary,
             );
@@ -96,9 +100,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     });
                   }
                 },
-          title: const Text('Отключить уведомления'),
-          subtitle: const Text(
+          title: Text(
+            'Отключить уведомления',
+            style: TextStyle(color: cs.onSurface),
+          ),
+          subtitle: Text(
             'Не показывать в шторке уведомления о новых сообщениях (на этом устройстве)',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           activeThumbColor: cs.primary,
         ),

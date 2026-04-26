@@ -12,9 +12,16 @@ import 'user_chat_thread_screen.dart';
 /// [returnUserIdOnly] — вернуть id через `Navigator.pop(id)` для добавления в группу;
 /// иначе открыть/создать личный чат.
 class ContactPickerPage extends StatefulWidget {
-  const ContactPickerPage({super.key, this.returnUserIdOnly = false});
+  const ContactPickerPage({
+    super.key,
+    this.returnUserIdOnly = false,
+    this.initialNickMode = false,
+  });
 
   final bool returnUserIdOnly;
+
+  /// Сразу открыть вкладку поиска по нику (@username).
+  final bool initialNickMode;
 
   @override
   State<ContactPickerPage> createState() => _ContactPickerPageState();
@@ -36,6 +43,9 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialNickMode) {
+      _mode = _PickerMode.byUsername;
+    }
     _nickSearch.addListener(_onNickQueryChanged);
     _load();
   }
@@ -353,26 +363,29 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
         if (_nickLoading) const LinearProgressIndicator(minHeight: 2),
         Expanded(
           child: apiQ.isEmpty
-              ? const Center(
+              ? Center(
                   child: Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(24),
                     child: Text(
                       'Введите ник, как в профиле (с @ или без). '
                       'Он совпадает с полем «Ник в чате».',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF6C6C70),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         height: 1.35,
                       ),
                     ),
                   ),
                 )
               : _nickResults.isEmpty && !_nickLoading
-              ? const Center(
+              ? Center(
                   child: Text(
                     'Никого не найдено',
-                    style: TextStyle(fontSize: 16, color: Color(0xFF6C6C70)),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 )
               : ListView.separated(
@@ -407,7 +420,7 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
                         at,
                         style: TextStyle(
                           color: at == '—'
-                              ? const Color(0xFF6C6C70)
+                              ? Theme.of(context).colorScheme.onSurfaceVariant
                               : kPrimaryBlue,
                           fontWeight: FontWeight.w500,
                         ),

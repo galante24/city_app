@@ -269,23 +269,31 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     }
     final String? me = Supabase.instance.client.auth.currentUser?.id;
     final bool isGroup = _isGroup == true;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
+    final bool isDark = theme.brightness == Brightness.dark;
+    final Color chatBg =
+        isDark ? theme.scaffoldBackgroundColor : const Color(0xFFF0F2F5);
+    final Color appBarBg = isDark ? cs.surface : Colors.white;
+    final Color appBarIcon = isDark ? cs.onSurface : kPrimaryBlue;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: chatBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: appBarBg,
+        foregroundColor: cs.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: kPrimaryBlue),
+          icon: Icon(Icons.arrow_back, color: appBarIcon),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           _headerTitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Color(0xFF1A1A1A),
+          style: TextStyle(
+            color: cs.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -293,7 +301,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
         actions: <Widget>[
           if (isGroup)
             IconButton(
-              icon: const Icon(Icons.group_outlined, color: kPrimaryBlue),
+              icon: Icon(Icons.group_outlined, color: appBarIcon),
               onPressed: () {
                 Navigator.of(context).push<void>(
                   MaterialPageRoute<void>(
@@ -353,7 +361,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
               ),
             ),
           Material(
-            color: Colors.white,
+            color: isDark ? cs.surface : Colors.white,
             child: Padding(
               padding: EdgeInsets.fromLTRB(4, 4, 8, _inputBarBottom),
               child: Row(
@@ -366,7 +374,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                       _showEmoji
                           ? Icons.keyboard_rounded
                           : Icons.emoji_emotions_outlined,
-                      color: kPrimaryBlue,
+                      color: appBarIcon,
                     ),
                     tooltip: _showEmoji ? 'Клавиатура' : 'Смайлики',
                   ),
@@ -379,7 +387,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.attach_file, color: kPrimaryBlue),
+                        : Icon(Icons.attach_file, color: appBarIcon),
                     tooltip: 'Прикрепить фото',
                   ),
                   Expanded(
@@ -389,12 +397,19 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                       minLines: 1,
                       maxLines: 4,
                       textCapitalization: TextCapitalization.sentences,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                      ),
                       decoration: InputDecoration(
                         hintText: isGroup
                             ? 'Сообщение в группе…'
                             : 'Сообщение…',
+                        hintStyle: TextStyle(color: cs.onSurfaceVariant),
                         filled: true,
-                        fillColor: const Color(0xFFF0F0F0),
+                        fillColor: isDark
+                            ? cs.surfaceContainerHigh
+                            : const Color(0xFFF0F0F0),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
@@ -495,13 +510,16 @@ class _MessagesListState extends State<_MessagesList> {
           });
         }
         if (rows.isEmpty) {
-          return const Center(
+          final ColorScheme ecs = Theme.of(context).colorScheme;
+          return Center(
             child: Text(
               'Пока нет сообщений',
-              style: TextStyle(color: Color(0xFF6B6B70)),
+              style: TextStyle(color: ecs.onSurfaceVariant),
             ),
           );
         }
+        final ColorScheme cs = Theme.of(context).colorScheme;
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           itemCount: rows.length,
@@ -527,6 +545,18 @@ class _MessagesListState extends State<_MessagesList> {
             final bool myReadByPeer = mine && !isDeleted && createdAt != null
                 ? _peersReadMessage(widget.otherReadByUser, createdAt)
                 : false;
+            final Color incomingBubble = isDark
+                ? cs.surfaceContainerHigh
+                : Colors.white;
+            final Color incomingUnreadBubble = isDark
+                ? Color.alphaBlend(
+                    kPrimaryBlue.withValues(alpha: 0.18),
+                    cs.surfaceContainerHigh,
+                  )
+                : const Color(0xFFF0F7FF);
+            final Color deletedBubble = isDark
+                ? cs.surfaceContainerLow
+                : const Color(0xFFE8E8ED);
             return Align(
               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
               child: GestureDetector(
@@ -568,12 +598,12 @@ class _MessagesListState extends State<_MessagesList> {
                   ),
                   decoration: BoxDecoration(
                     color: isDeleted
-                        ? const Color(0xFFE8E8ED)
+                        ? deletedBubble
                         : (mine
                               ? kPrimaryBlue
                               : (incomingUnread
-                                    ? const Color(0xFFF0F7FF)
-                                    : Colors.white)),
+                                    ? incomingUnreadBubble
+                                    : incomingBubble)),
                     border: incomingUnread
                         ? const Border(
                             left: BorderSide(color: kPrimaryBlue, width: 3),
@@ -642,10 +672,10 @@ class _MessagesListState extends State<_MessagesList> {
                           text,
                           style: TextStyle(
                             color: isDeleted
-                                ? const Color(0xFF6B6B70)
+                                ? cs.onSurfaceVariant
                                 : (mine
                                       ? Colors.white
-                                      : const Color(0xFF1A1C1C)),
+                                      : cs.onSurface),
                             fontSize: 15,
                             fontWeight: incomingUnread ? FontWeight.w600 : null,
                             fontStyle: isDeleted ? FontStyle.italic : null,
@@ -675,7 +705,7 @@ class _MessagesListState extends State<_MessagesList> {
                             style: TextStyle(
                               color: mine
                                   ? Colors.white.withValues(alpha: 0.75)
-                                  : const Color(0xFF8A8A8E),
+                                  : cs.onSurfaceVariant,
                               fontSize: 11,
                             ),
                           ),
