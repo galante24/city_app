@@ -256,7 +256,9 @@ class AboutBlock extends StatelessWidget {
     } on Object catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не сохранилось: $e')),
+          SnackBar(
+            content: Text(CityDataService.messageForAboutSaveFailure(e)),
+          ),
         );
       }
     } finally {

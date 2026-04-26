@@ -1389,3 +1389,12 @@ create policy "city media vacancies delete own"
     and split_part(name, '/', 2) = auth.uid()::text
   );
 
+-- >>>>>> BEGIN FILE: 019_profile_about.sql <<<<<<
+-- Текст «О себе» в профиле (виден собеседникам по политике p_profiles_read_chat_partners).
+
+alter table public.profiles
+  add column if not exists about text;
+
+comment on column public.profiles.about is 'О себе; отображается в профиле в чате у партнёров';
+-- >>>>>> END FILE: 019_profile_about.sql <<<<<<
+

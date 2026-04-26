@@ -462,14 +462,104 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   }
 
   Future<void> _openNicknameSearch() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (BuildContext c) =>
-            const ContactPickerPage(initialNickMode: true),
+    final TextEditingController nick = TextEditingController();
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext c) => AlertDialog(
+        title: const Text('Ник в приложении'),
+        content: TextField(
+          controller: nick,
+          keyboardType: TextInputType.text,
+          textCapitalization: TextCapitalization.none,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'Ник пользователя',
+            hintText: '@username или username',
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Найти'),
+          ),
+        ],
       ),
     );
-    await _load();
-    await ChatUnreadBadge.refresh();
+    if (ok != true || !mounted) {
+      return;
+    }
+    final String raw = nick.text.trim();
+    if (raw.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Введите ник')),
+        );
+      }
+      return;
+    }
+    final String? me = Supabase.instance.client.auth.currentUser?.id;
+    if (me == null) {
+      return;
+    }
+    final String? other = await ChatService.findUserIdByUsername(raw);
+    if (other == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Пользователь с таким ником не найден в приложении',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (other == me) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Это ваш ник — выберите другого')),
+        );
+      }
+      return;
+    }
+    try {
+      final String conv = await ChatService.getOrCreateDirectConversation(
+        other,
+      );
+      final String name =
+          (await ChatService.displayNameForUserId(other)) ?? 'Чат';
+      if (!mounted) {
+        return;
+      }
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext c) => UserChatThreadScreen(
+            conversationId: conv,
+            title: name,
+            listItem: null,
+            directPeerUserId: other,
+          ),
+        ),
+      );
+      if (mounted) {
+        await _load();
+        await ChatUnreadBadge.refresh();
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось открыть чат')));
+      }
+    }
   }
 
   Future<void> _openAddByEmail() async {

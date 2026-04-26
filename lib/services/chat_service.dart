@@ -55,6 +55,26 @@ class ChatService {
     }
   }
 
+  /// Точное совпадение [profiles.username] без учёта регистра; ввод с @ или без.
+  static Future<String?> findUserIdByUsername(String rawNick) async {
+    String s = rawNick.trim();
+    while (s.startsWith('@')) {
+      s = s.substring(1).trim();
+    }
+    if (s.isEmpty) {
+      return null;
+    }
+    final String needle = s.toLowerCase();
+    final List<Map<String, dynamic>> rows = await searchProfilesForChat(s);
+    for (final Map<String, dynamic> m in rows) {
+      final String? u = (m['username'] as String?)?.trim();
+      if (u != null && u.toLowerCase() == needle) {
+        return m['id']?.toString();
+      }
+    }
+    return null;
+  }
+
   static Future<String?> findUserIdByEmail(String email) async {
     final SupabaseClient? c = _c;
     if (c == null) {

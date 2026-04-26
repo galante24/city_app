@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -53,10 +54,14 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      _contacts = await FlutterContacts.getContacts(
-        withProperties: true,
-        withPhoto: false,
-      );
+      if (kIsWeb) {
+        _contacts = <Contact>[];
+      } else {
+        _contacts = await FlutterContacts.getContacts(
+          withProperties: true,
+          withPhoto: false,
+        );
+      }
     } on Object {
       _contacts = <Contact>[];
     } finally {

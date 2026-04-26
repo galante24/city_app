@@ -232,6 +232,17 @@ class CityDataService {
     return bucket.getPublicUrl(path);
   }
 
+  /// Сообщение для SnackBar, если сохранение «О себе» упало из‑за отсутствия колонки в БД.
+  static String messageForAboutSaveFailure(Object error) {
+    final String s = error.toString();
+    if (s.contains('PGRST204') && s.contains('about')) {
+      return 'В проекте Supabase нет колонки profiles.about. '
+          'Выполните SQL из файла supabase/migrations/019_profile_about.sql '
+          '(или команду supabase db push), затем снова нажмите «Сохранить».';
+    }
+    return 'Не сохранилось: $error';
+  }
+
   /// Текст «О себе» в [profiles.about] (виден партнёрам в чатах).
   static Future<void> setMyAbout(String? about) async {
     final c = client;
