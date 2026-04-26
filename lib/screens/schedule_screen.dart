@@ -10,10 +10,6 @@ import '../services/city_data_service.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 
-const Color _kPanelBg = Color(0xFFFFFFFF);
-const Color _kTextSecondary = Color(0xFF6C6C70);
-const Color _kTextPrimary = Color(0xFF1C1C1E);
-
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
 
@@ -138,6 +134,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     required bool loading,
     required bool isAdmin,
   }) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     final String text = ferry == null
         ? (loading
               ? 'Загрузка статуса парома...'
@@ -146,7 +143,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final String? timeLine = ferry?.timeText;
     final bool run = ferry == null || ferry.isRunning;
     return Material(
-      color: _kPanelBg,
+      color: Theme.of(context).colorScheme.surface,
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -164,21 +161,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  const Text(
+                  Text(
                     'Паром',
                     style: TextStyle(
                       fontSize: 12,
-                      color: _kTextSecondary,
+                      color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     text,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: _kTextPrimary,
+                      color: cs.onSurface,
                     ),
                   ),
                   if (timeLine != null && timeLine.isNotEmpty)
@@ -186,9 +183,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
                         timeLine,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: _kTextSecondary,
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -211,7 +208,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     if (!supabaseAppReady || _ferryStream == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF5F5F7),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -221,7 +218,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 action: Icon(
                   Icons.directions_bus_filled_rounded,
                   size: 28,
-                  color: kSoftHeaderActionIconColor,
+                  color: softHeaderTrailingIconColor(context),
                 ),
               ),
             ),
@@ -244,7 +241,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             : null;
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF5F5F7),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -254,7 +251,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   action: Icon(
                     Icons.directions_bus_filled_rounded,
                     size: 28,
-                    color: kSoftHeaderActionIconColor,
+                    color: softHeaderTrailingIconColor(context),
                   ),
                 ),
               ),
@@ -264,7 +261,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
                   children: <Widget>[
                     Card(
-                      color: _kPanelBg,
+                      color: Theme.of(c).colorScheme.surface,
                       clipBehavior: Clip.antiAlias,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -276,14 +273,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4, bottom: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 8),
                       child: Text(
                         'Автобусы',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: _kTextPrimary,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),

@@ -9,6 +9,46 @@ const Color _kCardBg = Color(0xFFFFFFFF);
 const Color _kNorthTint = Color(0xFFF1F6F0);
 const Color _kSouthTint = Color(0xFFF0F4FA);
 
+/// Цвета блока автобусов: в тёмной теме — [ColorScheme], иначе фиксированные светлые.
+final class _BusUiColors {
+  _BusUiColors(this.context);
+
+  final BuildContext context;
+
+  ColorScheme get cs => Theme.of(context).colorScheme;
+
+  bool get dark => Theme.of(context).brightness == Brightness.dark;
+
+  Color get cardBg => dark ? cs.surface : _kCardBg;
+
+  Color get textPrimary => dark ? cs.onSurface : _kTextPrimary;
+
+  Color get textSecondary => dark ? cs.onSurfaceVariant : _kTextSecondary;
+
+  Color get northTint => dark
+      ? Color.alphaBlend(
+          const Color(0xFF43A047).withValues(alpha: 0.14),
+          cs.surface,
+        )
+      : _kNorthTint;
+
+  Color get southTint => dark
+      ? Color.alphaBlend(
+          kPrimaryBlue.withValues(alpha: 0.14),
+          cs.surface,
+        )
+      : _kSouthTint;
+
+  Color get chipUnselectedBg =>
+      dark ? cs.surfaceContainerLow : const Color(0xFFF2F2F7);
+
+  Color get routeColumnBorder =>
+      dark ? cs.outline.withValues(alpha: 0.35) : const Color(0x14000000);
+
+  Color get chipTimeBg =>
+      dark ? cs.surfaceContainerHigh : const Color(0xFFF2F2F7);
+}
+
 class LesosibirskBusesSection extends StatelessWidget {
   const LesosibirskBusesSection({super.key});
 
@@ -44,6 +84,7 @@ class _Route7ScheduleCardState extends State<Route7ScheduleCard> {
 
   @override
   Widget build(BuildContext context) {
+    final _BusUiColors u = _BusUiColors(context);
     final String leftA = _dir == 0 ? 'Военкомат' : 'мкр. «А»';
     final String rightB = 'Спорткомплекс';
     final List<String> leftT =
@@ -51,7 +92,7 @@ class _Route7ScheduleCardState extends State<Route7ScheduleCard> {
     final List<String> rightT =
         _dir == 0 ? route7NorthSport : route7SouthSport;
     return Card(
-      color: _kCardBg,
+      color: u.cardBg,
       clipBehavior: Clip.antiAlias,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -73,20 +114,20 @@ class _Route7ScheduleCardState extends State<Route7ScheduleCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const Text(
+                      Text(
                         '№ 7',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: _kTextSecondary,
+                          color: u.textSecondary,
                         ),
                       ),
                       Text(
                         'Военкомат — Новоенисейск',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
-                          color: _kTextPrimary,
+                          color: u.textPrimary,
                         ),
                       ),
                     ],
@@ -130,7 +171,7 @@ class _Route7ScheduleCardState extends State<Route7ScheduleCard> {
               children: <Widget>[
                 Expanded(
                   child: _RouteColumn(
-                    background: _kNorthTint,
+                    background: u.northTint,
                     title: leftA,
                     times: leftT,
                     onAllTrips: () => _showAllTrips(
@@ -143,7 +184,7 @@ class _Route7ScheduleCardState extends State<Route7ScheduleCard> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: _RouteColumn(
-                    background: _kSouthTint,
+                    background: u.southTint,
                     title: rightB,
                     times: rightT,
                     onAllTrips: () => _showAllTrips(
@@ -202,10 +243,10 @@ class _Route7ScheduleCardState extends State<Route7ScheduleCard> {
               child: Text(
                 'В выбранном направлении уточнённые отходы с остановок '
                 '«$leftA» и «$rightB» показаны в колонках выше.',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12.5,
                   height: 1.35,
-                  color: _kTextSecondary,
+                  color: u.textSecondary,
                 ),
               ),
             ),
@@ -303,10 +344,11 @@ class _DirChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _BusUiColors u = _BusUiColors(context);
     return Material(
       color: selected
           ? kPrimaryBlue.withValues(alpha: 0.1)
-          : const Color(0xFFF2F2F7),
+          : u.chipUnselectedBg,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -326,7 +368,7 @@ class _DirChip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? kPrimaryBlue : _kTextSecondary,
+                    color: selected ? kPrimaryBlue : u.textSecondary,
                     height: 1.2,
                   ),
                 ),
@@ -353,6 +395,7 @@ class _RouteColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _BusUiColors u = _BusUiColors(context);
     final List<List<String>> parts = byDayparts(times);
     const List<String> labels = <String>['Утро', 'День', 'Вечер', 'Вечер и ночь'];
     const List<IconData> icons = <IconData>[
@@ -366,7 +409,7 @@ class _RouteColumn extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0x14000000)),
+        border: Border.all(color: u.routeColumnBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -374,10 +417,10 @@ class _RouteColumn extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.w700,
-              color: _kTextPrimary,
+              color: u.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
@@ -437,12 +480,13 @@ class _DaypartBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _BusUiColors u = _BusUiColors(context);
     final String? first = bandTimes.isEmpty ? null : bandTimes.first;
     final String? last = bandTimes.isEmpty ? null : bandTimes.last;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(icon, size: 16, color: _kTextSecondary),
+        Icon(icon, size: 16, color: u.textSecondary),
         const SizedBox(width: 4),
         Expanded(
           child: Column(
@@ -450,17 +494,17 @@ class _DaypartBlock extends StatelessWidget {
             children: <Widget>[
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
-                  color: _kTextSecondary,
+                  color: u.textSecondary,
                 ),
               ),
               Text(
                 bandRange,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11.5,
-                  color: _kTextSecondary,
+                  color: u.textSecondary,
                 ),
               ),
               if (first != null && last != null)
@@ -468,21 +512,21 @@ class _DaypartBlock extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     '$first  …  $last',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
-                      color: _kTextPrimary,
+                      color: u.textPrimary,
                     ),
                   ),
                 )
               else
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     '—',
                     style: TextStyle(
                       fontSize: 12.5,
-                      color: _kTextSecondary,
+                      color: u.textSecondary,
                     ),
                   ),
                 ),
@@ -500,8 +544,9 @@ class _SimpleRouteTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _BusUiColors u = _BusUiColors(context);
     return Material(
-      color: _kCardBg,
+      color: u.cardBg,
       borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
@@ -531,20 +576,20 @@ class _SimpleRouteTile extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       '№ ${route.number}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: _kTextSecondary,
+                        color: u.textSecondary,
                       ),
                     ),
                     Text(
                       route.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: _kTextPrimary,
+                        color: u.textPrimary,
                         height: 1.2,
                       ),
                     ),
@@ -553,9 +598,9 @@ class _SimpleRouteTile extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
                           route.workHoursLabel!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13.5,
-                            color: _kTextSecondary,
+                            color: u.textSecondary,
                           ),
                         ),
                       ),
@@ -577,6 +622,7 @@ class _SimpleRouteTile extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (BuildContext c) {
+        final _BusUiColors sheetU = _BusUiColors(c);
         return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 0.5,
@@ -616,9 +662,10 @@ class _SimpleRouteTile extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '№ ${r.number}  ${r.title}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
+                          color: sheetU.textPrimary,
                         ),
                       ),
                     ),
@@ -629,8 +676,8 @@ class _SimpleRouteTile extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 8, bottom: 16),
                     child: Text(
                       r.workHoursLabel!,
-                      style: const TextStyle(
-                        color: _kTextSecondary,
+                      style: TextStyle(
+                        color: sheetU.textSecondary,
                         fontSize: 15,
                       ),
                     ),
@@ -660,6 +707,7 @@ class _StopTimes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final _BusUiColors u = _BusUiColors(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -681,7 +729,7 @@ class _StopTimes extends StatelessWidget {
                   label: Text(t),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  backgroundColor: const Color(0xFFF2F2F7),
+                  backgroundColor: u.chipTimeBg,
                 ),
               )
               .toList(),

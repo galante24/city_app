@@ -572,7 +572,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF5F5F7),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -581,7 +581,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
               trailing: SoftHeaderWeatherWithAction(
                 action: Icon(
                   Icons.chat_outlined,
-                  color: kSoftHeaderActionIconColor,
+                  color: softHeaderTrailingIconColor(context),
                   size: 26,
                 ),
               ),
@@ -594,7 +594,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -604,7 +604,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
               action: IconButton(
                 icon: Icon(
                   Icons.add_circle_outline,
-                  color: kSoftHeaderActionIconColor,
+                  color: softHeaderTrailingIconColor(context),
                   size: 28,
                 ),
                 onPressed: _openAddChat,
@@ -625,7 +625,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                       prefixIcon:
                           const Icon(Icons.search, color: Color(0xFF8E8E93)),
                       filled: true,
-                      fillColor: const Color(0xFFF2F2F7),
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -737,7 +737,7 @@ class _ChatListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,

@@ -3,11 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../app_constants.dart';
 import '../services/job_vacancy_service.dart';
+import '../widgets/soft_tab_header.dart';
+import '../widgets/weather_app_bar_action.dart';
 import 'vacancy_detail_screen.dart';
 import 'vacancy_form_screen.dart';
-
-const Color _kBg = Color(0xFFF5F5F7);
-const Color _kTextSecondary = Color(0xFF6C6C70);
 
 enum _VacancySort { newest, oldest }
 
@@ -109,21 +108,28 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     final List<Map<String, dynamic>> shown = _filteredAndSorted;
     return Scaffold(
-      backgroundColor: _kBg,
-      appBar: AppBar(
-        title: const Text('Вакансии'),
-        backgroundColor: kPrimaryBlue,
-        foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          SoftTabHeader(
+            leading: const SoftHeaderBackButton(),
+            title: 'Вакансии',
+            trailing: SoftHeaderWeatherWithAction(
+              action: Icon(
+                Icons.work_rounded,
+                size: 28,
+                color: softHeaderTrailingIconColor(context),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: TextField(
@@ -132,7 +138,7 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                 hintText: 'Поиск вакансий',
                 prefixIcon: const Icon(Icons.search),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: cs.surfaceContainerHigh,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -164,9 +170,9 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: <Widget>[
-                const Text(
+                Text(
                   'Сортировка: ',
-                  style: TextStyle(color: _kTextSecondary, fontSize: 14),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 ),
                 DropdownButtonHideUnderline(
                   child: DropdownButton<_VacancySort>(
@@ -197,14 +203,14 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
               ],
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Text(
               'Актуальные вакансии',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1C1C1E),
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -212,10 +218,13 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : shown.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'Пока нет вакансий',
-                      style: TextStyle(color: _kTextSecondary, fontSize: 16),
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 16,
+                      ),
                     ),
                   )
                 : ListView.separated(
@@ -256,6 +265,9 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                     },
                   ),
           ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -270,7 +282,7 @@ class _SuggestVacancyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onOpen,
@@ -285,7 +297,7 @@ class _SuggestVacancyCard extends StatelessWidget {
             children: <Widget>[
               Icon(Icons.work_rounded, size: 40, color: kPrimaryBlue),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
@@ -294,7 +306,7 @@ class _SuggestVacancyCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1C1C1E),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     SizedBox(height: 4),
@@ -302,7 +314,8 @@ class _SuggestVacancyCard extends StatelessWidget {
                       'Разместите вакансию и найдите подходящих сотрудников',
                       style: TextStyle(
                         fontSize: 12,
-                        color: _kTextSecondary,
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withValues(alpha: 0.65),
                         height: 1.2,
                       ),
                     ),
@@ -345,8 +358,9 @@ class _VacancyListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     return Material(
-      color: Colors.white,
+      color: cs.surface,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -379,10 +393,10 @@ class _VacancyListTile extends StatelessWidget {
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1C1C1E),
+                        color: cs.onSurface,
                       ),
                     ),
                     if (salary.isNotEmpty) ...<Widget>[
@@ -404,7 +418,7 @@ class _VacancyListTile extends StatelessWidget {
                           Icon(
                             Icons.place_outlined,
                             size: 16,
-                            color: Colors.grey[600],
+                            color: cs.onSurfaceVariant,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
@@ -414,7 +428,7 @@ class _VacancyListTile extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[700],
+                                color: cs.onSurfaceVariant,
                               ),
                             ),
                           ),
@@ -425,16 +439,19 @@ class _VacancyListTile extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         dateLabel,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: _kTextSecondary,
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+              ),
             ],
           ),
         ),

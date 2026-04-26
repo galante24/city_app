@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_constants.dart';
+import 'services/app_theme_controller.dart';
+import 'theme/city_theme.dart' show CityTheme;
 import 'widgets/soft_tab_header.dart';
 import 'widgets/weather_app_bar_action.dart';
 import 'app_update_check.dart';
@@ -24,6 +26,7 @@ Future<void> main() async {
   await Supabase.initialize(url: kSupabaseUrl, anonKey: kSupabaseAnonKey);
   supabaseAppReady = true;
   await MessageNotificationService.instance.init();
+  await appThemeController.load();
   runApp(const CityApp());
 }
 
@@ -32,27 +35,18 @@ class CityApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Лесосибирск',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: kPrimaryBlue,
-          primary: kPrimaryBlue,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: kPrimaryBlue,
-          foregroundColor: Colors.white,
-          centerTitle: true,
-          elevation: 0,
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: kPrimaryBlue,
-          foregroundColor: Colors.white,
-        ),
-      ),
-      home: const _AuthStateGate(),
+    return ListenableBuilder(
+      listenable: appThemeController,
+      builder: (BuildContext context, Widget? _) {
+        return MaterialApp(
+          title: 'Лесосибирск',
+          debugShowCheckedModeBanner: false,
+          theme: CityTheme.light(),
+          darkTheme: CityTheme.dark(),
+          themeMode: appThemeController.themeMode,
+          home: const _AuthStateGate(),
+        );
+      },
     );
   }
 }
@@ -113,6 +107,13 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
+    final bool dark = theme.brightness == Brightness.dark;
+    final Color navBg =
+        theme.navigationBarTheme.backgroundColor ?? cs.surface;
+    final Color navIconMuted =
+        dark ? CityTheme.kDarkNavIconMuted : cs.onSurface.withValues(alpha: 0.7);
     return MainTabIndex(
       index: _currentIndex,
       child: Scaffold(
@@ -125,27 +126,29 @@ class _MainScaffoldState extends State<MainScaffold> {
               unawaited(ChatUnreadBadge.refresh());
             }
           },
-          backgroundColor: Colors.white,
+          backgroundColor: navBg,
           surfaceTintColor: Colors.transparent,
-          shadowColor: const Color(0x14000000),
+          shadowColor: dark ? Colors.black54 : const Color(0x14000000),
           elevation: 8,
-          indicatorColor: kPrimaryBlue.withValues(alpha: 0.18),
+          indicatorColor: kPrimaryBlue.withValues(
+            alpha: dark ? 0.35 : 0.18,
+          ),
           // На телефоне длинные подписи (Расписание) не ломают строку.
           labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
           destinations: <Widget>[
-            const NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home, color: kPrimaryBlue),
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined, color: navIconMuted),
+              selectedIcon: Icon(Icons.home, color: cs.primary),
               label: 'Главная',
             ),
-            const NavigationDestination(
-              icon: Icon(Icons.schedule_outlined),
-              selectedIcon: Icon(Icons.schedule, color: kPrimaryBlue),
+            NavigationDestination(
+              icon: Icon(Icons.schedule_outlined, color: navIconMuted),
+              selectedIcon: Icon(Icons.schedule, color: cs.primary),
               label: 'Расписание',
             ),
-            const NavigationDestination(
-              icon: Icon(Icons.grid_view_outlined),
-              selectedIcon: Icon(Icons.grid_view, color: kPrimaryBlue),
+            NavigationDestination(
+              icon: Icon(Icons.grid_view_outlined, color: navIconMuted),
+              selectedIcon: Icon(Icons.grid_view, color: cs.primary),
               label: 'Сервисы',
             ),
             NavigationDestination(
@@ -155,7 +158,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                   return Badge(
                     isLabelVisible: v,
                     backgroundColor: const Color(0xFFE53935),
-                    child: const Icon(Icons.chat_bubble_outline),
+                    child: Icon(Icons.chat_bubble_outline, color: navIconMuted),
                   );
                 },
               ),
@@ -165,15 +168,15 @@ class _MainScaffoldState extends State<MainScaffold> {
                   return Badge(
                     isLabelVisible: v,
                     backgroundColor: const Color(0xFFE53935),
-                    child: const Icon(Icons.chat_bubble, color: kPrimaryBlue),
+                    child: Icon(Icons.chat_bubble, color: cs.primary),
                   );
                 },
               ),
               label: 'Чаты',
             ),
-            const NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person, color: kPrimaryBlue),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline, color: navIconMuted),
+              selectedIcon: Icon(Icons.person, color: cs.primary),
               label: 'Аккаунт',
             ),
           ],
@@ -186,8 +189,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 // ---------------------------------------------------------------------------
 // Сервисы — Bento Grid
 // ---------------------------------------------------------------------------
-
-const Color _kBentoScaffoldBg = Color(0xFFF5F5F7);
 
 class _ServiceCategory {
   const _ServiceCategory({
@@ -284,7 +285,7 @@ class ServicesGridScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBentoScaffoldBg,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -294,7 +295,7 @@ class ServicesGridScreen extends StatelessWidget {
               action: Icon(
                 Icons.grid_view_rounded,
                 size: 28,
-                color: kSoftHeaderActionIconColor,
+                color: softHeaderTrailingIconColor(context),
               ),
             ),
           ),
@@ -333,92 +334,145 @@ class _BentoServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: category.cardColor,
-      borderRadius: BorderRadius.circular(22),
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        splashColor: category.iconAndTitleColor.withValues(alpha: 0.12),
-        highlightColor: category.iconAndTitleColor.withValues(alpha: 0.08),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: const Color(0xFF0A0A0A).withValues(alpha: 0.05),
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
+    final bool dark = theme.brightness == Brightness.dark;
+    final Color accent = category.iconAndTitleColor;
+    final Color cardBg = dark
+        ? Color.alphaBlend(
+            accent.withValues(alpha: 0.12),
+            CityTheme.kDarkSurface,
+          )
+        : category.cardColor;
+    final Color borderColor = dark
+        ? accent.withValues(alpha: 0.55)
+        : const Color(0xFF0A0A0A).withValues(alpha: 0.05);
+    final List<BoxShadow> outerGlow = dark
+        ? <BoxShadow>[
+            BoxShadow(
+              color: accent.withValues(alpha: 0.38),
+              blurRadius: 12,
+              spreadRadius: 0,
             ),
-          ),
-          child: Stack(
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 14, 12, 36),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: <Widget>[
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: const <BoxShadow>[
-                          BoxShadow(
-                            color: Color(0x14000000),
-                            blurRadius: 6,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        category.icon,
-                        size: 28,
-                        color: category.iconAndTitleColor,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      category.label,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
-                        color: category.iconAndTitleColor,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: Text(
-                        category.description,
-                        textAlign: TextAlign.center,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          height: 1.25,
-                          color: _kDescriptionColor,
+            BoxShadow(
+              color: accent.withValues(alpha: 0.14),
+              blurRadius: 22,
+              spreadRadius: -4,
+              offset: const Offset(0, 4),
+            ),
+          ]
+        : const <BoxShadow>[];
+    final Color iconTileBg = dark
+        ? Color.alphaBlend(
+            accent.withValues(alpha: 0.28),
+            CityTheme.kDarkScaffold,
+          )
+        : Colors.white;
+    final List<BoxShadow> iconShadows = dark
+        ? <BoxShadow>[
+            BoxShadow(
+              color: accent.withValues(alpha: 0.22),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ]
+        : const <BoxShadow>[
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ];
+    final Color titleColor = dark ? cs.onSurface : accent;
+    final Color descColor = dark ? cs.onSurfaceVariant : _kDescriptionColor;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: outerGlow,
+      ),
+      child: Material(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(22),
+        clipBehavior: Clip.antiAlias,
+        elevation: 0,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          splashColor: accent.withValues(alpha: 0.12),
+          highlightColor: accent.withValues(alpha: 0.08),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: borderColor,
+                width: dark ? 1.25 : 1,
+              ),
+            ),
+            child: Stack(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 36),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: <Widget>[
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: iconTileBg,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: iconShadows,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          category.icon,
+                          size: 28,
+                          color: accent,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 10),
+                      Text(
+                        category.label,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                          color: titleColor,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Expanded(
+                        child: Text(
+                          category.description,
+                          textAlign: TextAlign.center,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            height: 1.25,
+                            color: descColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Positioned(
-                right: 6,
-                bottom: 6,
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  size: 24,
-                  color: category.iconAndTitleColor,
+                Positioned(
+                  right: 6,
+                  bottom: 6,
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 24,
+                    color: accent,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -432,24 +486,33 @@ class FoodPlacesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBentoScaffoldBg,
-      appBar: AppBar(
-        title: const Text('Заведения'),
-        backgroundColor: Colors.white,
-        foregroundColor: kSoftHeaderTitleColor,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).maybePop(),
-          tooltip: 'Назад',
-        ),
-      ),
-      body: const Center(
-        child: Text(
-          'Пока нет заведений',
-          style: TextStyle(fontSize: 16, color: Color(0xFF6C6C70)),
-        ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SoftTabHeader(
+            leading: const SoftHeaderBackButton(),
+            title: 'Заведения',
+            trailing: SoftHeaderWeatherWithAction(
+              action: Icon(
+                Icons.restaurant_rounded,
+                size: 28,
+                color: softHeaderTrailingIconColor(context),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Text(
+                'Пока нет заведений',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

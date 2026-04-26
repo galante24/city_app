@@ -21,6 +21,8 @@ final RegExp kRegisterPasswordHasSpecial = RegExp(r'[!@#$%^&*]');
 
 const Color kAuthGreen = Color(0xFF0B723E);
 const Color kAuthVkBlue = Color(0xFF2787F5);
+/// Фон под фото при [BoxFit.cover] и запасной цвет (не чёрный — иначе «полосы» по краям).
+const Color kAuthScaffoldFill = Color(0xFF4A7BA7);
 const Color kAuthFieldBorder = Color(0xFFD1D1D6);
 const Color kAuthTitle = Color(0xFF1C1C1E);
 
@@ -415,8 +417,17 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final double bottomPad = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: kAuthScaffoldFill,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarContrastEnforced: false,
+      ),
+      child: Scaffold(
+      backgroundColor: kAuthScaffoldFill,
       resizeToAvoidBottomInset: true,
       body: Stack(
         fit: StackFit.expand,
@@ -424,10 +435,11 @@ class _AuthScreenState extends State<AuthScreen> {
           Positioned.fill(
             child: Image.asset(
               'assets/images/auth_bg.jpg',
-              fit: BoxFit.contain,
+              fit: BoxFit.cover,
               alignment: Alignment.center,
+              filterQuality: FilterQuality.medium,
               errorBuilder: (BuildContext c, Object e, StackTrace? st) {
-                return const ColoredBox(color: Color(0xFF4A7BA7));
+                return const ColoredBox(color: kAuthScaffoldFill);
               },
             ),
           ),
@@ -836,6 +848,7 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

@@ -13,21 +13,21 @@ import '../services/city_data_service.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 
-/// Мягкие нейтральные тона ленты
-const Color kNewsScaffoldBg = Color(0xFFF2F2F7);
-const Color kNewsCardBg = Color(0xFFFFFFFF);
-const Color kNewsTextPrimary = Color(0xFF1C1C1E);
-const Color kNewsTextSecondary = Color(0xFF6C6C70);
-
-List<BoxShadow> cardFloatingShadows() {
-  return [
+List<BoxShadow> cardFloatingShadows(BuildContext context) {
+  final double a = Theme.of(context).brightness == Brightness.dark
+      ? 0.35
+      : 0.06;
+  final double a2 = Theme.of(context).brightness == Brightness.dark
+      ? 0.22
+      : 0.04;
+  return <BoxShadow>[
     BoxShadow(
-      color: const Color(0xFF0A0A0A).withValues(alpha: 0.06),
+      color: const Color(0xFF0A0A0A).withValues(alpha: a),
       blurRadius: 20,
       offset: const Offset(0, 6),
     ),
     BoxShadow(
-      color: const Color(0xFF0A0A0A).withValues(alpha: 0.04),
+      color: const Color(0xFF0A0A0A).withValues(alpha: a2),
       blurRadius: 4,
       offset: const Offset(0, 1),
     ),
@@ -323,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen>
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: kNewsCardBg,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -341,30 +341,31 @@ class _HomeScreenState extends State<HomeScreen>
                   BuildContext context,
                   void Function(void Function()) setModal,
                 ) {
+                  final ColorScheme sheetCs = Theme.of(sheetContext).colorScheme;
                   return Form(
                     key: formKey,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        const Text(
+                        Text(
                           'Новая публикация',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: kNewsTextPrimary,
+                            color: sheetCs.onSurface,
                           ),
                         ),
                         const SizedBox(height: 20),
                         DropdownButtonFormField<NewsCategory>(
                           key: ValueKey<NewsCategory>(targetCategory),
                           initialValue: targetCategory,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Категория',
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
                             filled: true,
-                            fillColor: kNewsScaffoldBg,
+                            fillColor: sheetCs.surfaceContainerHighest,
                           ),
                           items: NewsCategory.values
                               .map(
@@ -386,11 +387,11 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Заголовок',
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
                             filled: true,
-                            fillColor: kNewsScaffoldBg,
+                            fillColor: sheetCs.surfaceContainerHighest,
                           ),
                           maxLines: 2,
                           validator: (String? v) {
@@ -403,11 +404,11 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Текст',
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
                             filled: true,
-                            fillColor: kNewsScaffoldBg,
+                            fillColor: sheetCs.surfaceContainerHighest,
                             alignLabelWithHint: true,
                             hintText: 'Текст новости',
                           ),
@@ -431,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 color:
                                     pickedFile != null && pickedKind == 'image'
                                     ? kPrimaryBlue
-                                    : kNewsTextSecondary,
+                                    : sheetCs.onSurface.withValues(alpha: 0.55),
                                 size: 28,
                               ),
                               tooltip: 'Фото',
@@ -456,7 +457,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 color:
                                     pickedFile != null && pickedKind == 'video'
                                     ? kPrimaryBlue
-                                    : kNewsTextSecondary,
+                                    : sheetCs.onSurface.withValues(alpha: 0.55),
                                 size: 28,
                               ),
                               tooltip: 'Видео',
@@ -484,9 +485,9 @@ class _HomeScreenState extends State<HomeScreen>
                                   ? 'Видео: ${pickedFile!.name}'
                                   : 'Фото: ${pickedFile!.name}',
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: kNewsTextSecondary,
+                                color: sheetCs.onSurface.withValues(alpha: 0.55),
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -585,7 +586,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     if (!supabaseAppReady || _newsStream == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF5F5F7),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -621,7 +622,7 @@ class _HomeScreenState extends State<HomeScreen>
             final List<SocialPost> posts = raw.map(socialPostFromMap).toList();
 
             return Scaffold(
-              backgroundColor: const Color(0xFFF5F5F7),
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               floatingActionButton: isAdmin
                   ? FloatingActionButton(
                       onPressed: openCreateSheet,
@@ -638,9 +639,12 @@ class _HomeScreenState extends State<HomeScreen>
                     trailing: const SoftHeaderWeatherWithAction(),
                     bottom: TabBar(
                       controller: _tabController,
-                      labelColor: kPrimaryBlue,
-                      unselectedLabelColor: kNewsTextSecondary,
-                      indicatorColor: kPrimaryBlue,
+                      labelColor: Theme.of(context).colorScheme.primary,
+                      unselectedLabelColor: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.55),
+                      indicatorColor: Theme.of(context).colorScheme.primary,
                       indicatorWeight: 3,
                       labelStyle: const TextStyle(
                         fontWeight: FontWeight.w600,
@@ -714,11 +718,14 @@ class SocialNewsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final Color onSurface = cs.onSurface;
+    final Color muted = onSurface.withValues(alpha: 0.65);
     return Container(
       decoration: BoxDecoration(
-        color: kNewsCardBg,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: cardFloatingShadows(),
+        boxShadow: cardFloatingShadows(context),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -744,18 +751,18 @@ class SocialNewsCard extends StatelessWidget {
                     children: [
                       Text(
                         post.author,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: kNewsTextPrimary,
+                          color: onSurface,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         post.time,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: kNewsTextSecondary,
+                          color: muted,
                         ),
                       ),
                     ],
@@ -768,11 +775,11 @@ class SocialNewsCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
               post.title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 height: 1.25,
-                color: kNewsTextPrimary,
+                color: onSurface,
               ),
             ),
           ),
@@ -782,10 +789,10 @@ class SocialNewsCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 post.body,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   height: 1.4,
-                  color: kNewsTextPrimary,
+                  color: onSurface,
                 ),
               ),
             ),
@@ -800,7 +807,7 @@ class SocialNewsCard extends StatelessWidget {
                 width: double.infinity,
                 fit: BoxFit.cover,
                 errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                    _brokenImagePlaceholder(),
+                    _brokenImagePlaceholder(context),
                 loadingBuilder: (context, child, progress) {
                   if (progress == null) {
                     return child;
@@ -829,7 +836,7 @@ class SocialNewsCard extends StatelessWidget {
                   label: post.likes.toString(),
                   iconColor: post.isLiked
                       ? const Color(0xFFE91E63)
-                      : kNewsTextSecondary,
+                      : muted,
                   onPressed: onLike,
                 ),
                 ActionChipPill(
@@ -851,15 +858,16 @@ class SocialNewsCard extends StatelessWidget {
   }
 }
 
-Widget _brokenImagePlaceholder() {
+Widget _brokenImagePlaceholder(BuildContext context) {
+  final ColorScheme cs = Theme.of(context).colorScheme;
   return Container(
     height: 200,
-    color: const Color(0xFFE5E5EA),
-    child: const Center(
+    color: cs.surfaceContainerHighest,
+    child: Center(
       child: Icon(
         Icons.broken_image_outlined,
         size: 48,
-        color: kNewsTextSecondary,
+        color: cs.onSurface.withValues(alpha: 0.45),
       ),
     ),
   );
@@ -891,15 +899,24 @@ class ActionChipPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 24, color: iconColor ?? kNewsTextSecondary),
+              Icon(
+                icon,
+                size: 24,
+                color: iconColor ??
+                    Theme.of(context).colorScheme.onSurface.withValues(
+                          alpha: 0.55,
+                        ),
+              ),
               if (label.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: kNewsTextSecondary,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(
+                          alpha: 0.55,
+                        ),
                   ),
                 ),
               ],
@@ -965,13 +982,16 @@ class _InlineVideoBlockState extends State<InlineVideoBlock> {
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
+      final ColorScheme cs = Theme.of(context).colorScheme;
       return Container(
         height: 200,
-        color: const Color(0xFFE5E5EA),
-        child: const Center(
+        color: cs.surfaceContainerHighest,
+        child: Center(
           child: Text(
             'Видео недоступно',
-            style: TextStyle(color: kNewsTextSecondary),
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.55),
+            ),
           ),
         ),
       );

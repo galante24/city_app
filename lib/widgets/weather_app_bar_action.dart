@@ -253,15 +253,16 @@ class SoftHeaderWeatherWithAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool lightHeader = Theme.of(context).brightness == Brightness.light;
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Padding(
-          padding: EdgeInsets.only(right: 4),
+        Padding(
+          padding: const EdgeInsets.only(right: 4),
           child: WeatherAppBarAction(
             compact: true,
-            onLightBackground: true,
+            onLightBackground: lightHeader,
           ),
         ),
         ?action,

@@ -1,40 +1,77 @@
 import 'package:flutter/material.dart';
 
-import '../app_constants.dart';
+import '../theme/city_theme.dart';
 
-/// Тёмно-синий заголовок в стиле «мягкого» таба.
-const Color kSoftHeaderTitleColor = Color(0xFF0D1B2A);
-
-Color get kSoftHeaderActionIconColor => kPrimaryBlue.withValues(alpha: 0.88);
+/// Для иконок справа в [SoftTabHeader]: в светлой — primary, в тёмной — приглушённый серый.
+Color softHeaderTrailingIconColor(BuildContext context) {
+  final ThemeData t = Theme.of(context);
+  if (t.brightness == Brightness.dark) {
+    return CityTheme.kDarkNavIconMuted;
+  }
+  return t.colorScheme.primary;
+}
 
 const double kSoftHeaderBottomRadius = 24;
 
-/// Шапка вкладки: белый блок с скруглением снизу, жирный заголовок, синяя точка,
-/// линия с градиентом, опциональная область снизу (например TabBar).
+/// Кнопка «назад» для вторичных экранов в том же стиле, что и [SoftTabHeader].
+class SoftHeaderBackButton extends StatelessWidget {
+  const SoftHeaderBackButton({super.key, this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fg = Theme.of(context).colorScheme.onSurface;
+    return IconButton(
+      icon: const Icon(Icons.arrow_back_rounded, size: 26),
+      color: fg,
+      onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+      tooltip: 'Назад',
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+/// Шапка вкладки: блок с скруглением снизу, жирный заголовок, точка, градиент.
+///
+/// Экраны из [Navigator.push]: [leading] — обычно [SoftHeaderBackButton],
+/// справа — [SoftHeaderWeatherWithAction] или иконка действия.
 class SoftTabHeader extends StatelessWidget {
   const SoftTabHeader({
     super.key,
     required this.title,
+    this.leading,
     this.trailing,
     this.bottom,
   });
 
   final String title;
+  final Widget? leading;
   final Widget? trailing;
   final Widget? bottom;
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
+    final bool isDark = theme.brightness == Brightness.dark;
     final double topInset = MediaQuery.paddingOf(context).top;
+    final bool hasLeading = leading != null;
+    final Color headerBg = isDark ? cs.surfaceContainerHigh : cs.surface;
+    final Color titleColor = cs.onSurface;
+    final Color shadow = isDark
+        ? Colors.black.withValues(alpha: 0.45)
+        : const Color(0xFF0A0A0A).withValues(alpha: 0.06);
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: headerBg,
         borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(kSoftHeaderBottomRadius),
         ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: const Color(0xFF0A0A0A).withValues(alpha: 0.06),
+            color: shadow,
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -43,7 +80,7 @@ class SoftTabHeader extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.only(
           top: topInset + 8,
-          left: 20,
+          left: hasLeading ? 4 : 20,
           right: 4,
           bottom: bottom == null ? 18 : 8,
         ),
@@ -54,6 +91,7 @@ class SoftTabHeader extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                if (hasLeading) leading!,
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -65,10 +103,10 @@ class SoftTabHeader extends StatelessWidget {
                           Flexible(
                             child: Text(
                               title,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 26,
                                 fontWeight: FontWeight.w800,
-                                color: kSoftHeaderTitleColor,
+                                color: titleColor,
                                 letterSpacing: -0.6,
                                 height: 1.05,
                               ),
@@ -79,15 +117,15 @@ class SoftTabHeader extends StatelessWidget {
                             width: 8,
                             height: 8,
                             margin: const EdgeInsets.only(bottom: 4),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF2196F3),
+                            decoration: BoxDecoration(
+                              color: cs.primary,
                               shape: BoxShape.circle,
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 10),
-                      const _HeaderUnderline(),
+                      _HeaderUnderline(color: cs.primary, thick: isDark),
                     ],
                   ),
                 ),
@@ -110,22 +148,25 @@ class SoftTabHeader extends StatelessWidget {
 }
 
 class _HeaderUnderline extends StatelessWidget {
-  const _HeaderUnderline();
+  const _HeaderUnderline({required this.color, this.thick = false});
+
+  final Color color;
+  final bool thick;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        width: 168,
-        height: 3,
+        width: thick ? 184 : 168,
+        height: thick ? 4 : 3,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(2),
           gradient: LinearGradient(
             colors: <Color>[
-              kPrimaryBlue,
-              kPrimaryBlue.withValues(alpha: 0.35),
-              kPrimaryBlue.withValues(alpha: 0),
+              color,
+              color.withValues(alpha: 0.35),
+              color.withValues(alpha: 0),
             ],
             stops: const <double>[0, 0.42, 1],
           ),

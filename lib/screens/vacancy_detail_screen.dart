@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_constants.dart';
+import '../widgets/soft_tab_header.dart';
+import '../widgets/weather_app_bar_action.dart';
 import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../services/job_vacancy_service.dart';
@@ -210,23 +212,31 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     const Color textSecondary = Color(0xFF6C6C70);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
-      appBar: AppBar(
-        backgroundColor: kPrimaryBlue,
-        foregroundColor: Colors.white,
-        title: const Text('Вакансия'),
-        actions: <Widget>[
-          if (_canDelete == true)
-            IconButton(
-              onPressed: _busy ? null : _delete,
-              icon: const Icon(Icons.delete_outline),
-              tooltip: 'Удалить',
-            ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          SoftTabHeader(
+            leading: const SoftHeaderBackButton(),
+            title: 'Вакансия',
+            trailing: SoftHeaderWeatherWithAction(
+              action: _canDelete == true
+                  ? IconButton(
+                      onPressed: _busy ? null : _delete,
+                      icon: Icon(
+                        Icons.delete_outline,
+                        color: softHeaderTrailingIconColor(context),
+                        size: 26,
+                      ),
+                      tooltip: 'Удалить',
+                    )
+                  : null,
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: <Widget>[
           if (imageUrl != null && imageUrl.isNotEmpty) ...<Widget>[
             Material(
               elevation: 0.5,
@@ -441,6 +451,9 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
               ),
             ),
           ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -455,7 +468,7 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       elevation: 0.4,
       shadowColor: Colors.black26,
       borderRadius: BorderRadius.circular(16),

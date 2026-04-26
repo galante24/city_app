@@ -10,7 +10,6 @@ import '../services/city_data_service.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'account_settings_screen.dart';
-import 'ferry_admin_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -161,8 +160,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final String nickLine = nickForDisplay.isEmpty
             ? '—'
             : '@$nickForDisplay';
+        final ColorScheme cs = Theme.of(c).colorScheme;
         return Scaffold(
-          backgroundColor: const Color(0xFFF5F5F7),
+          backgroundColor: Theme.of(c).scaffoldBackgroundColor,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -172,7 +172,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   action: IconButton(
                     icon: Icon(
                       Icons.settings_outlined,
-                      color: kSoftHeaderActionIconColor,
+                      color: softHeaderTrailingIconColor(c),
                       size: 26,
                     ),
                     onPressed: () async {
@@ -269,10 +269,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Text(
                   fullName == '—' ? 'Пользователь' : fullName,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: kAppTextPrimary,
+                    color: cs.onSurface,
                     letterSpacing: -0.3,
                   ),
                 ),
@@ -304,26 +304,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   vertical: 20,
                 ),
                 decoration: BoxDecoration(
-                  color: kAppCardSurface,
+                  color: cs.surface,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    const Text(
+                    Text(
                       'Данные',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 17,
-                        color: kAppTextPrimary,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'Видны вам; ник — всем в чатах',
                       style: TextStyle(
                         fontSize: 13,
-                        color: kAppTextSecondary,
+                        color: cs.onSurface.withValues(alpha: 0.65),
                         height: 1.2,
                       ),
                     ),
@@ -332,10 +332,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: 'Email',
                       child: Text(
                         email,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
-                          color: kAppTextPrimary,
+                          color: cs.onSurface,
                         ),
                       ),
                     ),
@@ -350,8 +350,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
                           color: fullName == '—'
-                              ? kAppTextSecondary
-                              : kAppTextPrimary,
+                              ? cs.onSurface.withValues(alpha: 0.65)
+                              : cs.onSurface,
                         ),
                       ),
                     ),
@@ -360,10 +360,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: 'Дата рождения',
                       child: Text(
                         _birthDisplayText(row?['birth_date']?.toString()),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
-                          color: kAppTextPrimary,
+                          color: cs.onSurface,
                         ),
                       ),
                     ),
@@ -375,10 +375,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Expanded(
                             child: Text(
                               nickLine,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: kAppTextPrimary,
+                                color: cs.onSurface,
                               ),
                             ),
                           ),
@@ -402,7 +402,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
                       style: TextStyle(
                         fontSize: 12,
-                        color: kAppTextSecondary.withValues(alpha: 0.9),
+                        color: cs.onSurface.withValues(alpha: 0.58),
                         height: 1.2,
                       ),
                     ),
@@ -418,8 +418,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
                                 color: phoneDisplay.isEmpty
-                                    ? kAppTextSecondary
-                                    : kAppTextPrimary,
+                                    ? cs.onSurface.withValues(alpha: 0.65)
+                                    : cs.onSurface,
                               ),
                             ),
                           ),
@@ -443,7 +443,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'Виден только вам. В списке чатов и у других не показывается.',
                       style: TextStyle(
                         fontSize: 12,
-                        color: kAppTextSecondary.withValues(alpha: 0.9),
+                        color: cs.onSurface.withValues(alpha: 0.58),
                         height: 1.2,
                       ),
                     ),
@@ -472,35 +472,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: const Icon(Icons.logout),
                 label: const Text('Выйти'),
               ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.directions_boat, color: kPrimaryBlue),
-                title: const Text('Расписание парома (полный экран)'),
-                onTap: () async {
-                  if (!CityDataService.isCurrentUserAdminSync()) {
-                    if (!context.mounted) {
-                      return;
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Нужен вход админа: $kAdministratorEmail',
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-                  final bool? saved = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute<bool>(
-                      builder: (BuildContext c) => const FerryAdminScreen(),
-                    ),
-                  );
-                  if (saved == true && mounted) {
-                    setState(() {});
-                  }
-                },
-              ),
                   ],
                 ),
               ),
@@ -525,10 +496,10 @@ class _LabeledField extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: kAppTextSecondary,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
             letterSpacing: 0.2,
           ),
         ),

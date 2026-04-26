@@ -8,10 +8,10 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../app_constants.dart';
 import '../services/job_vacancy_service.dart';
+import '../widgets/soft_tab_header.dart';
+import '../widgets/weather_app_bar_action.dart';
 import '../utils/capitalize_first_formatter.dart';
 
-const Color _kFormBg = Color(0xFFF0F2F5);
-const Color _kFieldFill = Color(0xFFFFFFFF);
 
 /// Одна строка для SnackBar: код, сообщение, details, hint (без дублирования).
 String _postgrestTechnicalLine(PostgrestException e) {
@@ -55,20 +55,22 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
 
   static const double _fieldRadius = 14;
 
-  InputDecoration _decoration(String label, {String? hint}) {
+  InputDecoration _decoration(BuildContext context, String label, {String? hint}) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final Color outline = cs.outline.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.4 : 0.35);
     return InputDecoration(
       labelText: label,
       hintText: hint,
       filled: true,
-      fillColor: _kFieldFill,
+      fillColor: cs.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_fieldRadius),
-        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+        borderSide: BorderSide(color: outline),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_fieldRadius),
-        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+        borderSide: BorderSide(color: outline),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_fieldRadius),
@@ -230,19 +232,21 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kFormBg,
-      appBar: AppBar(
-        backgroundColor: kPrimaryBlue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Новая вакансия'),
-        centerTitle: true,
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-          children: <Widget>[
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const SoftTabHeader(
+            leading: SoftHeaderBackButton(),
+            title: 'Новая вакансия',
+            trailing: SoftHeaderWeatherWithAction(),
+          ),
+          Expanded(
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+                children: <Widget>[
             Text(
               'Заполните поля. Фото — по желанию.',
               style: TextStyle(
@@ -253,7 +257,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
             ),
             const SizedBox(height: 16),
             Material(
-              color: _kFieldFill,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
               clipBehavior: Clip.antiAlias,
               elevation: 0,
@@ -274,7 +278,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
             const SizedBox(height: 20),
             TextFormField(
               controller: _title,
-              decoration: _decoration('Название вакансии'),
+              decoration: _decoration(context, 'Название вакансии'),
               minLines: 1,
               maxLines: 3,
               textCapitalization: TextCapitalization.none,
@@ -285,7 +289,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _description,
-              decoration: _decoration('Описание вакансии'),
+              decoration: _decoration(context, 'Описание вакансии'),
               minLines: 4,
               maxLines: 10,
               validator: _req,
@@ -295,6 +299,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
             TextFormField(
               controller: _salary,
               decoration: _decoration(
+                context,
                 'Зарплата',
                 hint: 'только цифры, напр. 60000',
               ),
@@ -308,7 +313,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _address,
-              decoration: _decoration('Адрес работы'),
+              decoration: _decoration(context, 'Адрес работы'),
               minLines: 1,
               maxLines: 3,
               textCapitalization: TextCapitalization.sentences,
@@ -324,6 +329,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
                 LengthLimitingTextInputFormatter(12),
               ],
               decoration: _decoration(
+                context,
                 'Контакты (телефон)',
                 hint: '+7 и 10 цифр',
               ),
@@ -359,8 +365,11 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
                       ),
                     ),
             ),
-          ],
-        ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
