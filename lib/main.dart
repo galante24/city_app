@@ -250,9 +250,10 @@ class ServicesGridScreen extends StatelessWidget {
     ),
     _ServiceCategory(
       id: 'services',
-      label: 'Услуги',
-      description: 'Различные услуги для вашего комфорта',
-      icon: Icons.build_rounded,
+      label: 'Подработка',
+      description:
+          'Разовые поручения: помощь с переездом, вывоз мусора и другие задачи',
+      icon: Icons.work_history_outlined,
       cardColor: Color(0xFFE2F2E3),
       iconAndTitleColor: Color(0xFF3D9B4C),
     ),

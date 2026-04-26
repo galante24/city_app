@@ -192,6 +192,7 @@ class PlaceService {
 
   static Future<String> createPlace({
     required String title,
+    String description = '',
     String? photoUrl,
     String? coverUrl,
   }) async {
@@ -204,6 +205,7 @@ class PlaceService {
         .from('places')
         .insert(<String, dynamic>{
           'title': title.trim(),
+          'description': description.trim(),
           'owner_id': uid,
           if (photoUrl != null && photoUrl.isNotEmpty) 'photo_url': photoUrl,
           if (coverUrl != null && coverUrl.isNotEmpty) 'cover_url': coverUrl,

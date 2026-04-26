@@ -7,8 +7,8 @@ import '../app_constants.dart';
 import '../main_shell_navigation.dart';
 import '../services/job_vacancy_service.dart';
 import '../widgets/city_main_navigation_bar.dart';
-import '../utils/image_cache_extent.dart';
 import '../widgets/soft_tab_header.dart';
+import '../widgets/vacancy_card.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'vacancy_detail_screen.dart';
 import 'vacancy_form_screen.dart';
@@ -302,7 +302,6 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                         address: addr,
                         dateLabel: _formatDate(created),
                         imageUrl: imageUrl,
-                        accent: accent,
                         onShare: () => unawaited(_shareVacancy(m)),
                         onTap: () async {
                           await Navigator.of(context).push<void>(
@@ -400,7 +399,6 @@ class _VacancyListTile extends StatelessWidget {
     required this.address,
     required this.dateLabel,
     required this.imageUrl,
-    required this.accent,
     required this.onShare,
     required this.onTap,
   });
@@ -410,7 +408,6 @@ class _VacancyListTile extends StatelessWidget {
   final String address;
   final String dateLabel;
   final String? imageUrl;
-  final Color accent;
   final VoidCallback onShare;
   final VoidCallback onTap;
 
@@ -428,21 +425,10 @@ class _VacancyListTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: imageUrl != null && imageUrl!.isNotEmpty
-                    ? Image.network(
-                        imageUrl!,
-                        width: 64,
-                        height: 64,
-                        fit: BoxFit.cover,
-                        cacheWidth: imageCacheExtentPx(context, 64),
-                        cacheHeight: imageCacheExtentPx(context, 64),
-                        errorBuilder:
-                            (BuildContext c, Object e, StackTrace? st) =>
-                                _vacancyImagePlaceholder(accent, 64),
-                      )
-                    : _vacancyImagePlaceholder(accent, 64),
+              VacancyCoverImage(
+                imageUrl: imageUrl,
+                width: 112,
+                borderRadius: 16,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -528,13 +514,4 @@ class _VacancyListTile extends StatelessWidget {
       ),
     );
   }
-}
-
-Widget _vacancyImagePlaceholder(Color accent, double size) {
-  return Container(
-    width: size,
-    height: size,
-    color: accent.withValues(alpha: 0.12),
-    child: Icon(Icons.work_outline_rounded, color: accent, size: 28),
-  );
 }

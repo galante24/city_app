@@ -152,6 +152,8 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                           ..._places.map((Map<String, dynamic> m) {
                             final String id = m['id']?.toString() ?? '';
                             final String title = m['title'] as String? ?? '';
+                            final String desc =
+                                (m['description'] as String?)?.trim() ?? '';
                             final String? photo =
                                 m['photo_url'] as String? ?? m['cover_url'] as String?;
                             final bool sub = _subscribed.contains(id);
@@ -250,6 +252,20 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                                   color: cs.onSurface,
                                                 ),
                                               ),
+                                              if (desc.isNotEmpty) ...<Widget>[
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  desc,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    height: 1.35,
+                                                    color: cs.onSurfaceVariant,
+                                                  ),
+                                                ),
+                                              ],
                                               const SizedBox(height: 10),
                                               _SubscribeChip(
                                                 subscribed: sub,

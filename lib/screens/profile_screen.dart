@@ -161,8 +161,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? '—'
             : '@$nickForDisplay';
         final ColorScheme cs = Theme.of(c).colorScheme;
+        final ThemeData theme = Theme.of(c);
         return Scaffold(
-          backgroundColor: Theme.of(c).scaffoldBackgroundColor,
+          backgroundColor: theme.brightness == Brightness.dark
+              ? theme.scaffoldBackgroundColor
+              : const Color(0xFFF8F9FA),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -299,13 +302,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 20,
-                ),
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
                 decoration: BoxDecoration(
                   color: cs.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.grey.withValues(alpha: 0.1),
+                    width: 1,
+                  ),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -327,7 +338,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 22),
                     _LabeledField(
                       label: 'Email',
                       child: Text(
@@ -339,7 +350,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     _LabeledField(
                       label: 'Имя и фамилия',
                       child: Text(
@@ -355,7 +366,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     _LabeledField(
                       label: 'Дата рождения',
                       child: Text(
@@ -367,7 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     _LabeledField(
                       label: 'Ник в чате',
                       child: Row(
@@ -406,7 +417,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     _LabeledField(
                       label: 'Телефон',
                       child: Row(
@@ -499,11 +510,13 @@ class _LabeledField extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+            color: Theme.of(context).colorScheme.onSurface.withValues(
+                  alpha: 0.5,
+                ),
             letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         child,
       ],
     );

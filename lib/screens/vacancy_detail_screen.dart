@@ -5,8 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_constants.dart';
-import '../utils/image_cache_extent.dart';
 import '../widgets/soft_tab_header.dart';
+import '../widgets/vacancy_card.dart';
 import '../widgets/weather_app_bar_action.dart';
 import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
@@ -214,8 +214,6 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     final Color textPrimary = cs.onSurface;
     final Color textSecondary = cs.onSurfaceVariant;
     final Color bodyTextColor = cs.onSurface.withValues(alpha: 0.92);
-    final double detailImgW = MediaQuery.sizeOf(context).width - 32;
-    final double detailImgH = detailImgW * 9 / 16;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -243,32 +241,11 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: <Widget>[
-          if (imageUrl != null && imageUrl.isNotEmpty) ...<Widget>[
-            Material(
-              elevation: 0.5,
-              borderRadius: BorderRadius.circular(16),
-              clipBehavior: Clip.antiAlias,
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  cacheWidth: imageCacheExtentPx(context, detailImgW),
-                  cacheHeight: imageCacheExtentPx(context, detailImgH),
-                  errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                      Container(
-                        color: widget.accent.withValues(alpha: 0.12),
-                        child: Icon(
-                          Icons.work_outline,
-                          color: widget.accent,
-                          size: 48,
-                        ),
-                      ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
+          VacancyCoverImage(
+            imageUrl: imageUrl,
+            borderRadius: 16,
+          ),
+          const SizedBox(height: 16),
           Text(
             title,
             style: TextStyle(

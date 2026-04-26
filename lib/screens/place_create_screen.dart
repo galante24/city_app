@@ -18,6 +18,7 @@ class PlaceCreateScreen extends StatefulWidget {
 
 class _PlaceCreateScreenState extends State<PlaceCreateScreen> {
   final TextEditingController _title = TextEditingController();
+  final TextEditingController _description = TextEditingController();
   XFile? _photo;
   XFile? _cover;
   bool _saving = false;
@@ -25,6 +26,7 @@ class _PlaceCreateScreenState extends State<PlaceCreateScreen> {
   @override
   void dispose() {
     _title.dispose();
+    _description.dispose();
     super.dispose();
   }
 
@@ -48,6 +50,7 @@ class _PlaceCreateScreenState extends State<PlaceCreateScreen> {
       }
       await PlaceService.createPlace(
         title: t,
+        description: _description.text,
         photoUrl: photoUrl,
         coverUrl: coverUrl,
       );
@@ -110,6 +113,20 @@ class _PlaceCreateScreenState extends State<PlaceCreateScreen> {
                     labelText: 'Название',
                     border: OutlineInputBorder(),
                   ),
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _description,
+                  decoration: const InputDecoration(
+                    labelText: 'Краткое описание',
+                    hintText:
+                        'Например: Уютная кофейня с лучшим рафом в городе',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                  minLines: 3,
                   textCapitalization: TextCapitalization.sentences,
                 ),
                 const SizedBox(height: 16),

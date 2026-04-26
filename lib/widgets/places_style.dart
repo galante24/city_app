@@ -4,14 +4,21 @@ import '../app_constants.dart';
 
 /// Заголовок секции в стиле «Сервисы»: крупный текст, синяя точка, градиентная линия.
 class PlacesSectionHeader extends StatelessWidget {
-  const PlacesSectionHeader({super.key, required this.title, this.subtitle});
+  const PlacesSectionHeader({
+    super.key,
+    required this.title,
+    this.description,
+    this.subtitle,
+  });
 
   final String title;
+  final String? description;
   final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
+    final String descTrim = description?.trim() ?? '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -41,6 +48,18 @@ class PlacesSectionHeader extends StatelessWidget {
             ),
           ],
         ),
+        if (descTrim.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            descTrim,
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+        ],
         if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Text(

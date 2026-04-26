@@ -230,6 +230,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                       children: <Widget>[
                         PlacesSectionHeader(
                           title: pl['title'] as String? ?? 'Заведение',
+                          description: pl['description'] as String?,
                           subtitle: (pl['phone'] as String?)?.trim().isNotEmpty ==
                                   true
                               ? pl['phone'] as String
@@ -347,11 +348,6 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                           ),
                           const SizedBox(height: 20),
                         ],
-                        _staticBlock(
-                          context,
-                          'Описание',
-                          pl['description'] as String?,
-                        ),
                         _staticBlock(context, 'Меню', pl['menu'] as String?),
                         _staticBlock(
                           context,
