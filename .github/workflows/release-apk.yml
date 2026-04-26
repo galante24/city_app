@@ -1,0 +1,114 @@
+# Сборка release APK, GitHub Release и запись version_code + download_url в public.app_config.
+#
+# Секреты репозитория (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL                — https://xxxxx.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY   — service_role (Settings → API → service_role, не anon)
+#
+# SQL: supabase/migrations/013_app_config_ci.sql
+#
+# Realtime: не обязателен для app_config.
+
+name: Release APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve version and release tag
+        id: ver
+        run: |
+          set -e
+          PUB_VERSION=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}')
+          BUILD_CODE=$(echo "$PUB_VERSION" | cut -d+ -f2)
+          if [[ -z "$BUILD_CODE" || "$BUILD_CODE" == "$PUB_VERSION" ]]; then
+            echo "Error: expected pubspec version like 1.0.0+NN" >&2
+            exit 1
+          fi
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${PUB_VERSION}"
+          fi
+          echo "full=${PUB_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "code=${BUILD_CODE}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved: PUB_VERSION=${PUB_VERSION} TAG=${TAG} version_code=${BUILD_CODE}"
+
+      - name: pub get
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Release ${{ steps.ver.outputs.full }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          generate_release_notes: true
+          make_latest: true
+          allowUpdates: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Supabase app_config
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          CODE: ${{ steps.ver.outputs.code }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]; then
+            echo "Skip: задайте секреты SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в настройках репозитория."
+            exit 0
+          fi
+          PAYLOAD=$(python3 << 'PY'
+          import json, os, urllib.parse
+          tag = os.environ["TAG"]
+          code = int(os.environ["CODE"])
+          repo = os.environ["REPO"]
+          enc = urllib.parse.quote(tag, safe="")
+          url = f"https://github.com/{repo}/releases/download/{enc}/app-release.apk"
+          print(json.dumps([{"id": "default", "version_code": code, "download_url": url}]))
+          PY
+          )
+          echo "$PAYLOAD"
+          curl -sS -f -X POST "${SUPABASE_URL}/rest/v1/app_config" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d "$PAYLOAD"
+          echo
+          echo "Supabase app_config: version_code=${CODE} обновлён"
