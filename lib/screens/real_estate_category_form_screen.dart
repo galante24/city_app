@@ -6,7 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
-import '../app_constants.dart';
+import '../app_constants.dart'
+    show kListingFloorAreaDisplaySuffix, kPrimaryBlue;
 import '../models/real_estate_listing_kind.dart';
 import '../services/real_estate_listing_service.dart';
 import '../utils/capitalize_first_formatter.dart';
@@ -50,6 +51,7 @@ class _RealEstateCategoryFormScreenState
   final TextEditingController _title = TextEditingController();
   final TextEditingController _description = TextEditingController();
   final TextEditingController _price = TextEditingController();
+  final TextEditingController _floorArea = TextEditingController();
   final TextEditingController _address = TextEditingController();
   final TextEditingController _phone = TextEditingController(text: '+7');
 
@@ -62,6 +64,7 @@ class _RealEstateCategoryFormScreenState
     BuildContext context,
     String label, {
     String? hint,
+    String? suffixText,
   }) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final Color outline = cs.outline.withValues(
@@ -70,6 +73,10 @@ class _RealEstateCategoryFormScreenState
     return InputDecoration(
       labelText: label,
       hintText: hint,
+      suffixText: suffixText,
+      suffixStyle: suffixText != null
+          ? TextStyle(color: cs.onSurfaceVariant, fontSize: 15)
+          : null,
       filled: true,
       fillColor: cs.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -104,6 +111,7 @@ class _RealEstateCategoryFormScreenState
     _title.dispose();
     _description.dispose();
     _price.dispose();
+    _floorArea.dispose();
     _address.dispose();
     _phone.dispose();
     super.dispose();
@@ -179,6 +187,7 @@ class _RealEstateCategoryFormScreenState
         title: _title.text,
         description: _description.text,
         price: _price.text,
+        floorArea: _floorArea.text,
         propertyAddress: _address.text,
         contactPhone: _phone.text.trim(),
         imageUrl: imageUrl,
@@ -205,7 +214,7 @@ class _RealEstateCategoryFormScreenState
           (e.message.contains(widget.kind.tableName) ||
               e.message.contains('schema cache'));
       final String text = tableMissing
-          ? 'Сервер: не найдена таблица ${widget.kind.tableName}. Выполните миграцию supabase/migrations/022_estate_categories_listings.sql (supabase db push).'
+          ? 'Сервер: не найдена таблица ${widget.kind.tableName}. Выполните миграции 022 и при необходимости 023 (supabase db push).'
           : technical;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -322,6 +331,22 @@ class _RealEstateCategoryFormScreenState
                       context,
                       'Цена',
                       hint: 'только цифры',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    validator: _req,
+                    enabled: !_saving,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _floorArea,
+                    decoration: _decoration(
+                      context,
+                      'Квадратура',
+                      hint: 'только цифры',
+                      suffixText: kListingFloorAreaDisplaySuffix,
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: <TextInputFormatter>[

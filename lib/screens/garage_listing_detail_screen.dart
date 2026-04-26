@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../app_constants.dart';
+import '../app_constants.dart'
+    show kPrimaryBlue, listingFloorAreaWithSuffix;
 import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../services/garage_listing_service.dart';
@@ -207,6 +208,8 @@ class _GarageListingDetailScreenState extends State<GarageListingDetailScreen> {
     final String desc = widget.row['description'] as String? ?? '';
     final String price = widget.row['price'] as String? ?? '';
     final String addr = widget.row['garage_address'] as String? ?? '';
+    final String floorRaw = (widget.row['floor_area'] as String? ?? '').trim();
+    final String floorLabel = listingFloorAreaWithSuffix(floorRaw);
     final String phone = widget.row['contact_phone'] as String? ?? '';
     final String? imageUrl = widget.row['image_url'] as String?;
     final String? me = Supabase.instance.client.auth.currentUser?.id;
@@ -304,6 +307,46 @@ class _GarageListingDetailScreenState extends State<GarageListingDetailScreen> {
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: kPrimaryBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (floorLabel.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 16),
+                  _GarageInfoCard(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Icon(
+                          Icons.square_foot_outlined,
+                          size: 22,
+                          color: kPrimaryBlue,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Квадратура',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                floorLabel,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: textPrimary,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

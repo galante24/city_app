@@ -25,6 +25,8 @@ import 'screens/profile_screen.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/real_estate_screen.dart';
 import 'screens/vacancies_screen.dart';
+import 'screens/places_list_screen.dart';
+import 'screens/tasks_list_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -284,7 +286,7 @@ class ServicesGridScreen extends StatelessWidget {
     if (c.id == 'food') {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) => const FoodPlacesScreen(),
+          builder: (BuildContext context) => const PlacesListScreen(),
         ),
       );
     } else if (c.id == 'jobs') {
@@ -297,6 +299,12 @@ class ServicesGridScreen extends StatelessWidget {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => const RealEstateScreen(),
+        ),
+      );
+    } else if (c.id == 'services') {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const TasksListScreen(),
         ),
       );
     } else {
@@ -509,40 +517,3 @@ class _BentoServiceCard extends StatelessWidget {
   }
 }
 
-class FoodPlacesScreen extends StatelessWidget {
-  const FoodPlacesScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          SoftTabHeader(
-            leading: const SoftHeaderBackButton(),
-            title: 'Заведения',
-            trailing: SoftHeaderWeatherWithAction(
-              action: Icon(
-                Icons.restaurant_rounded,
-                size: 28,
-                color: softHeaderTrailingIconColor(context),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                'Пока нет заведений',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

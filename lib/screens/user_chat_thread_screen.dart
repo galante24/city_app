@@ -22,11 +22,14 @@ import 'direct_peer_profile_screen.dart';
 import 'forward_conversation_picker_screen.dart';
 import 'group_chat_info_screen.dart';
 
+/// Декодирование не шире/выше логических пределов пузырька (см. _bubbleImageBlock).
 (int, int) _bubbleImageCachePx(BuildContext context) {
   final Size sz = MediaQuery.sizeOf(context);
+  const double maxH = 250;
+  final double maxW = sz.width * 0.7;
   return (
-    imageCacheExtentPx(context, sz.width * 0.7),
-    imageCacheExtentPx(context, sz.height * 0.28),
+    imageCacheExtentPx(context, maxW),
+    imageCacheExtentPx(context, maxH),
   );
 }
 
@@ -1430,47 +1433,65 @@ class _MessagesListState extends State<_MessagesList> {
     required bool outgoing,
   }) {
     final Size mq = MediaQuery.sizeOf(context);
+    final double maxW = mq.width * 0.7;
+    const double maxH = 250;
+    final BorderRadius clipR = outgoing
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(12),
+            topRight: Radius.circular(12),
+            bottomLeft: Radius.circular(12),
+            bottomRight: Radius.circular(4),
+          )
+        : const BorderRadius.only(
+            topLeft: Radius.circular(12),
+            topRight: Radius.circular(12),
+            bottomLeft: Radius.circular(4),
+            bottomRight: Radius.circular(12),
+          );
+    final (int iw, int ih) = _bubbleImageCachePx(context);
     return GestureDetector(
       onTap: () => _openChatImage(context, m, me, displayImageUrl),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: clipR,
+        clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: mq.height * 0.28,
-            maxWidth: mq.width * 0.58,
+            maxWidth: maxW,
+            maxHeight: maxH,
           ),
-          child: Builder(
-            builder: (BuildContext imgCtx) {
-              final (int iw, int ih) = _bubbleImageCachePx(imgCtx);
-              return Image.network(
-                displayImageUrl,
-                fit: BoxFit.contain,
-                cacheWidth: iw,
-                cacheHeight: ih,
-                loadingBuilder: (
-                  BuildContext _,
-                  Widget child,
-                  ImageChunkEvent? loadingProgress,
-                ) {
-                  if (loadingProgress == null) {
-                    return child;
-                  }
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  );
-                },
-                errorBuilder: (
-                  BuildContext context,
-                  Object error,
-                  StackTrace? st,
-                ) =>
-                    const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text('не удалось загрузить фото'),
-                ),
-              );
-            },
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: outgoing ? Alignment.centerRight : Alignment.centerLeft,
+            child: Image.network(
+              displayImageUrl,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              filterQuality: FilterQuality.medium,
+              cacheWidth: iw,
+              cacheHeight: ih,
+              loadingBuilder: (
+                BuildContext _,
+                Widget child,
+                ImageChunkEvent? loadingProgress,
+              ) {
+                if (loadingProgress == null) {
+                  return child;
+                }
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                );
+              },
+              errorBuilder: (
+                BuildContext context,
+                Object error,
+                StackTrace? st,
+              ) =>
+                  const Padding(
+                padding: EdgeInsets.all(8),
+                child: Text('не удалось загрузить фото'),
+              ),
+            ),
           ),
         ),
       ),

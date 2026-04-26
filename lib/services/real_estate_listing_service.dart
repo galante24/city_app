@@ -23,6 +23,10 @@ class RealEstateListingService {
     return (m['property_address'] as String? ?? '').trim();
   }
 
+  static String floorAreaFromRow(Map<String, dynamic> m) {
+    return (m['floor_area'] as String? ?? '').trim();
+  }
+
   static Future<List<Map<String, dynamic>>> fetchAll(
     RealEstateListingKind kind,
   ) async {
@@ -89,6 +93,7 @@ class RealEstateListingService {
     required String title,
     required String description,
     required String price,
+    required String floorArea,
     required String propertyAddress,
     required String contactPhone,
     String? imageUrl,
@@ -106,6 +111,7 @@ class RealEstateListingService {
       'title': title.trim(),
       'description': description.trim(),
       'price': price.trim(),
+      'floor_area': floorArea.trim(),
       'property_address': propertyAddress.trim(),
       'contact_phone': contactPhone.trim(),
       if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,

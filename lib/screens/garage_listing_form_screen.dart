@@ -6,7 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
-import '../app_constants.dart';
+import '../app_constants.dart'
+    show kListingFloorAreaDisplaySuffix, kPrimaryBlue;
 import '../services/garage_listing_service.dart';
 import '../utils/capitalize_first_formatter.dart';
 import '../widgets/soft_tab_header.dart';
@@ -45,6 +46,7 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _description = TextEditingController();
   final TextEditingController _price = TextEditingController();
+  final TextEditingController _floorArea = TextEditingController();
   final TextEditingController _address = TextEditingController();
   final TextEditingController _phone = TextEditingController(text: '+7');
 
@@ -53,7 +55,12 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
 
   static const double _fieldRadius = 14;
 
-  InputDecoration _decoration(BuildContext context, String label, {String? hint}) {
+  InputDecoration _decoration(
+    BuildContext context,
+    String label, {
+    String? hint,
+    String? suffixText,
+  }) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final Color outline = cs.outline.withValues(
       alpha: Theme.of(context).brightness == Brightness.dark ? 0.4 : 0.35,
@@ -61,6 +68,10 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
     return InputDecoration(
       labelText: label,
       hintText: hint,
+      suffixText: suffixText,
+      suffixStyle: suffixText != null
+          ? TextStyle(color: cs.onSurfaceVariant, fontSize: 15)
+          : null,
       filled: true,
       fillColor: cs.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -95,6 +106,7 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
     _title.dispose();
     _description.dispose();
     _price.dispose();
+    _floorArea.dispose();
     _address.dispose();
     _phone.dispose();
     super.dispose();
@@ -168,6 +180,7 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
         title: _title.text,
         description: _description.text,
         price: _price.text,
+        floorArea: _floorArea.text,
         garageAddress: _address.text,
         contactPhone: _phone.text.trim(),
         imageUrl: imageUrl,
@@ -197,7 +210,7 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
           (e.message.contains('garage_listings') ||
               e.message.contains('schema cache'));
       final String text = tableMissing
-          ? 'Сервер: не найдена таблица garage_listings. Выполните миграцию supabase/migrations/021_garage_listings.sql (supabase db push).'
+          ? 'Сервер: не найдена таблица garage_listings. Выполните миграции 021 и при необходимости 023 (supabase db push).'
           : technical;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -317,6 +330,22 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
                       context,
                       'Цена',
                       hint: 'только цифры',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    validator: _req,
+                    enabled: !_saving,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _floorArea,
+                    decoration: _decoration(
+                      context,
+                      'Квадратура',
+                      hint: 'только цифры',
+                      suffixText: kListingFloorAreaDisplaySuffix,
                     ),
                     keyboardType: TextInputType.number,
                     inputFormatters: <TextInputFormatter>[

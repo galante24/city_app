@@ -396,9 +396,22 @@ class CityDataService {
     );
   }
 
-  /// Только [kAdministratorEmail] в `auth.users` / JWT.
+  /// Один из [kAdministratorEmails] в `auth.users` / JWT.
   static bool isCurrentUserAdminSync() {
     return _isAdministratorEmail(client?.auth.currentUser?.email);
+  }
+
+  /// Админ приложения (email) или флаг [profiles.is_admin] (для RLS в БД).
+  static Future<bool> isProfilesOrEmailAdmin() async {
+    if (isCurrentUserAdminSync()) {
+      return true;
+    }
+    final String? uid = client?.auth.currentUser?.id;
+    if (uid == null) {
+      return false;
+    }
+    final Map<String, dynamic>? row = await fetchProfileRow(uid);
+    return row?['is_admin'] == true;
   }
 
   static Future<bool> isCurrentUserAdmin() async {
@@ -409,7 +422,7 @@ class CityDataService {
     if (email == null) {
       return false;
     }
-    return email.toLowerCase().trim() == kAdministratorEmail;
+    return kAdministratorEmails.contains(email.toLowerCase().trim());
   }
 
   static const String newsImagesBucket = 'news-images';

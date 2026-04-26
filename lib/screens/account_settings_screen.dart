@@ -8,6 +8,7 @@ import '../config/supabase_ready.dart';
 import '../services/app_theme_controller.dart';
 import '../services/city_data_service.dart';
 import '../services/notification_prefs.dart';
+import '../services/place_service.dart';
 import '../widgets/profile_edit_fields.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
@@ -106,6 +107,36 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ),
           subtitle: Text(
             'Не показывать в шторке уведомления о новых сообщениях (на этом устройстве)',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+          activeThumbColor: cs.primary,
+        ),
+        const SizedBox(height: 4),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: row?['notifications_enabled'] != false,
+          onChanged: snap.connectionState == ConnectionState.waiting
+              ? null
+              : (bool v) async {
+                  try {
+                    await PlaceService.updateMyNotificationsEnabled(v);
+                    if (mounted) {
+                      setState(() => _profileReload++);
+                    }
+                  } on Object catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Не сохранено: $e')),
+                      );
+                    }
+                  }
+                },
+          title: Text(
+            'Уведомления заведений',
+            style: TextStyle(color: cs.onSurface),
+          ),
+          subtitle: Text(
+            'Push о новостях заведений, на которые вы подписаны (нужен FCM-токен в профиле)',
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           activeThumbColor: cs.primary,

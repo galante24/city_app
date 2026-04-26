@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../app_constants.dart';
+import '../app_constants.dart'
+    show kPrimaryBlue, listingFloorAreaWithSuffix;
 import '../main_shell_navigation.dart';
 import '../models/real_estate_listing_kind.dart';
 import '../services/real_estate_listing_service.dart';
@@ -74,7 +75,13 @@ class _RealEstateCategoryListingsScreenState
       final String p = (m['price'] as String? ?? '').toLowerCase();
       final String a =
           RealEstateListingService.addressFromRow(m).toLowerCase();
-      return t.contains(q) || d.contains(q) || p.contains(q) || a.contains(q);
+      final String f =
+          RealEstateListingService.floorAreaFromRow(m).toLowerCase();
+      return t.contains(q) ||
+          d.contains(q) ||
+          p.contains(q) ||
+          a.contains(q) ||
+          f.contains(q);
     }).toList();
   }
 
@@ -120,6 +127,11 @@ class _RealEstateCategoryListingsScreenState
     }
     if (addr.isNotEmpty) {
       lines.add('Адрес: $addr');
+    }
+    final String fa = RealEstateListingService.floorAreaFromRow(m);
+    final String faDisp = listingFloorAreaWithSuffix(fa);
+    if (faDisp.isNotEmpty) {
+      lines.add('Квадратура: $faDisp');
     }
     await Share.share(lines.join('\n'), subject: title);
   }
@@ -237,6 +249,13 @@ class _RealEstateCategoryListingsScreenState
                                     RealEstateListingService.addressFromRow(
                                   m,
                                 );
+                                final String fa =
+                                    RealEstateListingService.floorAreaFromRow(
+                                  m,
+                                );
+                                final String? floorLine = fa.isEmpty
+                                    ? null
+                                    : listingFloorAreaWithSuffix(fa);
                                 final String? imageUrl =
                                     m['image_url'] as String?;
                                 final String created =
@@ -247,6 +266,7 @@ class _RealEstateCategoryListingsScreenState
                                 return _EstateListingTile(
                                   title: title,
                                   price: price,
+                                  floorLine: floorLine,
                                   address: addr,
                                   dateLabel: _formatDate(created),
                                   imageUrl: imageUrl,
@@ -353,6 +373,7 @@ class _EstateListingTile extends StatelessWidget {
   const _EstateListingTile({
     required this.title,
     required this.price,
+    this.floorLine,
     required this.address,
     required this.dateLabel,
     required this.imageUrl,
@@ -364,6 +385,7 @@ class _EstateListingTile extends StatelessWidget {
 
   final String title;
   final String price;
+  final String? floorLine;
   final String address;
   final String dateLabel;
   final String? imageUrl;
@@ -429,6 +451,17 @@ class _EstateListingTile extends StatelessWidget {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: kPrimaryBlue,
+                        ),
+                      ),
+                    ],
+                    if (floorLine != null && floorLine!.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Квадратура: $floorLine',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: cs.onSurface.withValues(alpha: 0.85),
                         ),
                       ),
                     ],

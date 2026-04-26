@@ -450,7 +450,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (isEmailAdmin) ...<Widget>[
                       const SizedBox(height: 12),
                       Text(
-                        'Админ: $kAdministratorEmail',
+                        'Админы: ${kAdministratorEmails.join(', ')}',
                         style: const TextStyle(
                           fontSize: 13,
                           color: Color(0xFF2E7D32),
