@@ -552,6 +552,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
             conversationId: conv,
             title: name,
             listItem: null,
+            directPeerUserId: other,
           ),
         ),
       );
@@ -793,17 +794,25 @@ class _ChatListTile extends StatelessWidget {
             children: <Widget>[
               CircleAvatar(
                 backgroundColor: kPrimaryBlue.withValues(alpha: 0.2),
+                backgroundImage: !item.isGroup &&
+                        item.otherAvatarUrl != null &&
+                        item.otherAvatarUrl!.isNotEmpty
+                    ? NetworkImage(item.otherAvatarUrl!)
+                    : null,
                 child: item.isGroup
                     ? const Icon(Icons.group, color: kPrimaryBlue, size: 22)
-                    : Text(
-                        item.title.isNotEmpty
-                            ? item.title[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          color: kPrimaryBlue,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    : (item.otherAvatarUrl != null &&
+                            item.otherAvatarUrl!.isNotEmpty
+                        ? null
+                        : Text(
+                            item.title.isNotEmpty
+                                ? item.title[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: kPrimaryBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )),
               ),
               const SizedBox(width: 12),
               Expanded(

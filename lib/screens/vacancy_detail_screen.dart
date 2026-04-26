@@ -93,6 +93,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             conversationId: conv,
             title: name,
             listItem: null,
+            directPeerUserId: _authorId,
           ),
         ),
       );

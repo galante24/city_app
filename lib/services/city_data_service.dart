@@ -178,6 +178,79 @@ class CityDataService {
     return bucket.getPublicUrl(path);
   }
 
+  /// Произвольное вложение в чат (тот же bucket/prefix, что и у фото).
+  static Future<String> uploadChatAttachment(XFile file) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final String? uid = c.auth.currentUser?.id;
+    if (uid == null) {
+      throw StateError('Нет сессии');
+    }
+    final String name = file.name;
+    final int dot = name.lastIndexOf('.');
+    final String ext = dot >= 0 && dot < name.length - 1
+        ? name.substring(dot + 1).toLowerCase()
+        : 'bin';
+    final String path =
+        'chat_media/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    const Map<String, String> ct = <String, String>{
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'pdf': 'application/pdf',
+      'mp3': 'audio/mpeg',
+      'ogg': 'audio/ogg',
+      'wav': 'audio/wav',
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'apk': 'application/vnd.android.package-archive',
+      'xml': 'application/xml',
+      'zip': 'application/zip',
+      'txt': 'text/plain',
+      'json': 'application/json',
+    };
+    final String contentType = ct[ext] ?? 'application/octet-stream';
+    final bucket = c.storage.from(cityMediaBucket);
+    if (kIsWeb) {
+      final Uint8List bytes = await file.readAsBytes();
+      await bucket.uploadBinary(
+        path,
+        bytes,
+        fileOptions: FileOptions(upsert: true, contentType: contentType),
+      );
+    } else {
+      await bucket.upload(
+        path,
+        File(file.path),
+        fileOptions: FileOptions(upsert: true, contentType: contentType),
+      );
+    }
+    return bucket.getPublicUrl(path);
+  }
+
+  /// Текст «О себе» в [profiles.about] (виден партнёрам в чатах).
+  static Future<void> setMyAbout(String? about) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final String? uid = c.auth.currentUser?.id;
+    if (uid == null) {
+      throw StateError('Нет сессии');
+    }
+    final String? t = about?.trim();
+    await c
+        .from('profiles')
+        .update(<String, dynamic>{
+          'about': (t == null || t.isEmpty) ? null : t,
+        })
+        .eq('id', uid);
+  }
+
   static Future<void> setMyBirthDate(DateTime? date) async {
     final c = client;
     if (c == null) {

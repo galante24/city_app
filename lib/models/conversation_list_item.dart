@@ -7,6 +7,7 @@ class ConversationListItem {
     required this.timeText,
     required this.sortKeyMs,
     this.otherUserId,
+    this.otherAvatarUrl,
     this.isGroup = false,
     this.isOpen,
     this.myRole,
@@ -22,6 +23,9 @@ class ConversationListItem {
 
   /// Собеседник в личном чате.
   final String? otherUserId;
+
+  /// Аватар собеседника (если есть в [profiles.avatar_url]).
+  final String? otherAvatarUrl;
   final bool isGroup;
 
   /// Только для группы: открытая (любой участник добавляет) или закрытая.

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_ready.dart';
@@ -231,7 +233,7 @@ class ChatService {
       <Future<dynamic>>[
         c
             .from('profiles')
-            .select('id, first_name, last_name, username')
+            .select('id, first_name, last_name, username, avatar_url')
             .inFilter('id', uids.toList()),
         if (anyMissingPreview)
           c.rpc(
@@ -333,6 +335,7 @@ class ChatService {
             timeText: _formatListTime(updated),
             sortKeyMs: sortMs,
             otherUserId: otherId,
+            otherAvatarUrl: _avatarForUser(otherId, profById),
             isGroup: false,
             myRole: myRole,
             hasUnread: unreadIds.contains(cid),
@@ -345,6 +348,18 @@ class ChatService {
           b.sortKeyMs.compareTo(a.sortKeyMs),
     );
     return out;
+  }
+
+  static String? _avatarForUser(
+    String? userId,
+    Map<String, Map<String, dynamic>> profById,
+  ) {
+    if (userId == null) {
+      return null;
+    }
+    final String? u =
+        (profById[userId]?['avatar_url'] as String?)?.trim();
+    return (u != null && u.isNotEmpty) ? u : null;
   }
 
   static String _titleForOther(
@@ -375,6 +390,9 @@ class ChatService {
     }
     if (t.startsWith(imageMessagePrefix)) {
       return 'Изображение';
+    }
+    if (fileMetaFromMessageBody(t) != null) {
+      return 'Файл';
     }
     return t;
   }
@@ -555,6 +573,118 @@ class ChatService {
   /// Префикс тела сообщения для вложенного изображения (публичный URL).
   static const String imageMessagePrefix = '!img:';
 
+  /// Вложение: base64url(JSON {u, n, m}).
+  static const String fileMessagePrefix = '!file:b64:';
+
+  static String buildFileMessageBody({
+    required String publicUrl,
+    required String fileName,
+    required String mimeType,
+  }) {
+    final String payload = jsonEncode(<String, String>{
+      'u': publicUrl,
+      'n': fileName,
+      'm': mimeType,
+    });
+    return '$fileMessagePrefix${base64Url.encode(utf8.encode(payload))}';
+  }
+
+  /// Разбор [buildFileMessageBody]; при ошибке — null.
+  static ChatFileMeta? fileMetaFromMessageBody(String body) {
+    if (!body.startsWith(fileMessagePrefix)) {
+      return null;
+    }
+    try {
+      final String b64 = body.substring(fileMessagePrefix.length).trim();
+      final String jsonStr = utf8.decode(base64Url.decode(b64));
+      final Object? dec = jsonDecode(jsonStr);
+      if (dec is! Map<String, dynamic>) {
+        return null;
+      }
+      final String u = (dec['u'] as String?)?.trim() ?? '';
+      if (u.isEmpty) {
+        return null;
+      }
+      return ChatFileMeta(
+        url: u,
+        name: (dec['n'] as String?)?.trim() ?? 'файл',
+        mime: (dec['m'] as String?)?.trim() ?? 'application/octet-stream',
+      );
+    } on Object {
+      return null;
+    }
+  }
+
+  static Future<void> sendFileMessage(
+    String conversationId,
+    ChatFileMeta meta,
+  ) async {
+    return sendMessage(
+      conversationId,
+      buildFileMessageBody(
+        publicUrl: meta.url,
+        fileName: meta.name,
+        mimeType: meta.mime,
+      ),
+    );
+  }
+
+  /// Сообщения беседы (от новых к старым), для вкладок профиля и галереи.
+  static Future<List<Map<String, dynamic>>> fetchChatMessagesNewestFirst(
+    String conversationId, {
+    int limit = 400,
+  }) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      return <Map<String, dynamic>>[];
+    }
+    try {
+      final List<dynamic> rows = await c
+          .from('chat_messages')
+          .select()
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return rows.cast<Map<String, dynamic>>();
+    } on Object {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  /// До 5 URL для шапки профиля: [avatarUrl] + последние фото из чата от [peerUserId].
+  static List<String> peerGalleryUrls({
+    required String peerUserId,
+    String? avatarUrl,
+    required List<Map<String, dynamic>> messagesNewestFirst,
+  }) {
+    final List<String> out = <String>[];
+    final Set<String> seen = <String>{};
+    void add(String? u) {
+      final String? t = u?.trim();
+      if (t == null || t.isEmpty || seen.contains(t)) {
+        return;
+      }
+      seen.add(t);
+      out.add(t);
+    }
+
+    add(avatarUrl);
+    for (final Map<String, dynamic> m in messagesNewestFirst) {
+      if (out.length >= 5) {
+        break;
+      }
+      if (m['sender_id']?.toString() != peerUserId) {
+        continue;
+      }
+      if (m['deleted_at'] != null) {
+        continue;
+      }
+      final String body = (m['body'] as String?) ?? '';
+      add(imageUrlFromMessageBody(body));
+    }
+    return out;
+  }
+
   static Future<void> sendMessage(String conversationId, String body) async {
     final SupabaseClient? c = _c;
     if (c == null) {
@@ -573,6 +703,21 @@ class ChatService {
       'sender_id': uid,
       'body': t,
     });
+  }
+
+  /// Копирует сообщения в другой чат (то же поле [body]: текст, фото, файлы).
+  /// Порядок [bodies] сохраняется. Пустые строки пропускаются.
+  static Future<void> forwardMessageBodies(
+    String toConversationId,
+    List<String> bodies,
+  ) async {
+    for (final String raw in bodies) {
+      final String t = raw.trim();
+      if (t.isEmpty) {
+        continue;
+      }
+      await sendMessage(toConversationId, t);
+    }
   }
 
   static Future<void> sendImageMessage(
@@ -932,5 +1077,43 @@ class ChatService {
       return 'Чат';
     }
     return await displayNameForUserId(other) ?? 'Чат';
+  }
+}
+
+/// Мета вложения в теле сообщения [ChatService.fileMessagePrefix].
+class ChatFileMeta {
+  const ChatFileMeta({
+    required this.url,
+    required this.name,
+    required this.mime,
+  });
+
+  final String url;
+  final String name;
+  final String mime;
+
+  bool get isImage =>
+      mime.toLowerCase().startsWith('image/') ||
+      _imageName(name);
+
+  bool get isVideo =>
+      mime.toLowerCase().startsWith('video/') ||
+      _videoName(name);
+
+  static bool _imageName(String n) {
+    final String l = n.toLowerCase();
+    return l.endsWith('.png') ||
+        l.endsWith('.jpg') ||
+        l.endsWith('.jpeg') ||
+        l.endsWith('.gif') ||
+        l.endsWith('.webp');
+  }
+
+  static bool _videoName(String n) {
+    final String l = n.toLowerCase();
+    return l.endsWith('.mp4') ||
+        l.endsWith('.webm') ||
+        l.endsWith('.mov') ||
+        l.endsWith('.mkv');
   }
 }

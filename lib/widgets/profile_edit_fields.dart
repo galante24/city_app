@@ -206,6 +206,110 @@ class NickBlock extends StatelessWidget {
   }
 }
 
+/// Короткий текст «О себе» в [profiles.about] — виден собеседнику в профиле личного чата.
+class AboutBlock extends StatelessWidget {
+  const AboutBlock({
+    super.key,
+    required this.initialAbout,
+    required this.onSaved,
+  });
+
+  final String? initialAbout;
+  final VoidCallback onSaved;
+
+  Future<void> _edit(BuildContext context) async {
+    final TextEditingController controller = TextEditingController(
+      text: (initialAbout ?? '').trim(),
+    );
+    try {
+      final bool? ok = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext ctx) {
+          return AlertDialog(
+            title: const Text('О себе'),
+            content: TextField(
+              controller: controller,
+              maxLines: 4,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                hintText: 'Коротко о себе — видно в профиле в чатах',
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Сохранить'),
+              ),
+            ],
+          );
+        },
+      );
+      if (ok != true || !context.mounted) {
+        return;
+      }
+      await CityDataService.setMyAbout(controller.text);
+      onSaved();
+    } on Object catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не сохранилось: $e')),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final Color sub = cs.onSurfaceVariant;
+    final String display = (initialAbout ?? '').trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'О себе',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: sub,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Текст показывается в карточке профиля при личной переписке.',
+          style: TextStyle(fontSize: 12, color: sub, height: 1.2),
+        ),
+        const SizedBox(height: 10),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            display.isEmpty ? 'Не заполнено' : display,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: display.isEmpty ? sub : cs.onSurface,
+              fontSize: 16,
+              height: 1.35,
+            ),
+          ),
+          trailing: IconButton(
+            tooltip: 'Изменить',
+            onPressed: () => _edit(context),
+            icon: const Icon(Icons.edit_outlined, color: kPrimaryBlue),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class PhoneBlock extends StatelessWidget {
   const PhoneBlock({
     super.key,

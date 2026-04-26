@@ -84,10 +84,15 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
+  late final PageController _pageController;
+
+  static const Duration _tabAnimDuration = Duration(milliseconds: 340);
+  static const Curve _tabAnimCurve = Curves.easeOutCubic;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
     ChatUnreadBadge.start();
     MessageNotificationService.instance.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -95,6 +100,29 @@ class _MainScaffoldState extends State<MainScaffold> {
         unawaited(checkForAppUpdates(context));
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _onTabSelected(int i) {
+    if (i == _currentIndex) {
+      return;
+    }
+    setState(() => _currentIndex = i);
+    unawaited(
+      _pageController.animateToPage(
+        i,
+        duration: _tabAnimDuration,
+        curve: _tabAnimCurve,
+      ),
+    );
+    if (i == 3) {
+      unawaited(ChatUnreadBadge.refresh());
+    }
   }
 
   static const List<Widget> _stackChildren = <Widget>[
@@ -117,15 +145,20 @@ class _MainScaffoldState extends State<MainScaffold> {
     return MainTabIndex(
       index: _currentIndex,
       child: Scaffold(
-        body: IndexedStack(index: _currentIndex, children: _stackChildren),
+        body: PageView(
+          controller: _pageController,
+          physics: const NeverScrollableScrollPhysics(),
+          children: List<Widget>.generate(
+            _stackChildren.length,
+            (int i) => _KeepAliveTab(
+              key: ValueKey<int>(i),
+              child: _stackChildren[i],
+            ),
+          ),
+        ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
-          onDestinationSelected: (int i) {
-            setState(() => _currentIndex = i);
-            if (i == 3) {
-              unawaited(ChatUnreadBadge.refresh());
-            }
-          },
+          onDestinationSelected: _onTabSelected,
           backgroundColor: navBg,
           surfaceTintColor: Colors.transparent,
           shadowColor: dark ? Colors.black54 : const Color(0x14000000),
@@ -183,6 +216,28 @@ class _MainScaffoldState extends State<MainScaffold> {
         ),
       ),
     );
+  }
+}
+
+/// Чтобы [PageView] не сбрасывал скролл и состояние невидимых вкладок.
+class _KeepAliveTab extends StatefulWidget {
+  const _KeepAliveTab({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 

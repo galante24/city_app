@@ -171,8 +171,11 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
       }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext c) =>
-              UserChatThreadScreen(conversationId: conv, title: name),
+          builder: (BuildContext c) => UserChatThreadScreen(
+            conversationId: conv,
+            title: name,
+            directPeerUserId: otherUserId,
+          ),
         ),
       );
     } on Object {

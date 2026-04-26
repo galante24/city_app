@@ -121,7 +121,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Дата рождения, ник в чате и номер телефона',
+          'Дата рождения, ник, текст о себе и номер телефона',
           style: TextStyle(
             fontSize: 13,
             color: secondaryText,
@@ -142,6 +142,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           userId: user.id,
           profileReload: _profileReload,
           initialForEdit: row?['username'] as String?,
+          onSaved: () => setState(() => _profileReload++),
+        ),
+        const SizedBox(height: 20),
+        AboutBlock(
+          key: ValueKey<String>(
+            'about_${row?['about']?.toString() ?? ''}_${user.id}_$_profileReload',
+          ),
+          initialAbout: row?['about'] as String?,
           onSaved: () => setState(() => _profileReload++),
         ),
         const SizedBox(height: 20),

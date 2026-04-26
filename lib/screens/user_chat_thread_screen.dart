@@ -1,6 +1,6 @@
 import 'dart:async';
-
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,10 +9,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../models/conversation_list_item.dart';
+import '../services/chat_download_share.dart';
 import '../services/open_chat_tracker.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
 import '../services/city_data_service.dart';
+import 'direct_peer_profile_screen.dart';
+import 'forward_conversation_picker_screen.dart';
 import 'group_chat_info_screen.dart';
 
 class UserChatThreadScreen extends StatefulWidget {
@@ -21,11 +24,15 @@ class UserChatThreadScreen extends StatefulWidget {
     required this.conversationId,
     required this.title,
     this.listItem,
+    this.directPeerUserId,
   });
 
   final String conversationId;
   final String title;
   final ConversationListItem? listItem;
+
+  /// Собеседник в личном чате, если экран открыт не из списка (например, из вакансии).
+  final String? directPeerUserId;
 
   @override
   State<UserChatThreadScreen> createState() => _UserChatThreadScreenState();
@@ -36,16 +43,26 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   final FocusNode _inputFocus = FocusNode();
   bool _sending = false;
   bool _sendingImage = false;
+  bool _sendingFile = false;
   bool _showEmoji = false;
   String _headerTitle = '';
   bool? _isGroup;
   bool? _isOpen;
   String? _myRole;
+  String? _peerUserId;
+  String? _peerAvatarUrl;
   Timer? _readDebounce;
 
   /// Курсор «прочитано до» (для стиля входящих + галочек исходящих).
   DateTime? _myReadCursor;
   Map<String, DateTime?> _otherReadByUser = <String, DateTime?>{};
+
+  bool _selectingMessages = false;
+  final Set<String> _selectedMessageIds = <String>{};
+
+  /// Актуальная лента (для порядка пересылки); обновляется из [ _MessagesList ] без setState.
+  List<Map<String, dynamic>> _messageRowsForForward =
+      <Map<String, dynamic>>[];
 
   @override
   void initState() {
@@ -60,7 +77,13 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   }
 
   Future<void> _loadMeta() async {
-    if (widget.listItem == null) {
+    if (widget.listItem != null) {
+      setState(() {
+        _isGroup = widget.listItem!.isGroup;
+        _isOpen = widget.listItem!.isOpen;
+        _myRole = widget.listItem!.myRole;
+      });
+    } else {
       final Map<String, dynamic>? row = await ChatService.fetchConversation(
         widget.conversationId,
       );
@@ -80,6 +103,30 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
       if (mounted) {
         setState(() => _myRole = r ?? _myRole);
       }
+    }
+
+    if (_isGroup == true) {
+      return;
+    }
+    String? peer = widget.directPeerUserId?.trim();
+    peer ??= widget.listItem?.otherUserId;
+    if (peer == null || peer.isEmpty) {
+      peer = await ChatService.otherParticipantId(widget.conversationId);
+    }
+    if (!mounted || peer == null || peer.isEmpty) {
+      return;
+    }
+    final Map<String, dynamic>? prof = await CityDataService.fetchProfileRow(
+      peer,
+    );
+    if (mounted) {
+      setState(() {
+        _peerUserId = peer;
+        _peerAvatarUrl = (prof?['avatar_url'] as String?)?.trim();
+        if (_peerAvatarUrl != null && _peerAvatarUrl!.isEmpty) {
+          _peerAvatarUrl = null;
+        }
+      });
     }
   }
 
@@ -139,6 +186,99 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
         setState(() => _sendingImage = false);
       }
     }
+  }
+
+  static String _mimeFromFileName(String name) {
+    final int dot = name.lastIndexOf('.');
+    final String ext = dot >= 0 && dot < name.length - 1
+        ? name.substring(dot + 1).toLowerCase()
+        : '';
+    const Map<String, String> ct = <String, String>{
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'pdf': 'application/pdf',
+      'mp3': 'audio/mpeg',
+      'ogg': 'audio/ogg',
+      'wav': 'audio/wav',
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'mov': 'video/quicktime',
+      'mkv': 'video/x-matroska',
+      'apk': 'application/vnd.android.package-archive',
+      'xml': 'application/xml',
+      'zip': 'application/zip',
+      'txt': 'text/plain',
+      'json': 'application/json',
+    };
+    return ct[ext] ?? 'application/octet-stream';
+  }
+
+  Future<void> _attachFile() async {
+    if (_sending || _sendingImage || _sendingFile) {
+      return;
+    }
+    final FilePickerResult? result = await FilePicker.platform.pickFiles();
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    final PlatformFile pf = result.files.single;
+    late final XFile xf;
+    if (kIsWeb) {
+      final Uint8List? bytes = pf.bytes;
+      if (bytes == null) {
+        return;
+      }
+      xf = XFile.fromData(bytes, name: pf.name);
+    } else {
+      final String? path = pf.path;
+      if (path == null || path.isEmpty) {
+        return;
+      }
+      xf = XFile(path, name: pf.name);
+    }
+    final String displayName =
+        pf.name.isNotEmpty ? pf.name : (xf.name.isNotEmpty ? xf.name : 'file');
+    setState(() => _sendingFile = true);
+    try {
+      final String url = await CityDataService.uploadChatAttachment(xf);
+      await ChatService.sendFileMessage(
+        widget.conversationId,
+        ChatFileMeta(
+          url: url,
+          name: displayName,
+          mime: _mimeFromFileName(displayName),
+        ),
+      );
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Файл: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sendingFile = false);
+      }
+    }
+  }
+
+  void _openPeerProfile() {
+    final String? id = _peerUserId;
+    if (id == null || id.isEmpty) {
+      return;
+    }
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext c) => DirectPeerProfileScreen(
+          conversationId: widget.conversationId,
+          peerUserId: id,
+          title: _headerTitle,
+        ),
+      ),
+    );
   }
 
   Future<void> _bootstrapReadState() async {
@@ -262,6 +402,92 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     }
   }
 
+  void _exitMessageSelection() {
+    setState(() {
+      _selectingMessages = false;
+      _selectedMessageIds.clear();
+    });
+  }
+
+  void _toggleMessageSelection(String messageId) {
+    setState(() {
+      if (_selectedMessageIds.contains(messageId)) {
+        _selectedMessageIds.remove(messageId);
+      } else {
+        _selectedMessageIds.add(messageId);
+      }
+    });
+  }
+
+  void _beginForwardSelection(String messageId) {
+    setState(() {
+      _selectingMessages = true;
+      _selectedMessageIds
+        ..clear()
+        ..add(messageId);
+    });
+  }
+
+  void _onMessagesSnapshot(List<Map<String, dynamic>> rows) {
+    _messageRowsForForward = List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<void> _forwardSelected() async {
+    if (_selectedMessageIds.isEmpty) {
+      return;
+    }
+    final List<String> bodies = <String>[];
+    for (final Map<String, dynamic> row in _messageRowsForForward) {
+      final String? id = row['id']?.toString();
+      if (id == null || !_selectedMessageIds.contains(id)) {
+        continue;
+      }
+      if (row['deleted_at'] != null) {
+        continue;
+      }
+      final String raw = (row['body'] as String?) ?? '';
+      if (raw.trim().isEmpty) {
+        continue;
+      }
+      bodies.add(raw);
+    }
+    if (bodies.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нечего пересылать')),
+        );
+      }
+      return;
+    }
+    final ConversationListItem? target =
+        await Navigator.of(context).push<ConversationListItem>(
+      MaterialPageRoute<ConversationListItem>(
+        builder: (BuildContext c) => ForwardConversationPickerScreen(
+          excludeConversationId: widget.conversationId,
+        ),
+      ),
+    );
+    if (!mounted || target == null) {
+      return;
+    }
+    try {
+      await ChatService.forwardMessageBodies(target.id, bodies);
+      _exitMessageSelection();
+      unawaited(ChatUnreadBadge.refresh());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Переслано в «${target.title}»')),
+        );
+      }
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось переслать: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
@@ -285,21 +511,88 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: appBarIcon),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          _headerTitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: cs.onSurface,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+          icon: Icon(
+            _selectingMessages ? Icons.close : Icons.arrow_back,
+            color: appBarIcon,
           ),
+          onPressed: _selectingMessages
+              ? _exitMessageSelection
+              : () => Navigator.of(context).pop(),
         ),
+        title: _selectingMessages
+            ? Text(
+                _selectedMessageIds.isEmpty
+                    ? 'Выберите сообщения'
+                    : 'Выбрано: ${_selectedMessageIds.length}',
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            : (!isGroup && (_peerUserId != null && _peerUserId!.isNotEmpty)
+                  ? InkWell(
+                      onTap: _openPeerProfile,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: <Widget>[
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor:
+                                  kPrimaryBlue.withValues(alpha: 0.2),
+                              backgroundImage: _peerAvatarUrl != null
+                                  ? NetworkImage(_peerAvatarUrl!)
+                                  : null,
+                              child: _peerAvatarUrl == null
+                                  ? Text(
+                                      _headerTitle.isNotEmpty
+                                          ? _headerTitle[0].toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
+                                        color: kPrimaryBlue,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _headerTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: cs.onSurface,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Text(
+                      _headerTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )),
         actions: <Widget>[
-          if (isGroup)
+          if (_selectingMessages)
+            IconButton(
+              icon: Icon(Icons.forward, color: appBarIcon),
+              tooltip: 'Переслать',
+              onPressed:
+                  _selectedMessageIds.isEmpty ? null : () => _forwardSelected(),
+            )
+          else if (isGroup)
             IconButton(
               icon: Icon(Icons.group_outlined, color: appBarIcon),
               onPressed: () {
@@ -328,9 +621,14 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
               myReadAt: _myReadCursor,
               otherReadByUser: _otherReadByUser,
               onStreamChanged: _scheduleReadSync,
+              selectingMessages: _selectingMessages,
+              selectedMessageIds: _selectedMessageIds,
+              onToggleMessageSelection: _toggleMessageSelection,
+              onBeginForwardSelection: _beginForwardSelection,
+              onMessagesSnapshot: _onMessagesSnapshot,
             ),
           ),
-          if (_showEmoji)
+          if (!_selectingMessages && _showEmoji)
             SizedBox(
               height: 256,
               child: EmojiPicker(
@@ -360,9 +658,10 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                 ),
               ),
             ),
-          Material(
-            color: isDark ? cs.surface : Colors.white,
-            child: Padding(
+          if (!_selectingMessages)
+            Material(
+              color: isDark ? cs.surface : Colors.white,
+              child: Padding(
               padding: EdgeInsets.fromLTRB(4, 4, 8, _inputBarBottom),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -378,17 +677,46 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                     ),
                     tooltip: _showEmoji ? 'Клавиатура' : 'Смайлики',
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    onPressed: _sendingImage ? null : _attachImage,
-                    icon: _sendingImage
-                        ? const SizedBox(
+                  PopupMenuButton<int>(
+                    enabled: !_sendingImage && !_sendingFile,
+                    icon: _sendingImage || _sendingFile
+                        ? SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: appBarIcon,
+                            ),
                           )
                         : Icon(Icons.attach_file, color: appBarIcon),
-                    tooltip: 'Прикрепить фото',
+                    tooltip: 'Прикрепить',
+                    onSelected: (int v) {
+                      if (v == 0) {
+                        unawaited(_attachImage());
+                      } else if (v == 1) {
+                        unawaited(_attachFile());
+                      }
+                    },
+                    itemBuilder: (BuildContext menuContext) {
+                      return <PopupMenuEntry<int>>[
+                        const PopupMenuItem<int>(
+                          value: 0,
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.photo_outlined),
+                            title: Text('Фото'),
+                          ),
+                        ),
+                        const PopupMenuItem<int>(
+                          value: 1,
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.insert_drive_file_outlined),
+                            title: Text('Файл'),
+                          ),
+                        ),
+                      ];
+                    },
                   ),
                   Expanded(
                     child: TextField(
@@ -458,6 +786,11 @@ class _MessagesList extends StatefulWidget {
     required this.myReadAt,
     required this.otherReadByUser,
     required this.onStreamChanged,
+    required this.selectingMessages,
+    required this.selectedMessageIds,
+    required this.onToggleMessageSelection,
+    required this.onBeginForwardSelection,
+    required this.onMessagesSnapshot,
   });
 
   final String conversationId;
@@ -468,6 +801,11 @@ class _MessagesList extends StatefulWidget {
   final DateTime? myReadAt;
   final Map<String, DateTime?> otherReadByUser;
   final VoidCallback onStreamChanged;
+  final bool selectingMessages;
+  final Set<String> selectedMessageIds;
+  final void Function(String messageId) onToggleMessageSelection;
+  final void Function(String messageId) onBeginForwardSelection;
+  final void Function(List<Map<String, dynamic>> rows) onMessagesSnapshot;
 
   @override
   State<_MessagesList> createState() => _MessagesListState();
@@ -475,6 +813,89 @@ class _MessagesList extends StatefulWidget {
 
 class _MessagesListState extends State<_MessagesList> {
   String? _dataSig;
+  String? _rowsReportSig;
+
+  void _maybeReportRowsForForward(List<Map<String, dynamic>> rows) {
+    final String sig = rows.isEmpty
+        ? ''
+        : '${rows.length}|${rows.first['id']}|${rows.last['id']}';
+    if (sig == _rowsReportSig) {
+      return;
+    }
+    _rowsReportSig = sig;
+    widget.onMessagesSnapshot(rows);
+  }
+
+  void _showMessageActions(
+    BuildContext sheetContext,
+    Map<String, dynamic> m,
+    String me, {
+    required String? displayImageUrl,
+    required ChatFileMeta? fileMeta,
+  }) {
+    final bool isDeleted = m['deleted_at'] != null;
+    if (isDeleted) {
+      return;
+    }
+    final bool canSave =
+        (displayImageUrl != null && displayImageUrl.isNotEmpty) ||
+        fileMeta != null;
+    final bool canDel = widget.canDeleteMessage(m, me);
+    showModalBottomSheet<void>(
+      context: sheetContext,
+      builder: (BuildContext bc) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.checklist_outlined),
+                title: const Text('Выбрать для пересылки'),
+                onTap: () {
+                  Navigator.pop(bc);
+                  widget.onBeginForwardSelection(m['id']!.toString());
+                },
+              ),
+              if (canSave)
+                ListTile(
+                  leading: const Icon(Icons.download_outlined),
+                  title: const Text('Скачать или поделиться'),
+                  onTap: () {
+                    Navigator.pop(bc);
+                    final String url =
+                        displayImageUrl ?? fileMeta?.url ?? '';
+                    final String name = fileMeta?.name ??
+                        (displayImageUrl != null ? 'image.jpg' : 'file');
+                    if (url.isEmpty) {
+                      return;
+                    }
+                    unawaited(
+                      shareNetworkFileToDevice(
+                        context: sheetContext,
+                        url: url,
+                        suggestedName: name,
+                      ),
+                    );
+                  },
+                ),
+              if (canDel)
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline,
+                    color: Color(0xFFC62828),
+                  ),
+                  title: const Text('Удалить сообщение'),
+                  onTap: () {
+                    Navigator.pop(bc);
+                    widget.onDelete(m['id']!.toString());
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -500,6 +921,7 @@ class _MessagesListState extends State<_MessagesList> {
             s.data ?? <Map<String, dynamic>>[];
         final List<Map<String, dynamic>> rows =
             ChatService.dedupeChatMessagesById(raw);
+        _maybeReportRowsForForward(rows);
         final String sig = rows.isEmpty
             ? '0'
             : '${rows.length}:${rows.last['id']}:${rows.first['id']}';
@@ -532,9 +954,20 @@ class _MessagesListState extends State<_MessagesList> {
             final String? imageUrl = !isDeleted
                 ? ChatService.imageUrlFromMessageBody(bodyRaw)
                 : null;
+            final ChatFileMeta? fileMeta = !isDeleted
+                ? ChatService.fileMetaFromMessageBody(bodyRaw)
+                : null;
+            final String? displayImageUrl = imageUrl ??
+                (fileMeta != null && fileMeta.isImage ? fileMeta.url : null);
+            final ChatFileMeta? attachmentMeta =
+                fileMeta != null && !fileMeta.isImage ? fileMeta : null;
             final String text = isDeleted
                 ? 'Сообщение удалено'
-                : (imageUrl != null ? '' : bodyRaw);
+                : displayImageUrl != null
+                    ? ''
+                    : attachmentMeta != null
+                        ? attachmentMeta.name
+                        : bodyRaw;
             final DateTime? createdAt = _tryParse(m['created_at'] as String?);
             final bool incomingUnread =
                 !mine &&
@@ -557,36 +990,25 @@ class _MessagesListState extends State<_MessagesList> {
             final Color deletedBubble = isDark
                 ? cs.surfaceContainerLow
                 : const Color(0xFFE8E8ED);
+            final String? mid = m['id']?.toString();
+            final bool selected = mid != null &&
+                widget.selectingMessages &&
+                widget.selectedMessageIds.contains(mid);
             return Align(
               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
               child: GestureDetector(
-                onLongPress: widget.canDeleteMessage(m, me)
-                    ? () {
-                        showModalBottomSheet<void>(
-                          context: context,
-                          builder: (BuildContext bc) {
-                            return SafeArea(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: <Widget>[
-                                  ListTile(
-                                    leading: const Icon(
-                                      Icons.delete_outline,
-                                      color: Color(0xFFC62828),
-                                    ),
-                                    title: const Text('Удалить сообщение'),
-                                    onTap: () {
-                                      Navigator.pop(bc);
-                                      widget.onDelete(m['id']!.toString());
-                                    },
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-                      }
+                onTap: widget.selectingMessages && !isDeleted && mid != null
+                    ? () => widget.onToggleMessageSelection(mid)
                     : null,
+                onLongPress: widget.selectingMessages || isDeleted
+                    ? null
+                    : () => _showMessageActions(
+                          context,
+                          m,
+                          me,
+                          displayImageUrl: displayImageUrl,
+                          fileMeta: fileMeta,
+                        ),
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 2),
                   padding: const EdgeInsets.symmetric(
@@ -604,11 +1026,16 @@ class _MessagesListState extends State<_MessagesList> {
                               : (incomingUnread
                                     ? incomingUnreadBubble
                                     : incomingBubble)),
-                    border: incomingUnread
-                        ? const Border(
-                            left: BorderSide(color: kPrimaryBlue, width: 3),
-                          )
-                        : null,
+                    border: widget.selectingMessages && selected
+                        ? Border.all(color: kPrimaryBlue, width: 2.5)
+                        : incomingUnread
+                            ? const Border(
+                                left: BorderSide(
+                                  color: kPrimaryBlue,
+                                  width: 3,
+                                ),
+                              )
+                            : null,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -627,7 +1054,7 @@ class _MessagesListState extends State<_MessagesList> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      if (imageUrl != null && !isDeleted)
+                      if (displayImageUrl != null && !isDeleted)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
                           child: ConstrainedBox(
@@ -637,7 +1064,7 @@ class _MessagesListState extends State<_MessagesList> {
                               maxWidth: MediaQuery.sizeOf(context).width * 0.7,
                             ),
                             child: Image.network(
-                              imageUrl,
+                              displayImageUrl,
                               fit: BoxFit.cover,
                               loadingBuilder:
                                   (
@@ -667,7 +1094,36 @@ class _MessagesListState extends State<_MessagesList> {
                             ),
                           ),
                         )
-                      else
+                      else if (attachmentMeta != null && !isDeleted)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              attachmentMeta.isVideo
+                                  ? Icons.play_circle_outline
+                                  : Icons.insert_drive_file_outlined,
+                              color: mine ? Colors.white : cs.onSurface,
+                              size: 28,
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                attachmentMeta.name,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: mine ? Colors.white : cs.onSurface,
+                                  fontSize: 15,
+                                  fontWeight: incomingUnread
+                                      ? FontWeight.w600
+                                      : null,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else if (text.isNotEmpty)
                         Text(
                           text,
                           style: TextStyle(
@@ -682,7 +1138,7 @@ class _MessagesListState extends State<_MessagesList> {
                             height: 1.35,
                           ),
                         ),
-                      if (imageUrl != null && !isDeleted)
+                      if (displayImageUrl != null && !isDeleted)
                         const SizedBox(height: 4)
                       else
                         const SizedBox(height: 2),

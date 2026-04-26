@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../app_constants.dart';
 
+/// Переходы при [Navigator.push]: горизонтальный слайд на телефонах, лёгкий fade на десктопе.
+const PageTransitionsTheme kCityPageTransitions = PageTransitionsTheme(
+  builders: <TargetPlatform, PageTransitionsBuilder>{
+    TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.fuchsia: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+  },
+);
+
 /// Темы приложения: общий seed [kPrimaryBlue], фон скролла как у «мягких» экранов.
 abstract final class CityTheme {
   static ThemeData light() {
@@ -13,6 +25,7 @@ abstract final class CityTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: cs,
+      pageTransitionsTheme: kCityPageTransitions,
       scaffoldBackgroundColor: const Color(0xFFF5F5F7),
       appBarTheme: const AppBarTheme(
         backgroundColor: kPrimaryBlue,
@@ -81,6 +94,7 @@ abstract final class CityTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: cs,
+      pageTransitionsTheme: kCityPageTransitions,
       scaffoldBackgroundColor: kDarkScaffold,
       appBarTheme: AppBarTheme(
         backgroundColor: cs.surface,
