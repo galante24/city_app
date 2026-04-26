@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../services/city_data_service.dart';
+import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 
 /// Мягкие нейтральные тона ленты
@@ -584,26 +585,28 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     if (!supabaseAppReady || _newsStream == null) {
       return Scaffold(
-        backgroundColor: kNewsScaffoldBg,
-        appBar: AppBar(
-          leading: const SizedBox(width: 56),
-          leadingWidth: 56,
-          title: const Text(
-            'Главная',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
-          ),
-          centerTitle: true,
-          actions: const <Widget>[
-            SizedBox(
-              width: 56,
-              child: Center(child: WeatherAppBarAction(compact: true)),
+        backgroundColor: const Color(0xFFF5F5F7),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            SoftTabHeader(
+              title: 'Главная',
+              trailing: const Padding(
+                padding: EdgeInsets.only(right: 4),
+                child: WeatherAppBarAction(
+                  compact: true,
+                  onLightBackground: true,
+                ),
+              ),
+            ),
+            const Expanded(
+              child: Center(
+                child: Text(
+                  'Подключите Supabase (см. lib/config/supabase_config.dart)',
+                ),
+              ),
             ),
           ],
-        ),
-        body: const Center(
-          child: Text(
-            'Подключите Supabase (см. lib/config/supabase_config.dart)',
-          ),
         ),
       );
     }
@@ -624,31 +627,28 @@ class _HomeScreenState extends State<HomeScreen>
             final List<SocialPost> posts = raw.map(socialPostFromMap).toList();
 
             return Scaffold(
-              backgroundColor: kNewsScaffoldBg,
-              appBar: AppBar(
-                backgroundColor: kPrimaryBlue,
-                foregroundColor: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-                shadowColor: Colors.transparent,
-                leading: const SizedBox(width: 56),
-                leadingWidth: 56,
-                title: const Text(
-                  'Главная',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
-                ),
-                centerTitle: true,
-                actions: const <Widget>[
-                  SizedBox(
-                    width: 56,
-                    child: Center(child: WeatherAppBarAction(compact: true)),
-                  ),
-                ],
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(92),
-                  child: Material(
-                    color: kNewsCardBg,
-                    child: TabBar(
+              backgroundColor: const Color(0xFFF5F5F7),
+              floatingActionButton: isAdmin
+                  ? FloatingActionButton(
+                      onPressed: openCreateSheet,
+                      backgroundColor: kPrimaryBlue,
+                      foregroundColor: Colors.white,
+                      child: const Icon(Icons.add, size: 30),
+                    )
+                  : null,
+              body: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  SoftTabHeader(
+                    title: 'Главная',
+                    trailing: const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: WeatherAppBarAction(
+                        compact: true,
+                        onLightBackground: true,
+                      ),
+                    ),
+                    bottom: TabBar(
                       controller: _tabController,
                       labelColor: kPrimaryBlue,
                       unselectedLabelColor: kNewsTextSecondary,
@@ -684,18 +684,6 @@ class _HomeScreenState extends State<HomeScreen>
                       ],
                     ),
                   ),
-                ),
-              ),
-              floatingActionButton: isAdmin
-                  ? FloatingActionButton(
-                      onPressed: openCreateSheet,
-                      backgroundColor: kPrimaryBlue,
-                      foregroundColor: Colors.white,
-                      child: const Icon(Icons.add, size: 30),
-                    )
-                  : null,
-              body: Column(
-                children: <Widget>[
                   if (newsWaiting) const LinearProgressIndicator(minHeight: 2),
                   Expanded(
                     child: TabBarView(

@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../main_tab_index.dart';
+import '../widgets/soft_tab_header.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
@@ -569,127 +570,151 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
-      return const Scaffold(body: Center(child: Text('Supabase не настроен')));
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F5F7),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            SoftTabHeader(
+              title: 'Чаты',
+              trailing: IconButton(
+                icon: Icon(
+                  Icons.chat_outlined,
+                  color: kSoftHeaderActionIconColor,
+                  size: 26,
+                ),
+                onPressed: null,
+                tooltip: 'Чаты',
+              ),
+            ),
+            const Expanded(
+              child: Center(child: Text('Supabase не настроен')),
+            ),
+          ],
+        ),
+      );
     }
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 16,
-        title: const Text(
-          'Чаты',
-          style: TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontSize: 22,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.3,
-          ),
-        ),
-        centerTitle: false,
-      ),
+      backgroundColor: const Color(0xFFF5F5F7),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: TextField(
-              controller: _search,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'Поиск по чатам',
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF8E8E93)),
-                filled: true,
-                fillColor: const Color(0xFFF2F2F7),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 4,
-                ),
-                isDense: true,
+          SoftTabHeader(
+            title: 'Чаты',
+            trailing: IconButton(
+              icon: Icon(
+                Icons.add_circle_outline,
+                color: kSoftHeaderActionIconColor,
+                size: 28,
               ),
+              onPressed: _openAddChat,
+              tooltip: 'Новый чат',
             ),
           ),
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: _filtered.isEmpty
-                        ? ListView(
-                            children: <Widget>[
-                              const SizedBox(height: 64),
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                size: 56,
-                                color: Colors.grey[400],
-                              ),
-                              const SizedBox(height: 16),
-                              Center(
-                                child: Text(
-                                  _all.isEmpty
-                                      ? 'Нет чатов. Нажмите +, чтобы написать кому-то'
-                                      : 'Ничего не найдено',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    color: Color(0xFF6B6B70),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : ListView.separated(
-                            itemCount: _filtered.length,
-                            padding: const EdgeInsets.only(top: 4, bottom: 80),
-                            separatorBuilder: (BuildContext c, int i) =>
-                                const Padding(
-                                  padding: EdgeInsets.only(left: 80),
-                                  child: Divider(
-                                    height: 1,
-                                    thickness: 1,
-                                    color: Color(0xFFE8E8ED),
-                                  ),
-                                ),
-                            itemBuilder: (BuildContext c, int i) {
-                              final ConversationListItem item = _filtered[i];
-                              return _ChatListTile(
-                                item: item,
-                                notificationsMuted: _mutedIds.contains(item.id),
-                                onLongPress: () {
-                                  unawaited(_onChatLongPress(item));
-                                },
-                                onTap: () async {
-                                  await Navigator.of(context).push<void>(
-                                    MaterialPageRoute<void>(
-                                      builder: (BuildContext c) =>
-                                          UserChatThreadScreen(
-                                            conversationId: item.id,
-                                            title: item.title,
-                                            listItem: item,
-                                          ),
-                                    ),
-                                  );
-                                  if (!mounted) {
-                                    return;
-                                  }
-                                  await _load();
-                                  await ChatUnreadBadge.refresh();
-                                },
-                              );
-                            },
-                          ),
+            child: Column(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  child: TextField(
+                    controller: _search,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Поиск по чатам',
+                      prefixIcon:
+                          const Icon(Icons.search, color: Color(0xFF8E8E93)),
+                      filled: true,
+                      fillColor: const Color(0xFFF2F2F7),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 4,
+                      ),
+                      isDense: true,
+                    ),
                   ),
+                ),
+                Expanded(
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: _filtered.isEmpty
+                              ? ListView(
+                                  children: <Widget>[
+                                    const SizedBox(height: 64),
+                                    Icon(
+                                      Icons.chat_bubble_outline,
+                                      size: 56,
+                                      color: Colors.grey[400],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Center(
+                                      child: Text(
+                                        _all.isEmpty
+                                            ? 'Нет чатов. Нажмите «+» сверху, чтобы написать кому-то'
+                                            : 'Ничего не найдено',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          color: Color(0xFF6B6B70),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : ListView.separated(
+                                  itemCount: _filtered.length,
+                                  padding:
+                                      const EdgeInsets.only(top: 4, bottom: 80),
+                                  separatorBuilder: (BuildContext c, int i) =>
+                                      const Padding(
+                                        padding: EdgeInsets.only(left: 80),
+                                        child: Divider(
+                                          height: 1,
+                                          thickness: 1,
+                                          color: Color(0xFFE8E8ED),
+                                        ),
+                                      ),
+                                  itemBuilder: (BuildContext c, int i) {
+                                    final ConversationListItem item =
+                                        _filtered[i];
+                                    return _ChatListTile(
+                                      item: item,
+                                      notificationsMuted:
+                                          _mutedIds.contains(item.id),
+                                      onLongPress: () {
+                                        unawaited(_onChatLongPress(item));
+                                      },
+                                      onTap: () async {
+                                        await Navigator.of(context).push<void>(
+                                          MaterialPageRoute<void>(
+                                            builder: (BuildContext c) =>
+                                                UserChatThreadScreen(
+                                              conversationId: item.id,
+                                              title: item.title,
+                                              listItem: item,
+                                            ),
+                                          ),
+                                        );
+                                        if (!mounted) {
+                                          return;
+                                        }
+                                        await _load();
+                                        await ChatUnreadBadge.refresh();
+                                      },
+                                    );
+                                  },
+                                ),
+                        ),
+                ),
+              ],
+            ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddChat,
-        child: const Icon(Icons.add),
       ),
     );
   }

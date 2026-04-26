@@ -7,6 +7,7 @@ import '../app_constants.dart';
 import '../config/admin_config.dart';
 import '../config/supabase_ready.dart';
 import '../services/city_data_service.dart';
+import '../widgets/soft_tab_header.dart';
 import 'account_settings_screen.dart';
 import 'ferry_admin_screen.dart';
 
@@ -160,28 +161,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? '—'
             : '@$nickForDisplay';
         return Scaffold(
-          backgroundColor: kAppScaffoldBg,
-          appBar: AppBar(
-            title: const Text('Аккаунт'),
-            backgroundColor: kPrimaryBlue,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            foregroundColor: Colors.white,
-            centerTitle: true,
-            titleTextStyle: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              kScreenHorizontalPadding,
-              8,
-              kScreenHorizontalPadding,
-              32,
-            ),
+          backgroundColor: const Color(0xFFF5F5F7),
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              SoftTabHeader(
+                title: 'Аккаунт',
+                trailing: IconButton(
+                  icon: Icon(
+                    Icons.settings_outlined,
+                    color: kSoftHeaderActionIconColor,
+                    size: 26,
+                  ),
+                  onPressed: () async {
+                    await Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (BuildContext c) =>
+                            const AccountSettingsScreen(),
+                      ),
+                    );
+                    if (mounted) {
+                      setState(() => _profileReload++);
+                    }
+                  },
+                  tooltip: 'Настройки',
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    kScreenHorizontalPadding,
+                    8,
+                    kScreenHorizontalPadding,
+                    32,
+                  ),
+                  children: <Widget>[
               const SizedBox(height: 4),
               Center(
                 child: GestureDetector(
@@ -444,32 +458,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              FilledButton.tonal(
-                onPressed: () async {
-                  await Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (BuildContext c) =>
-                          const AccountSettingsScreen(),
-                    ),
-                  );
-                  if (mounted) {
-                    setState(() => _profileReload++);
-                  }
-                },
-                style: FilledButton.styleFrom(
-                  foregroundColor: kPrimaryBlue,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Icon(Icons.settings_outlined),
-                    SizedBox(width: 8),
-                    Text('Настройки'),
-                  ],
-                ),
-              ),
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: _signOut,
@@ -509,6 +497,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     setState(() {});
                   }
                 },
+              ),
+                  ],
+                ),
               ),
             ],
           ),

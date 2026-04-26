@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_constants.dart';
+import 'widgets/soft_tab_header.dart';
 import 'app_update_check.dart';
 import 'config/supabase_config.dart';
 import 'config/supabase_ready.dart';
@@ -117,13 +118,11 @@ class _MainScaffoldState extends State<MainScaffold> {
         body: IndexedStack(index: _currentIndex, children: _stackChildren),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
-          onDestinationSelected: (int i) {
-            setState(() => _currentIndex = i);
-            if (i == 3) {
-              unawaited(ChatUnreadBadge.refresh());
-            }
-          },
-          indicatorColor: kPrimaryBlue.withValues(alpha: 0.2),
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: const Color(0x14000000),
+          elevation: 8,
+          indicatorColor: kPrimaryBlue.withValues(alpha: 0.18),
           // На телефоне длинные подписи (Расписание) не ломают строку.
           labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
           destinations: <Widget>[
@@ -168,7 +167,7 @@ class _MainScaffoldState extends State<MainScaffold> {
             const NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person, color: kPrimaryBlue),
-              label: 'Профиль',
+              label: 'Аккаунт',
             ),
           ],
         ),
@@ -279,23 +278,37 @@ class ServicesGridScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _kBentoScaffoldBg,
-      appBar: AppBar(title: const Text('Сервисы')),
-      body: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 16,
-          crossAxisSpacing: 16,
-          childAspectRatio: 0.72,
-        ),
-        itemCount: _categories.length,
-        itemBuilder: (BuildContext context, int index) {
-          final _ServiceCategory c = _categories[index];
-          return _BentoServiceCard(
-            category: c,
-            onTap: () => _onCategoryTap(context, c),
-          );
-        },
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SoftTabHeader(
+            title: 'Сервисы',
+            trailing: Icon(
+              Icons.grid_view_rounded,
+              size: 28,
+              color: kSoftHeaderActionIconColor,
+            ),
+          ),
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: 0.72,
+              ),
+              itemCount: _categories.length,
+              itemBuilder: (BuildContext context, int index) {
+                final _ServiceCategory c = _categories[index];
+                return _BentoServiceCard(
+                  category: c,
+                  onTap: () => _onCategoryTap(context, c),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -313,17 +326,17 @@ class _BentoServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: category.cardColor,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(22),
         splashColor: category.iconAndTitleColor.withValues(alpha: 0.12),
         highlightColor: category.iconAndTitleColor.withValues(alpha: 0.08),
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
               color: const Color(0xFF0A0A0A).withValues(alpha: 0.05),
             ),
@@ -338,10 +351,10 @@ class _BentoServiceCard extends StatelessWidget {
                     Container(
                       width: 56,
                       height: 56,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: <BoxShadow>[
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: const <BoxShadow>[
                           BoxShadow(
                             color: Color(0x14000000),
                             blurRadius: 6,
@@ -349,6 +362,7 @@ class _BentoServiceCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                      alignment: Alignment.center,
                       child: Icon(
                         category.icon,
                         size: 28,
@@ -412,6 +426,10 @@ class FoodPlacesScreen extends StatelessWidget {
       backgroundColor: _kBentoScaffoldBg,
       appBar: AppBar(
         title: const Text('Заведения'),
+        backgroundColor: Colors.white,
+        foregroundColor: kSoftHeaderTitleColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).maybePop(),

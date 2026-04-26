@@ -36,10 +36,17 @@ IconData _weatherIconDataFromCode(String? icon) {
 
 /// Компактная кнопка погоды (иконка + °C) и bottom sheet с прогнозом.
 class WeatherAppBarAction extends StatefulWidget {
-  const WeatherAppBarAction({super.key, this.compact = false});
+  const WeatherAppBarAction({
+    super.key,
+    this.compact = false,
+    this.onLightBackground = false,
+  });
 
   /// В узком режиме без названия города (для симметрии заголовка AppBar).
   final bool compact;
+
+  /// Светлая шапка (белый фон): иконки/индикатор в цвете [kPrimaryBlue].
+  final bool onLightBackground;
 
   @override
   State<WeatherAppBarAction> createState() => _WeatherAppBarActionState();
@@ -162,6 +169,7 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
                   : '…');
 
         final bool compact = widget.compact;
+        final bool lightBg = widget.onLightBackground;
         return Tooltip(
           message: 'Погода: $kWeatherCityNameRu (Open-Weather Map)',
           child: Material(
@@ -181,9 +189,9 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
                       SizedBox(
                         width: compact ? 16 : 18,
                         height: compact ? 16 : 18,
-                        child: const CircularProgressIndicator(
+                        child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: lightBg ? kPrimaryBlue : Colors.white,
                         ),
                       )
                     else
@@ -192,6 +200,7 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
                             ? _weatherIconDataFromCode(c.iconCode)
                             : Icons.cloud_outlined,
                         size: compact ? 18 : 20,
+                        color: lightBg ? kPrimaryBlue : null,
                       ),
                     const SizedBox(width: 3),
                     Text(
@@ -199,6 +208,7 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
                       style: TextStyle(
                         fontSize: compact ? 12 : 13,
                         fontWeight: FontWeight.w600,
+                        color: lightBg ? kPrimaryBlue : null,
                       ),
                     ),
                     if (!compact) ...<Widget>[

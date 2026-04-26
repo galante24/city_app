@@ -7,6 +7,7 @@ import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../schedule/lesosibirsk_bus_widgets.dart';
 import '../services/city_data_service.dart';
+import '../widgets/soft_tab_header.dart';
 
 const Color _kPanelBg = Color(0xFFFFFFFF);
 const Color _kTextSecondary = Color(0xFF6C6C70);
@@ -209,8 +210,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     if (!supabaseAppReady || _ferryStream == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Расписание')),
-        body: const Center(child: Text('Supabase не подключён')),
+        backgroundColor: const Color(0xFFF5F5F7),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            SoftTabHeader(
+              title: 'Расписание',
+              trailing: Icon(
+                Icons.directions_bus_filled_rounded,
+                size: 28,
+                color: kSoftHeaderActionIconColor,
+              ),
+            ),
+            const Expanded(
+              child: Center(child: Text('Supabase не подключён')),
+            ),
+          ],
+        ),
       );
     }
     final bool isAdmin = CityDataService.isCurrentUserAdminSync();
@@ -225,43 +241,51 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             : null;
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF2F2F7),
-          appBar: AppBar(
-            title: const Text('Расписание'),
-            backgroundColor: kPrimaryBlue,
-            foregroundColor: Colors.white,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-          ),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+          backgroundColor: const Color(0xFFF5F5F7),
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              SoftTabHeader(
+                title: 'Расписание',
+                trailing: Icon(
+                  Icons.directions_bus_filled_rounded,
+                  size: 28,
+                  color: kSoftHeaderActionIconColor,
+                ),
+              ),
               if (fWait) const LinearProgressIndicator(minHeight: 2),
-              Card(
-                color: _kPanelBg,
-                clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: _ferryStrip(
-                  ferry: ferry,
-                  loading: fWait,
-                  isAdmin: isAdmin,
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+                  children: <Widget>[
+                    Card(
+                      color: _kPanelBg,
+                      clipBehavior: Clip.antiAlias,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: _ferryStrip(
+                        ferry: ferry,
+                        loading: fWait,
+                        isAdmin: isAdmin,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text(
+                        'Автобусы',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: _kTextPrimary,
+                        ),
+                      ),
+                    ),
+                    const LesosibirskBusesSection(),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              const Padding(
-                padding: EdgeInsets.only(left: 4, bottom: 8),
-                child: Text(
-                  'Автобусы',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: _kTextPrimary,
-                  ),
-                ),
-              ),
-              const LesosibirskBusesSection(),
             ],
           ),
         );
