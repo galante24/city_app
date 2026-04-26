@@ -35,7 +35,10 @@ IconData _weatherIconDataFromCode(String? icon) {
 
 /// Компактная кнопка погоды (иконка + °C) и bottom sheet с прогнозом.
 class WeatherAppBarAction extends StatefulWidget {
-  const WeatherAppBarAction({super.key});
+  const WeatherAppBarAction({super.key, this.compact = false});
+
+  /// В узком режиме без названия города (для симметрии заголовка AppBar).
+  final bool compact;
 
   @override
   State<WeatherAppBarAction> createState() => _WeatherAppBarActionState();
@@ -137,15 +140,17 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
       future: _currentFuture,
       builder: (BuildContext context, AsyncSnapshot<WeatherCurrent?> snap) {
         final WeatherCurrent? c = snap.data;
-        final bool loading = snap.connectionState == ConnectionState.waiting &&
-            !snap.hasData;
+        final bool loading =
+            snap.connectionState == ConnectionState.waiting && !snap.hasData;
         final String tempText = c != null
             ? formatTempC(c.tempC)
             : (snap.hasError ||
-                    (snap.connectionState == ConnectionState.done && c == null)
-                ? '—'
-                : '…');
+                      (snap.connectionState == ConnectionState.done &&
+                          c == null)
+                  ? '—'
+                  : '…');
 
+        final bool compact = widget.compact;
         return Tooltip(
           message: 'Погода: $kWeatherCityNameRu (Open-Weather Map)',
           child: Material(
@@ -154,15 +159,18 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
               onTap: _openSheet,
               borderRadius: BorderRadius.circular(10),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 2 : 6,
+                  vertical: compact ? 4 : 6,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     if (loading)
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
+                      SizedBox(
+                        width: compact ? 16 : 18,
+                        height: compact ? 16 : 18,
+                        child: const CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
@@ -172,34 +180,39 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
                         c != null
                             ? _weatherIconDataFromCode(c.iconCode)
                             : Icons.cloud_outlined,
-                        size: 20,
+                        size: compact ? 18 : 20,
                       ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 3),
                     Text(
                       tempText,
-                      style: const TextStyle(
-                        fontSize: 13,
+                      style: TextStyle(
+                        fontSize: compact ? 12 : 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 86),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          kWeatherCityNameRu,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: (IconTheme.of(context).color ??
-                                    Theme.of(context).colorScheme.onSurface)
-                                .withValues(alpha: 0.9),
+                    if (!compact) ...<Widget>[
+                      const SizedBox(width: 4),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 70),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            kWeatherCityNameRu,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color:
+                                  (IconTheme.of(context).color ??
+                                          Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface)
+                                      .withValues(alpha: 0.9),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -241,168 +254,179 @@ class _WeatherForecastSheetState extends State<_WeatherForecastSheet> {
       builder: (BuildContext context, ScrollController scroll) {
         return FutureBuilder<List<WeatherDayForecast>>(
           future: _forecastFuture,
-          builder: (
-            BuildContext context,
-            AsyncSnapshot<List<WeatherDayForecast>> snap,
-          ) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: kNewsScaffoldBg,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x33000000),
-                    blurRadius: 16,
-                    offset: Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: kNewsTextSecondary.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(2),
+          builder:
+              (
+                BuildContext context,
+                AsyncSnapshot<List<WeatherDayForecast>> snap,
+              ) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: kNewsScaffoldBg,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(20),
                     ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x33000000),
+                        blurRadius: 16,
+                        offset: Offset(0, -4),
+                      ),
+                    ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Row(
-                      children: <Widget>[
-                        Icon(Icons.location_on, color: kPrimaryBlue, size: 22),
-                        const SizedBox(width: 6),
-                        Text(
-                          kWeatherCityNameRu,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: kNewsTextPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (snap.connectionState == ConnectionState.waiting)
-                    const Expanded(
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: kPrimaryBlue,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: kNewsTextSecondary.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                    )
-                  else if (snap.hasError ||
-                      snap.data == null ||
-                      snap.data!.isEmpty)
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          'Не удалось загрузить прогноз',
-                          style: TextStyle(
-                            color: kNewsTextSecondary,
-                            fontSize: 15,
-                          ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.location_on,
+                              color: kPrimaryBlue,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              kWeatherCityNameRu,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: kNewsTextPrimary,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    )
-                  else
-                    Expanded(
-                      child: ListView(
-                        controller: scroll,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        children: <Widget>[
-                          for (final WeatherDayForecast d in snap.data!)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Material(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                elevation: 0,
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 4,
-                                  ),
-                                  leading: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      openWeatherIconUrl(d.iconCode),
-                                      width: 48,
-                                      height: 48,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (
-                                        _,
-                                        Object error,
-                                        StackTrace? stackTrace,
-                                      ) {
-                                        return Icon(
-                                          _weatherIconDataFromCode(
-                                            d.iconCode,
+                      if (snap.connectionState == ConnectionState.waiting)
+                        const Expanded(
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: kPrimaryBlue,
+                            ),
+                          ),
+                        )
+                      else if (snap.hasError ||
+                          snap.data == null ||
+                          snap.data!.isEmpty)
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              'Не удалось загрузить прогноз',
+                              style: TextStyle(
+                                color: kNewsTextSecondary,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView(
+                            controller: scroll,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            children: <Widget>[
+                              for (final WeatherDayForecast d in snap.data!)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: Material(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    elevation: 0,
+                                    child: ListTile(
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 4,
                                           ),
-                                          size: 40,
+                                      leading: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          openWeatherIconUrl(d.iconCode),
+                                          width: 48,
+                                          height: 48,
+                                          fit: BoxFit.contain,
+                                          errorBuilder:
+                                              (
+                                                _,
+                                                Object error,
+                                                StackTrace? stackTrace,
+                                              ) {
+                                                return Icon(
+                                                  _weatherIconDataFromCode(
+                                                    d.iconCode,
+                                                  ),
+                                                  size: 40,
+                                                  color: kPrimaryBlue,
+                                                );
+                                              },
+                                        ),
+                                      ),
+                                      title: Text(
+                                        d.label,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: kNewsTextPrimary,
+                                        ),
+                                      ),
+                                      subtitle: d.description.isNotEmpty
+                                          ? Text(
+                                              d.description,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: kNewsTextSecondary,
+                                              ),
+                                            )
+                                          : null,
+                                      trailing: Text(
+                                        '${formatTempC(d.tempMinC)} / ${formatTempC(d.tempMaxC)}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
                                           color: kPrimaryBlue,
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  title: Text(
-                                    d.label,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: kNewsTextPrimary,
-                                    ),
-                                  ),
-                                  subtitle: d.description.isNotEmpty
-                                      ? Text(
-                                          d.description,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: kNewsTextSecondary,
-                                          ),
-                                        )
-                                      : null,
-                                  trailing: Text(
-                                    '${formatTempC(d.tempMinC)} / ${formatTempC(d.tempMaxC)}',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: kPrimaryBlue,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
+                            ],
+                          ),
+                        ),
+                      SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: kPrimaryBlue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: kPrimaryBlue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              child: const Text('Закрыть'),
                             ),
                           ),
-                          child: const Text('Закрыть'),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
+                );
+              },
         );
       },
     );

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../models/conversation_list_item.dart';
+import '../services/open_chat_tracker.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
 import '../services/city_data_service.dart';
@@ -41,6 +42,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   bool? _isOpen;
   String? _myRole;
   Timer? _readDebounce;
+
   /// Курсор «прочитано до» (для стиля входящих + галочек исходящих).
   DateTime? _myReadCursor;
   Map<String, DateTime?> _otherReadByUser = <String, DateTime?>{};
@@ -48,6 +50,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   @override
   void initState() {
     super.initState();
+    OpenChatTracker.setOpen(widget.conversationId);
     _headerTitle = widget.title;
     _isGroup = widget.listItem?.isGroup;
     _isOpen = widget.listItem?.isOpen;
@@ -58,17 +61,22 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
 
   Future<void> _loadMeta() async {
     if (widget.listItem == null) {
-      final Map<String, dynamic>? row = await ChatService.fetchConversation(widget.conversationId);
+      final Map<String, dynamic>? row = await ChatService.fetchConversation(
+        widget.conversationId,
+      );
       if (row != null && mounted) {
         setState(() {
-          _isGroup = row['is_group'] as bool? ?? !(row['is_direct'] as bool? ?? true);
+          _isGroup =
+              row['is_group'] as bool? ?? !(row['is_direct'] as bool? ?? true);
           _isOpen = row['is_open'] as bool?;
           if (_isGroup == true) {
             _headerTitle = (row['group_name'] as String?)?.trim() ?? 'Группа';
           }
         });
       }
-      final String? r = await ChatService.getMyRoleInConversation(widget.conversationId);
+      final String? r = await ChatService.getMyRoleInConversation(
+        widget.conversationId,
+      );
       if (mounted) {
         setState(() => _myRole = r ?? _myRole);
       }
@@ -77,6 +85,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
 
   @override
   void dispose() {
+    OpenChatTracker.setOpen(null);
     _readDebounce?.cancel();
     _inputFocus.dispose();
     _input.dispose();
@@ -87,7 +96,8 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   double get _inputBarBottom {
     final MediaQueryData mq = MediaQuery.of(context);
     if (mq.viewInsets.bottom > 0) {
-      return 4 + mq.viewInsets.bottom;
+      // Клавиатура: `Scaffold` уже учитывает viewInsets, не дублируем.
+      return 4;
     }
     return 4 + mq.viewPadding.bottom;
   }
@@ -120,9 +130,9 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
       await ChatService.sendImageMessage(widget.conversationId, url);
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Фото: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Фото: $e')));
       }
     } finally {
       if (mounted) {
@@ -135,14 +145,20 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     if (!supabaseAppReady) {
       return;
     }
-    final DateTime? first = await ChatService.getMyLastReadInConversation(widget.conversationId);
+    final DateTime? first = await ChatService.getMyLastReadInConversation(
+      widget.conversationId,
+    );
     if (mounted) {
       setState(() => _myReadCursor = first);
     }
     await ChatService.markConversationRead(widget.conversationId);
-    final DateTime? after = await ChatService.getMyLastReadInConversation(widget.conversationId);
+    final DateTime? after = await ChatService.getMyLastReadInConversation(
+      widget.conversationId,
+    );
     final Map<String, DateTime?> other =
-        await ChatService.getOtherParticipantsLastReadMap(widget.conversationId);
+        await ChatService.getOtherParticipantsLastReadMap(
+          widget.conversationId,
+        );
     if (mounted) {
       setState(() {
         _myReadCursor = after ?? _myReadCursor;
@@ -162,9 +178,13 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
       if (!mounted) {
         return;
       }
-      final DateTime? after = await ChatService.getMyLastReadInConversation(widget.conversationId);
+      final DateTime? after = await ChatService.getMyLastReadInConversation(
+        widget.conversationId,
+      );
       final Map<String, DateTime?> other =
-          await ChatService.getOtherParticipantsLastReadMap(widget.conversationId);
+          await ChatService.getOtherParticipantsLastReadMap(
+            widget.conversationId,
+          );
       if (mounted) {
         setState(() {
           _myReadCursor = after ?? _myReadCursor;
@@ -201,9 +221,9 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
       _input.clear();
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось отправить')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось отправить')));
       }
     } finally {
       if (mounted) {
@@ -235,9 +255,9 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
       await ChatService.softDeleteMessage(messageId);
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось удалить')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось удалить')));
       }
     }
   }
@@ -245,9 +265,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
-      return const Scaffold(
-        body: Center(child: Text('Supabase не настроен')),
-      );
+      return const Scaffold(body: Center(child: Text('Supabase не настроен')));
     }
     final String? me = Supabase.instance.client.auth.currentUser?.id;
     final bool isGroup = _isGroup == true;
@@ -345,7 +363,9 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                     visualDensity: VisualDensity.compact,
                     onPressed: _toggleEmoji,
                     icon: Icon(
-                      _showEmoji ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
+                      _showEmoji
+                          ? Icons.keyboard_rounded
+                          : Icons.emoji_emotions_outlined,
                       color: kPrimaryBlue,
                     ),
                     tooltip: _showEmoji ? 'Клавиатура' : 'Смайлики',
@@ -370,7 +390,9 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                       maxLines: 4,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
-                        hintText: isGroup ? 'Сообщение в группе…' : 'Сообщение…',
+                        hintText: isGroup
+                            ? 'Сообщение в группе…'
+                            : 'Сообщение…',
                         filled: true,
                         fillColor: const Color(0xFFF0F0F0),
                         border: OutlineInputBorder(
@@ -445,7 +467,8 @@ class _MessagesListState extends State<_MessagesList> {
       return const Center(child: Text('Нет сессии'));
     }
     final String me = widget.me!;
-    final Stream<List<Map<String, dynamic>>>? stream = ChatService.watchMessages(widget.conversationId);
+    final Stream<List<Map<String, dynamic>>>? stream =
+        ChatService.watchMessages(widget.conversationId);
     if (stream == null) {
       return const Center(child: Text('Нет соединения'));
     }
@@ -458,8 +481,10 @@ class _MessagesListState extends State<_MessagesList> {
         if (!s.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final List<Map<String, dynamic>> raw = s.data ?? <Map<String, dynamic>>[];
-        final List<Map<String, dynamic>> rows = ChatService.dedupeChatMessagesById(raw);
+        final List<Map<String, dynamic>> raw =
+            s.data ?? <Map<String, dynamic>>[];
+        final List<Map<String, dynamic>> rows =
+            ChatService.dedupeChatMessagesById(raw);
         final String sig = rows.isEmpty
             ? '0'
             : '${rows.length}:${rows.last['id']}:${rows.first['id']}';
@@ -493,7 +518,8 @@ class _MessagesListState extends State<_MessagesList> {
                 ? 'Сообщение удалено'
                 : (imageUrl != null ? '' : bodyRaw);
             final DateTime? createdAt = _tryParse(m['created_at'] as String?);
-            final bool incomingUnread = !mine &&
+            final bool incomingUnread =
+                !mine &&
                 !isDeleted &&
                 createdAt != null &&
                 widget.myReadAt != null &&
@@ -514,7 +540,10 @@ class _MessagesListState extends State<_MessagesList> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: <Widget>[
                                   ListTile(
-                                    leading: const Icon(Icons.delete_outline, color: Color(0xFFC62828)),
+                                    leading: const Icon(
+                                      Icons.delete_outline,
+                                      color: Color(0xFFC62828),
+                                    ),
                                     title: const Text('Удалить сообщение'),
                                     onTap: () {
                                       Navigator.pop(bc);
@@ -530,7 +559,10 @@ class _MessagesListState extends State<_MessagesList> {
                     : null,
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   constraints: BoxConstraints(
                     maxWidth: MediaQuery.sizeOf(context).width * 0.82,
                   ),
@@ -538,14 +570,13 @@ class _MessagesListState extends State<_MessagesList> {
                     color: isDeleted
                         ? const Color(0xFFE8E8ED)
                         : (mine
-                            ? kPrimaryBlue
-                            : (incomingUnread ? const Color(0xFFF0F7FF) : Colors.white)),
+                              ? kPrimaryBlue
+                              : (incomingUnread
+                                    ? const Color(0xFFF0F7FF)
+                                    : Colors.white)),
                     border: incomingUnread
                         ? const Border(
-                            left: BorderSide(
-                              color: kPrimaryBlue,
-                              width: 3,
-                            ),
+                            left: BorderSide(color: kPrimaryBlue, width: 3),
                           )
                         : null,
                     borderRadius: BorderRadius.only(
@@ -571,29 +602,38 @@ class _MessagesListState extends State<_MessagesList> {
                           borderRadius: BorderRadius.circular(10),
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
-                              maxHeight: MediaQuery.sizeOf(context).height * 0.28,
+                              maxHeight:
+                                  MediaQuery.sizeOf(context).height * 0.28,
                               maxWidth: MediaQuery.sizeOf(context).width * 0.7,
                             ),
                             child: Image.network(
                               imageUrl,
                               fit: BoxFit.cover,
-                              loadingBuilder: (
-                                BuildContext _,
-                                Widget child,
-                                ImageChunkEvent? loadingProgress,
-                              ) {
-                                if (loadingProgress == null) {
-                                  return child;
-                                }
-                                return const Padding(
-                                  padding: EdgeInsets.all(24),
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                );
-                              },
-                              errorBuilder: (BuildContext context, Object error, StackTrace? st) => const Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text('не удалось загрузить фото'),
-                              ),
+                              loadingBuilder:
+                                  (
+                                    BuildContext _,
+                                    Widget child,
+                                    ImageChunkEvent? loadingProgress,
+                                  ) {
+                                    if (loadingProgress == null) {
+                                      return child;
+                                    }
+                                    return const Padding(
+                                      padding: EdgeInsets.all(24),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    );
+                                  },
+                              errorBuilder:
+                                  (
+                                    BuildContext context,
+                                    Object error,
+                                    StackTrace? st,
+                                  ) => const Padding(
+                                    padding: EdgeInsets.all(8),
+                                    child: Text('не удалось загрузить фото'),
+                                  ),
                             ),
                           ),
                         )
@@ -603,7 +643,9 @@ class _MessagesListState extends State<_MessagesList> {
                           style: TextStyle(
                             color: isDeleted
                                 ? const Color(0xFF6B6B70)
-                                : (mine ? Colors.white : const Color(0xFF1A1C1C)),
+                                : (mine
+                                      ? Colors.white
+                                      : const Color(0xFF1A1C1C)),
                             fontSize: 15,
                             fontWeight: incomingUnread ? FontWeight.w600 : null,
                             fontStyle: isDeleted ? FontStyle.italic : null,

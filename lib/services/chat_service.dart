@@ -25,9 +25,12 @@ class ChatService {
       throw StateError('Нет сессии');
     }
     final String? t = phoneE164?.trim();
-    await c.from('profiles').update(<String, dynamic>{
-      'phone_e164': (t == null || t.isEmpty) ? null : t,
-    }).eq('id', uid);
+    await c
+        .from('profiles')
+        .update(<String, dynamic>{
+          'phone_e164': (t == null || t.isEmpty) ? null : t,
+        })
+        .eq('id', uid);
   }
 
   static Future<String?> findUserIdByPhoneE164(String phoneE164) async {
@@ -36,8 +39,10 @@ class ChatService {
       return null;
     }
     try {
-      final dynamic r = await c.rpc('find_user_id_by_phone_e164',
-          params: <String, dynamic>{'p_phone': phoneE164});
+      final dynamic r = await c.rpc(
+        'find_user_id_by_phone_e164',
+        params: <String, dynamic>{'p_phone': phoneE164},
+      );
       final Object? p = _rpcPayload(r);
       if (p == null) {
         return null;
@@ -54,8 +59,10 @@ class ChatService {
       return null;
     }
     try {
-      final dynamic r = await c
-          .rpc('find_user_id_by_email', params: <String, dynamic>{'lookup': email.trim()});
+      final dynamic r = await c.rpc(
+        'find_user_id_by_email',
+        params: <String, dynamic>{'lookup': email.trim()},
+      );
       final Object? p = _rpcPayload(r);
       if (p == null) {
         return null;
@@ -66,7 +73,9 @@ class ChatService {
     }
   }
 
-  static Future<String> getOrCreateDirectConversation(String otherUserId) async {
+  static Future<String> getOrCreateDirectConversation(
+    String otherUserId,
+  ) async {
     final SupabaseClient? c = _c;
     if (c == null) {
       throw StateError('Supabase не готов');
@@ -99,7 +108,8 @@ class ChatService {
       if (d is! List) {
         return <String, Map<String, dynamic>>{};
       }
-      final Map<String, Map<String, dynamic>> out = <String, Map<String, dynamic>>{};
+      final Map<String, Map<String, dynamic>> out =
+          <String, Map<String, dynamic>>{};
       for (final dynamic e in d) {
         if (e is Map<String, dynamic>) {
           final String? cid = e['conversation_id']?.toString();
@@ -130,7 +140,11 @@ class ChatService {
       return _uuidFromRpcData(data.first);
     }
     if (data is Map) {
-      for (final String k in <String>['id', 'create_group_conversation', 'get_or_create_direct_conversation']) {
+      for (final String k in <String>[
+        'id',
+        'create_group_conversation',
+        'get_or_create_direct_conversation',
+      ]) {
         final Object? v = data[k];
         if (v != null) {
           final String s = _uuidFromRpcData(v);
@@ -174,14 +188,15 @@ class ChatService {
     if (convIds.isEmpty) {
       return <ConversationListItem>[];
     }
-    final List<dynamic> convAndPart = await Future.wait<dynamic>(<Future<dynamic>>[
-      c.from('conversations').select().inFilter('id', convIds),
-      c
-          .from('conversation_participants')
-          .select('conversation_id, user_id, role')
-          .inFilter('conversation_id', convIds),
-      fetchUnreadConversationIds(),
-    ]);
+    final List<dynamic> convAndPart =
+        await Future.wait<dynamic>(<Future<dynamic>>[
+          c.from('conversations').select().inFilter('id', convIds),
+          c
+              .from('conversation_participants')
+              .select('conversation_id, user_id, role')
+              .inFilter('conversation_id', convIds),
+          fetchUnreadConversationIds(),
+        ]);
     final List<dynamic> convRows = convAndPart[0] as List<dynamic>;
     final List<dynamic> allPart = convAndPart[1] as List<dynamic>;
     final Set<String> unreadIds = <String>{};
@@ -205,30 +220,44 @@ class ChatService {
     if (uids.isEmpty) {
       return <ConversationListItem>[];
     }
-    final bool anyMissingPreview = convRows.cast<Map<String, dynamic>>().any((Map<String, dynamic> r) {
+    final bool anyMissingPreview = convRows.cast<Map<String, dynamic>>().any((
+      Map<String, dynamic> r,
+    ) {
       final String? p = r['last_message_preview'] as String?;
       return p == null || p.trim().isEmpty;
     });
     // Без phone_e164: номер не подтягивать в списке чатов; превью по RPC — только если в строке пусто.
-    final List<dynamic> profAndOpt = await Future.wait<dynamic>(<Future<dynamic>>[
-      c.from('profiles').select('id, first_name, last_name, username').inFilter('id', uids.toList()),
-      if (anyMissingPreview)
-        c.rpc('conversation_last_message_previews', params: <String, dynamic>{'p_conv_ids': convIds})
-      else
-        Future<dynamic>.value(null),
-    ]);
+    final List<dynamic> profAndOpt = await Future.wait<dynamic>(
+      <Future<dynamic>>[
+        c
+            .from('profiles')
+            .select('id, first_name, last_name, username')
+            .inFilter('id', uids.toList()),
+        if (anyMissingPreview)
+          c.rpc(
+            'conversation_last_message_previews',
+            params: <String, dynamic>{'p_conv_ids': convIds},
+          )
+        else
+          Future<dynamic>.value(null),
+      ],
+    );
     final List<dynamic> profRows = profAndOpt[0] as List<dynamic>;
     final Map<String, Map<String, dynamic>> lastMsgByConv = anyMissingPreview
         ? _parseLastPreviewRpc(profAndOpt[1])
         : <String, Map<String, dynamic>>{};
-    final Map<String, Map<String, dynamic>> profById = <String, Map<String, dynamic>>{
-      for (final Map<String, dynamic> p in profRows.cast<Map<String, dynamic>>())
-        p['id']!.toString(): p
-    };
+    final Map<String, Map<String, dynamic>> profById =
+        <String, Map<String, dynamic>>{
+          for (final Map<String, dynamic> p
+              in profRows.cast<Map<String, dynamic>>())
+            p['id']!.toString(): p,
+        };
     final List<ConversationListItem> out = <ConversationListItem>[];
-    for (final Map<String, dynamic> row in convRows.cast<Map<String, dynamic>>()) {
+    for (final Map<String, dynamic> row
+        in convRows.cast<Map<String, dynamic>>()) {
       final String cid = row['id']!.toString();
-      final bool isGroup = row['is_group'] as bool? ?? !(row['is_direct'] as bool? ?? true);
+      final bool isGroup =
+          row['is_group'] as bool? ?? !(row['is_direct'] as bool? ?? true);
       final String? myRole = myRoleByConv[cid];
       String? otherId;
       for (final dynamic p in allPart) {
@@ -282,7 +311,9 @@ class ChatService {
           ConversationListItem(
             id: cid,
             title: (gname != null && gname.isNotEmpty) ? gname : 'Группа',
-            subtitle: (preview != null && preview.isNotEmpty) ? preview : 'Нет сообщений',
+            subtitle: (preview != null && preview.isNotEmpty)
+                ? preview
+                : 'Нет сообщений',
             timeText: _formatListTime(updated),
             sortKeyMs: sortMs,
             isGroup: true,
@@ -297,7 +328,9 @@ class ChatService {
           ConversationListItem(
             id: cid,
             title: _titleForOther(otherId, profById),
-            subtitle: (preview != null && preview.isNotEmpty) ? preview : 'Нет сообщений',
+            subtitle: (preview != null && preview.isNotEmpty)
+                ? preview
+                : 'Нет сообщений',
             timeText: _formatListTime(updated),
             sortKeyMs: sortMs,
             otherUserId: otherId,
@@ -309,11 +342,16 @@ class ChatService {
       }
     }
     out.sort(
-        (ConversationListItem a, ConversationListItem b) => b.sortKeyMs.compareTo(a.sortKeyMs));
+      (ConversationListItem a, ConversationListItem b) =>
+          b.sortKeyMs.compareTo(a.sortKeyMs),
+    );
     return out;
   }
 
-  static String _titleForOther(String? otherId, Map<String, Map<String, dynamic>> profById) {
+  static String _titleForOther(
+    String? otherId,
+    Map<String, Map<String, dynamic>> profById,
+  ) {
     if (otherId == null) {
       return 'Чат';
     }
@@ -353,7 +391,8 @@ class ChatService {
     if (rows == null || rows.isEmpty) {
       return <Map<String, dynamic>>[];
     }
-    final Map<String, Map<String, dynamic>> byId = <String, Map<String, dynamic>>{};
+    final Map<String, Map<String, dynamic>> byId =
+        <String, Map<String, dynamic>>{};
     for (final Map<String, dynamic> m in rows) {
       final String? id = m['id']?.toString();
       if (id != null) {
@@ -415,7 +454,9 @@ class ChatService {
     return false;
   }
 
-  static Future<DateTime?> getMyLastReadInConversation(String conversationId) async {
+  static Future<DateTime?> getMyLastReadInConversation(
+    String conversationId,
+  ) async {
     final SupabaseClient? c = _c;
     if (c == null) {
       return null;
@@ -443,16 +484,19 @@ class ChatService {
       return;
     }
     try {
-      await c.rpc('mark_conversation_read', params: <String, dynamic>{
-        'p_conversation_id': conversationId,
-      });
+      await c.rpc(
+        'mark_conversation_read',
+        params: <String, dynamic>{'p_conversation_id': conversationId},
+      );
     } on Object {
       // миграция ещё не на сервере — тихо
     }
   }
 
   /// [user_id] остальных участников → время их last_read (для «галочек»).
-  static Future<Map<String, DateTime?>> getOtherParticipantsLastReadMap(String conversationId) async {
+  static Future<Map<String, DateTime?>> getOtherParticipantsLastReadMap(
+    String conversationId,
+  ) async {
     final SupabaseClient? c = _c;
     if (c == null) {
       return <String, DateTime?>{};
@@ -483,7 +527,9 @@ class ChatService {
     return out;
   }
 
-  static Stream<List<Map<String, dynamic>>>? watchMessages(String conversationId) {
+  static Stream<List<Map<String, dynamic>>>? watchMessages(
+    String conversationId,
+  ) {
     final SupabaseClient? c = _c;
     if (c == null) {
       return null;
@@ -518,7 +564,10 @@ class ChatService {
     });
   }
 
-  static Future<void> sendImageMessage(String conversationId, String publicImageUrl) async {
+  static Future<void> sendImageMessage(
+    String conversationId,
+    String publicImageUrl,
+  ) async {
     final String u = publicImageUrl.trim();
     if (u.isEmpty) {
       return;
@@ -542,7 +591,10 @@ class ChatService {
     if (c == null) {
       throw StateError('Supabase не готов');
     }
-    await c.rpc('set_my_username', params: <String, dynamic>{'p_username': username});
+    await c.rpc(
+      'set_my_username',
+      params: <String, dynamic>{'p_username': username},
+    );
   }
 
   static Future<String> createGroupConversation({
@@ -596,25 +648,37 @@ class ChatService {
     }
   }
 
-  static Future<void> addGroupParticipant(String conversationId, String userId) async {
+  static Future<void> addGroupParticipant(
+    String conversationId,
+    String userId,
+  ) async {
     final SupabaseClient? c = _c;
     if (c == null) {
       throw StateError('Supabase не готов');
     }
     await c.rpc(
       'add_group_participant',
-      params: <String, dynamic>{'p_conversation_id': conversationId, 'p_user_id': userId},
+      params: <String, dynamic>{
+        'p_conversation_id': conversationId,
+        'p_user_id': userId,
+      },
     );
   }
 
-  static Future<void> removeGroupParticipant(String conversationId, String userId) async {
+  static Future<void> removeGroupParticipant(
+    String conversationId,
+    String userId,
+  ) async {
     final SupabaseClient? c = _c;
     if (c == null) {
       throw StateError('Supabase не готов');
     }
     await c.rpc(
       'remove_group_participant',
-      params: <String, dynamic>{'p_conversation_id': conversationId, 'p_user_id': userId},
+      params: <String, dynamic>{
+        'p_conversation_id': conversationId,
+        'p_user_id': userId,
+      },
     );
   }
 
@@ -642,10 +706,15 @@ class ChatService {
     if (c == null) {
       throw StateError('Supabase не готов');
     }
-    await c.rpc('soft_delete_group_message', params: <String, dynamic>{'p_message_id': messageId});
+    await c.rpc(
+      'soft_delete_group_message',
+      params: <String, dynamic>{'p_message_id': messageId},
+    );
   }
 
-  static Future<List<Map<String, dynamic>>> searchProfilesForChat(String query) async {
+  static Future<List<Map<String, dynamic>>> searchProfilesForChat(
+    String query,
+  ) async {
     final SupabaseClient? c = _c;
     if (c == null) {
       return <Map<String, dynamic>>[];
@@ -677,12 +746,18 @@ class ChatService {
     return <String>[];
   }
 
-  static Future<Map<String, dynamic>?> fetchConversation(String conversationId) async {
+  static Future<Map<String, dynamic>?> fetchConversation(
+    String conversationId,
+  ) async {
     final SupabaseClient? c = _c;
     if (c == null) {
       return null;
     }
-    return c.from('conversations').select().eq('id', conversationId).maybeSingle();
+    return c
+        .from('conversations')
+        .select()
+        .eq('id', conversationId)
+        .maybeSingle();
   }
 
   static Future<List<Map<String, dynamic>>> fetchParticipantsWithProfiles(
@@ -707,9 +782,12 @@ class ChatService {
         .from('profiles')
         .select('id, first_name, last_name, username')
         .inFilter('id', uids);
-    final Map<String, Map<String, dynamic>> byU = <String, Map<String, dynamic>>{
-      for (final Map<String, dynamic> p in profs.cast<Map<String, dynamic>>()) p['id']!.toString(): p
-    };
+    final Map<String, Map<String, dynamic>> byU =
+        <String, Map<String, dynamic>>{
+          for (final Map<String, dynamic> p
+              in profs.cast<Map<String, dynamic>>())
+            p['id']!.toString(): p,
+        };
     final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
     for (final dynamic p in parts) {
       final Map<String, dynamic> m = p as Map<String, dynamic>;
@@ -774,8 +852,11 @@ class ChatService {
     if (c == null) {
       return null;
     }
-    final Map<String, dynamic>? row =
-        await c.from('profiles').select('first_name, last_name').eq('id', userId).maybeSingle();
+    final Map<String, dynamic>? row = await c
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', userId)
+        .maybeSingle();
     if (row == null) {
       return 'Пользователь';
     }
@@ -783,5 +864,62 @@ class ChatService {
     final String ln = (row['last_name'] as String?)?.trim() ?? '';
     final String t = ('$fn $ln').trim();
     return t.isNotEmpty ? t : 'Пользователь';
+  }
+
+  /// Только личный чат: удалить все сообщения, беседа остаётся.
+  static Future<void> clearConversationHistory(String conversationId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.rpc(
+      'clear_conversation_history',
+      params: <String, dynamic>{'p_conversation_id': conversationId},
+    );
+  }
+
+  /// Личный: любой участник. Группа: только владелец.
+  static Future<void> deleteConversationCompletely(
+    String conversationId,
+  ) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.rpc(
+      'delete_conversation_completely',
+      params: <String, dynamic>{'p_conversation_id': conversationId},
+    );
+  }
+
+  static Future<void> leaveGroupConversation(String conversationId) async {
+    final SupabaseClient? c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final String? me = c.auth.currentUser?.id;
+    if (me == null) {
+      throw StateError('Нет сессии');
+    }
+    await removeGroupParticipant(conversationId, me);
+  }
+
+  /// Короткое имя беседы для уведомления.
+  static Future<String> titleForNotification(String conversationId) async {
+    final Map<String, dynamic>? row = await fetchConversation(conversationId);
+    if (row == null) {
+      return 'Чат';
+    }
+    final bool isGroup =
+        row['is_group'] as bool? ?? !(row['is_direct'] as bool? ?? true);
+    if (isGroup) {
+      final String? g = (row['group_name'] as String?)?.trim();
+      return (g != null && g.isNotEmpty) ? g : 'Группа';
+    }
+    final String? other = await otherParticipantId(conversationId);
+    if (other == null) {
+      return 'Чат';
+    }
+    return await displayNameForUserId(other) ?? 'Чат';
   }
 }

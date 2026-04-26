@@ -86,9 +86,7 @@ class _FerryAdminScreenState extends State<FerryAdminScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Паром — расписание'),
-      ),
+      appBar: AppBar(title: const Text('Паром — расписание')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -96,10 +94,7 @@ class _FerryAdminScreenState extends State<FerryAdminScreen> {
               children: <Widget>[
                 const Text(
                   'Текст для блока на главной и индикатор движения',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -107,7 +102,8 @@ class _FerryAdminScreenState extends State<FerryAdminScreen> {
                   minLines: 2,
                   maxLines: 4,
                   decoration: const InputDecoration(
-                    labelText: 'Статус (например, ходит по расписанию / задержка)',
+                    labelText:
+                        'Статус (например, ходит по расписанию / задержка)',
                     border: OutlineInputBorder(),
                   ),
                 ),

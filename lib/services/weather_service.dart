@@ -10,10 +10,7 @@ import '../config/weather_config.dart';
 
 /// Текущая погода (компакт для AppBar).
 class WeatherCurrent {
-  const WeatherCurrent({
-    required this.tempC,
-    required this.iconCode,
-  });
+  const WeatherCurrent({required this.tempC, required this.iconCode});
 
   final double tempC;
   final String iconCode;
@@ -46,12 +43,12 @@ class WeatherService {
   static bool get hasApiKey => kOpenWeatherApiKey.isNotEmpty;
 
   static Map<String, String> get _queryBase => <String, String>{
-        'lat': kWeatherLat.toString(),
-        'lon': kWeatherLon.toString(),
-        'appid': kOpenWeatherApiKey,
-        'units': 'metric',
-        'lang': 'ru',
-      };
+    'lat': kWeatherLat.toString(),
+    'lon': kWeatherLon.toString(),
+    'appid': kOpenWeatherApiKey,
+    'units': 'metric',
+    'lang': 'ru',
+  };
 
   static const Map<String, String> _httpHeaders = <String, String>{
     'User-Agent': 'CityApp-Flutter/1.0 (weather)',
@@ -61,9 +58,9 @@ class WeatherService {
     if (!hasApiKey) {
       return null;
     }
-    final Uri uri = Uri.parse('$_base/weather').replace(
-      queryParameters: _queryBase,
-    );
+    final Uri uri = Uri.parse(
+      '$_base/weather',
+    ).replace(queryParameters: _queryBase);
     try {
       final http.Response r = await http
           .get(uri, headers: _httpHeaders)
@@ -88,8 +85,9 @@ class WeatherService {
       final List<dynamic>? w = root['weather'] as List<dynamic>?;
       final String icon = w != null && w.isNotEmpty && w.first is Map
           ? (Map<dynamic, dynamic>.from(
-                  w.first as Map<dynamic, dynamic>,
-                )['icon'] as String? ??
+                      w.first as Map<dynamic, dynamic>,
+                    )['icon']
+                    as String? ??
                 '02d')
           : '02d';
       if (t == null) {
@@ -105,13 +103,15 @@ class WeatherService {
   }
 
   /// Прогноз на [totalDays] календарных дней, начиная с сегодня (по данным 3-ч API).
-  static Future<List<WeatherDayForecast>> fetchForecastDays({int totalDays = 3}) async {
+  static Future<List<WeatherDayForecast>> fetchForecastDays({
+    int totalDays = 3,
+  }) async {
     if (!hasApiKey) {
       return <WeatherDayForecast>[];
     }
-    final Uri uri = Uri.parse('$_base/forecast').replace(
-      queryParameters: _queryBase,
-    );
+    final Uri uri = Uri.parse(
+      '$_base/forecast',
+    ).replace(queryParameters: _queryBase);
     final http.Response r;
     try {
       r = await http
@@ -159,24 +159,26 @@ class WeatherService {
       if (mainObj is! Map) {
         continue;
       }
-      final num? tnum = Map<String, dynamic>.from(
-        mainObj,
-      )['temp'] as num?;
+      final num? tnum = Map<String, dynamic>.from(mainObj)['temp'] as num?;
       if (tnum == null) {
         continue;
       }
       final double temp = tnum.toDouble();
       final List<dynamic>? wlist = entry['weather'] as List<dynamic>?;
-      final String icon = wlist != null && wlist.isNotEmpty && wlist.first is Map
+      final String icon =
+          wlist != null && wlist.isNotEmpty && wlist.first is Map
           ? (Map<dynamic, dynamic>.from(
-                  wlist.first as Map<dynamic, dynamic>,
-                )['icon'] as String? ??
+                      wlist.first as Map<dynamic, dynamic>,
+                    )['icon']
+                    as String? ??
                 '02d')
           : '02d';
-      final String desc = wlist != null && wlist.isNotEmpty && wlist.first is Map
+      final String desc =
+          wlist != null && wlist.isNotEmpty && wlist.first is Map
           ? (Map<dynamic, dynamic>.from(
-                  wlist.first as Map<dynamic, dynamic>,
-                )['description'] as String? ??
+                      wlist.first as Map<dynamic, dynamic>,
+                    )['description']
+                    as String? ??
                 '')
           : '';
       byDay.putIfAbsent(key, () => _DayAgg());
@@ -202,13 +204,11 @@ class WeatherService {
 
     final DateTime now = DateTime.now();
     final DateTime startToday = DateTime(now.year, now.month, now.day);
-    final List<String> dayKeys = sortedKeys
-        .where((String k) {
-          final List<int> p = k.split('-').map(int.parse).toList();
-          final DateTime d = DateTime(p[0], p[1], p[2]);
-          return !d.isBefore(startToday);
-        })
-        .toList();
+    final List<String> dayKeys = sortedKeys.where((String k) {
+      final List<int> p = k.split('-').map(int.parse).toList();
+      final DateTime d = DateTime(p[0], p[1], p[2]);
+      return !d.isBefore(startToday);
+    }).toList();
 
     final int want = totalDays;
     final List<WeatherDayForecast> out = <WeatherDayForecast>[];
@@ -221,8 +221,12 @@ class WeatherService {
       final List<int> p = k.split('-').map(int.parse).toList();
       final DateTime d = DateTime(p[0], p[1], p[2]);
       final String label = _dayLabel(d, now);
-      final String midIcon = a.icons.isNotEmpty ? a.icons[a.icons.length >> 1] : '02d';
-      final String midDesc = a.descs.isNotEmpty ? a.descs[a.descs.length >> 1] : '';
+      final String midIcon = a.icons.isNotEmpty
+          ? a.icons[a.icons.length >> 1]
+          : '02d';
+      final String midDesc = a.descs.isNotEmpty
+          ? a.descs[a.descs.length >> 1]
+          : '';
       out.add(
         WeatherDayForecast(
           dateKey: k,
@@ -247,7 +251,16 @@ class WeatherService {
     if (diff == 1) {
       return 'Завтра';
     }
-    const List<String> w = <String>['', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+    const List<String> w = <String>[
+      '',
+      'пн',
+      'вт',
+      'ср',
+      'чт',
+      'пт',
+      'сб',
+      'вс',
+    ];
     return w[d.weekday];
   }
 }

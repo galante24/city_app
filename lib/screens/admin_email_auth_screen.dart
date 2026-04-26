@@ -48,7 +48,9 @@ class _AdminEmailAuthScreenState extends State<AdminEmailAuthScreen> {
       if (mounted) {
         setState(() => _codeSent = true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Проверьте почту и введите код из письма.')),
+          const SnackBar(
+            content: Text('Проверьте почту и введите код из письма.'),
+          ),
         );
       }
     } on AuthException catch (e) {
@@ -88,9 +90,9 @@ class _AdminEmailAuthScreenState extends State<AdminEmailAuthScreen> {
       );
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Вход выполнен')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Вход выполнен')));
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -110,9 +112,7 @@ class _AdminEmailAuthScreenState extends State<AdminEmailAuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Вход администратора (email)'),
-      ),
+      appBar: AppBar(title: const Text('Вход администратора (email)')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
@@ -178,10 +178,7 @@ class _AdminEmailAuthScreenState extends State<AdminEmailAuthScreen> {
           ],
           if (_error != null) ...<Widget>[
             const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: const TextStyle(color: Color(0xFFC62828)),
-            ),
+            Text(_error!, style: const TextStyle(color: Color(0xFFC62828))),
           ],
         ],
       ),

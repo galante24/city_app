@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,6 +11,7 @@ import 'screens/auth_screen.dart';
 import 'main_tab_index.dart';
 import 'screens/chats_list_screen.dart';
 import 'services/chat_unread_badge.dart';
+import 'services/message_notification_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/schedule_screen.dart';
@@ -18,11 +19,9 @@ import 'screens/vacancies_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(
-    url: kSupabaseUrl,
-    anonKey: kSupabaseAnonKey,
-  );
+  await Supabase.initialize(url: kSupabaseUrl, anonKey: kSupabaseAnonKey);
   supabaseAppReady = true;
+  await MessageNotificationService.instance.init();
   runApp(const CityApp());
 }
 
@@ -62,11 +61,7 @@ class _AuthStateGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return StreamBuilder<AuthState>(
       stream: Supabase.instance.client.auth.onAuthStateChange,
@@ -98,6 +93,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   void initState() {
     super.initState();
     ChatUnreadBadge.start();
+    MessageNotificationService.instance.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(checkForAppUpdates(context));
@@ -118,69 +114,66 @@ class _MainScaffoldState extends State<MainScaffold> {
     return MainTabIndex(
       index: _currentIndex,
       child: Scaffold(
-        body: IndexedStack(
-          index: _currentIndex,
-          children: _stackChildren,
-        ),
+        body: IndexedStack(index: _currentIndex, children: _stackChildren),
         bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (int i) {
-          setState(() => _currentIndex = i);
-          if (i == 3) {
-            unawaited(ChatUnreadBadge.refresh());
-          }
-        },
-        indicatorColor: kPrimaryBlue.withValues(alpha: 0.2),
-        // На телефоне длинные подписи (Расписание) не ломают строку.
-        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-        destinations: <Widget>[
-          const NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home, color: kPrimaryBlue),
-            label: 'Главная',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.schedule_outlined),
-            selectedIcon: Icon(Icons.schedule, color: kPrimaryBlue),
-            label: 'Расписание',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(Icons.grid_view, color: kPrimaryBlue),
-            label: 'Сервисы',
-          ),
-          NavigationDestination(
-            icon: ValueListenableBuilder<bool>(
-              valueListenable: ChatUnreadBadge.hasUnread,
-              builder: (BuildContext context, bool v, _) {
-                return Badge(
-                  isLabelVisible: v,
-                  backgroundColor: const Color(0xFFE53935),
-                  child: const Icon(Icons.chat_bubble_outline),
-                );
-              },
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (int i) {
+            setState(() => _currentIndex = i);
+            if (i == 3) {
+              unawaited(ChatUnreadBadge.refresh());
+            }
+          },
+          indicatorColor: kPrimaryBlue.withValues(alpha: 0.2),
+          // На телефоне длинные подписи (Расписание) не ломают строку.
+          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+          destinations: <Widget>[
+            const NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home, color: kPrimaryBlue),
+              label: 'Главная',
             ),
-            selectedIcon: ValueListenableBuilder<bool>(
-              valueListenable: ChatUnreadBadge.hasUnread,
-              builder: (BuildContext context, bool v, _) {
-                return Badge(
-                  isLabelVisible: v,
-                  backgroundColor: const Color(0xFFE53935),
-                  child: const Icon(Icons.chat_bubble, color: kPrimaryBlue),
-                );
-              },
+            const NavigationDestination(
+              icon: Icon(Icons.schedule_outlined),
+              selectedIcon: Icon(Icons.schedule, color: kPrimaryBlue),
+              label: 'Расписание',
             ),
-            label: 'Чаты',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person, color: kPrimaryBlue),
-            label: 'Профиль',
-          ),
-        ],
+            const NavigationDestination(
+              icon: Icon(Icons.grid_view_outlined),
+              selectedIcon: Icon(Icons.grid_view, color: kPrimaryBlue),
+              label: 'Сервисы',
+            ),
+            NavigationDestination(
+              icon: ValueListenableBuilder<bool>(
+                valueListenable: ChatUnreadBadge.hasUnread,
+                builder: (BuildContext context, bool v, _) {
+                  return Badge(
+                    isLabelVisible: v,
+                    backgroundColor: const Color(0xFFE53935),
+                    child: const Icon(Icons.chat_bubble_outline),
+                  );
+                },
+              ),
+              selectedIcon: ValueListenableBuilder<bool>(
+                valueListenable: ChatUnreadBadge.hasUnread,
+                builder: (BuildContext context, bool v, _) {
+                  return Badge(
+                    isLabelVisible: v,
+                    backgroundColor: const Color(0xFFE53935),
+                    child: const Icon(Icons.chat_bubble, color: kPrimaryBlue),
+                  );
+                },
+              ),
+              label: 'Чаты',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person, color: kPrimaryBlue),
+              label: 'Профиль',
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
   }
 }
 
@@ -276,9 +269,9 @@ class ServicesGridScreen extends StatelessWidget {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${c.label} — в разработке')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${c.label} — в разработке')));
     }
   }
 
@@ -286,9 +279,7 @@ class ServicesGridScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _kBentoScaffoldBg,
-      appBar: AppBar(
-        title: const Text('Сервисы'),
-      ),
+      appBar: AppBar(title: const Text('Сервисы')),
       body: GridView.builder(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -311,10 +302,7 @@ class ServicesGridScreen extends StatelessWidget {
 }
 
 class _BentoServiceCard extends StatelessWidget {
-  const _BentoServiceCard({
-    required this.category,
-    required this.onTap,
-  });
+  const _BentoServiceCard({required this.category, required this.onTap});
 
   static const Color _kDescriptionColor = Color(0xFF6C6C70);
 
@@ -433,13 +421,9 @@ class FoodPlacesScreen extends StatelessWidget {
       body: const Center(
         child: Text(
           'Пока нет заведений',
-          style: TextStyle(
-            fontSize: 16,
-            color: Color(0xFF6C6C70),
-          ),
+          style: TextStyle(fontSize: 16, color: Color(0xFF6C6C70)),
         ),
       ),
     );
   }
 }
-

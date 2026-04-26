@@ -172,9 +172,9 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
       );
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Вакансия опубликована')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Вакансия опубликована')));
       }
     } on PostgrestException catch (e) {
       if (!mounted) {
@@ -190,7 +190,8 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
           '  hint: ${e.hint}',
         );
       }
-      final bool tableMissing = e.code == 'PGRST205' &&
+      final bool tableMissing =
+          e.code == 'PGRST205' &&
           (e.message.contains('job_vacancies') ||
               e.message.contains('schema cache'));
       final String text = tableMissing
@@ -293,7 +294,10 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _salary,
-              decoration: _decoration('Зарплата', hint: 'только цифры, напр. 60000'),
+              decoration: _decoration(
+                'Зарплата',
+                hint: 'только цифры, напр. 60000',
+              ),
               keyboardType: TextInputType.number,
               inputFormatters: <TextInputFormatter>[
                 FilteringTextInputFormatter.digitsOnly,
@@ -319,7 +323,10 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
                 FilteringTextInputFormatter.allow(RegExp(r'[+\d]*')),
                 LengthLimitingTextInputFormatter(12),
               ],
-              decoration: _decoration('Контакты (телефон)', hint: '+7 и 10 цифр'),
+              decoration: _decoration(
+                'Контакты (телефон)',
+                hint: '+7 и 10 цифр',
+              ),
               validator: _phoneValidator,
               enabled: !_saving,
             ),
@@ -344,7 +351,13 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text('Опубликовать', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  : const Text(
+                      'Опубликовать',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
           ],
         ),
@@ -382,10 +395,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
           const SizedBox(height: 4),
           Text(
             'Необязательно',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.grey[600], fontSize: 12),
           ),
         ],
       );

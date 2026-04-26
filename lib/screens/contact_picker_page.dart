@@ -45,7 +45,8 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
   }
 
   String _searchText(Contact c) {
-    return '${c.displayName} ${c.phones.map((Phone p) => p.number).join(' ')}'.toLowerCase();
+    return '${c.displayName} ${c.phones.map((Phone p) => p.number).join(' ')}'
+        .toLowerCase();
   }
 
   @override
@@ -60,8 +61,8 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
     final List<Contact> list = _loading
         ? <Contact>[]
         : _contacts
-            .where((Contact c) => lq.isEmpty || _searchText(c).contains(lq))
-            .toList();
+              .where((Contact c) => lq.isEmpty || _searchText(c).contains(lq))
+              .toList();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Контакты'),
@@ -95,14 +96,14 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
                     itemBuilder: (BuildContext c, int i) {
                       final Contact cont = list[i];
                       return ListTile(
-                        leading: const CircleAvatar(
-                          child: Icon(Icons.person),
-                        ),
+                        leading: const CircleAvatar(child: Icon(Icons.person)),
                         title: Text(cont.displayName),
                         subtitle: Text(
                           cont.phones.isEmpty
                               ? 'Нет номера'
-                              : cont.phones.map((Phone p) => p.number).join(', '),
+                              : cont.phones
+                                    .map((Phone p) => p.number)
+                                    .join(', '),
                         ),
                         onTap: () => _onPick(cont),
                       );
@@ -143,7 +144,9 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Пользователь с таким номером не в приложении. Добавьте номер в «Профиль».'),
+            content: Text(
+              'Пользователь с таким номером не в приложении. Добавьте номер в «Профиль».',
+            ),
           ),
         );
       }
@@ -165,8 +168,11 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
       return;
     }
     try {
-      final String conv = await ChatService.getOrCreateDirectConversation(other);
-      final String name = (await ChatService.displayNameForUserId(other)) ?? c.displayName;
+      final String conv = await ChatService.getOrCreateDirectConversation(
+        other,
+      );
+      final String name =
+          (await ChatService.displayNameForUserId(other)) ?? c.displayName;
       if (!mounted) {
         return;
       }
@@ -176,17 +182,15 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
       }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext c) => UserChatThreadScreen(
-            conversationId: conv,
-            title: name,
-          ),
+          builder: (BuildContext c) =>
+              UserChatThreadScreen(conversationId: conv, title: name),
         ),
       );
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось открыть чат')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось открыть чат')));
       }
     }
   }

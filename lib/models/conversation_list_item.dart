@@ -19,17 +19,20 @@ class ConversationListItem {
   final String subtitle;
   final String timeText;
   final int sortKeyMs;
+
   /// Собеседник в личном чате.
   final String? otherUserId;
   final bool isGroup;
+
   /// Только для группы: открытая (любой участник добавляет) или закрытая.
   final bool? isOpen;
+
   /// Роль текущего пользователя: owner | moderator | member.
   final String? myRole;
   final String? groupName;
+
   /// Входящие непрочитанные (есть сообщения от других после [last_read_at]).
   final bool hasUnread;
 
-  bool get canModerate =>
-      myRole == 'owner' || myRole == 'moderator';
+  bool get canModerate => myRole == 'owner' || myRole == 'moderator';
 }

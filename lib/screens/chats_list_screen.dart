@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -11,6 +13,7 @@ import '../main_tab_index.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
+import '../services/notification_prefs.dart';
 import 'contact_picker_page.dart';
 import 'create_group_screen.dart';
 import 'user_chat_thread_screen.dart';
@@ -27,6 +30,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   final TextEditingController _search = TextEditingController();
   String _q = '';
   bool _loading = false;
+
   /// Чаты грузим только при первом открытии вкладки «Чаты» (не на старте приложения).
   bool _autoLoadScheduled = false;
   List<ConversationListItem> _all = <ConversationListItem>[];
@@ -71,7 +75,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     }
     setState(() => _loading = true);
     try {
-      final List<ConversationListItem> r = await ChatService.listConversations();
+      final List<ConversationListItem> r =
+          await ChatService.listConversations();
       if (mounted) {
         setState(() => _all = r);
       }
@@ -97,6 +102,237 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     }
   }
 
+  Future<void> _onChatLongPress(ConversationListItem item) async {
+    final bool muted = await NotificationPrefs.isConversationMuted(item.id);
+    if (!mounted) {
+      return;
+    }
+    final bool isOwner = item.myRole == 'owner';
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (BuildContext c) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: <Widget>[
+              ListTile(
+                leading: Icon(
+                  muted
+                      ? Icons.notifications_active_outlined
+                      : Icons.notifications_off_outlined,
+                  color: kPrimaryBlue,
+                ),
+                title: Text(
+                  muted ? 'Включить уведомления' : 'Отключить уведомления',
+                ),
+                onTap: () async {
+                  await NotificationPrefs.setConversationMuted(item.id, !muted);
+                  if (c.mounted) {
+                    Navigator.of(c).pop();
+                  }
+                  if (!mounted) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        muted
+                            ? 'Уведомления для этого чата снова включены'
+                            : 'Уведомления для этого чата отключены',
+                      ),
+                    ),
+                  );
+                },
+              ),
+              if (item.isGroup)
+                ListTile(
+                  leading: const Icon(Icons.exit_to_app, color: kPrimaryBlue),
+                  title: const Text('Покинуть чат'),
+                  onTap: () async {
+                    final bool? ok = await showDialog<bool>(
+                      context: c,
+                      builder: (BuildContext c2) => AlertDialog(
+                        title: const Text('Покинуть чат?'),
+                        content: const Text(
+                          'Вы больше не будете видеть эту переписку в списке.',
+                        ),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(c2).pop(false),
+                            child: const Text('Отмена'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.of(c2).pop(true),
+                            child: const Text('Покинуть'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (c.mounted) {
+                      Navigator.of(c).pop();
+                    }
+                    if (ok == true) {
+                      try {
+                        await ChatService.leaveGroupConversation(item.id);
+                        if (!mounted) {
+                          return;
+                        }
+                        await _load();
+                        if (!mounted) {
+                          return;
+                        }
+                        await ChatUnreadBadge.refresh();
+                        if (!mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Вы вышли из чата')),
+                        );
+                      } on Object catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Не выйти из чата: $e')),
+                          );
+                        }
+                      }
+                    }
+                  },
+                ),
+              if (!item.isGroup)
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_sweep_outlined,
+                    color: kPrimaryBlue,
+                  ),
+                  title: const Text('Очистить историю'),
+                  onTap: () async {
+                    final bool? ok = await showDialog<bool>(
+                      context: c,
+                      builder: (BuildContext c2) => AlertDialog(
+                        title: const Text('Очистить историю?'),
+                        content: const Text(
+                          'Все сообщения в этом чате будут удалены. Собеседник сможет писать снова; сам чат в списке останется.',
+                        ),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(c2).pop(false),
+                            child: const Text('Отмена'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.of(c2).pop(true),
+                            child: const Text('Очистить'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (c.mounted) {
+                      Navigator.of(c).pop();
+                    }
+                    if (ok == true) {
+                      try {
+                        await ChatService.clearConversationHistory(item.id);
+                        if (!mounted) {
+                          return;
+                        }
+                        await _load();
+                        if (!mounted) {
+                          return;
+                        }
+                        await ChatUnreadBadge.refresh();
+                        if (!mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('История очищена')),
+                        );
+                      } on Object catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+                        }
+                      }
+                    }
+                  },
+                ),
+              if (!item.isGroup || isOwner)
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_forever,
+                    color: Color(0xFFE53935),
+                  ),
+                  title: const Text('Удалить чат'),
+                  onTap: () async {
+                    final String extra = item.isGroup
+                        ? 'Группу и все сообщения нельзя будет восстановить для всех.'
+                        : 'Переписка удалится у вас и у собеседника, сообщения сотрутся.';
+                    final bool? ok = await showDialog<bool>(
+                      context: c,
+                      builder: (BuildContext c2) => AlertDialog(
+                        title: const Text('Удалить чат?'),
+                        content: Text(extra),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(c2).pop(false),
+                            child: const Text('Отмена'),
+                          ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFE53935),
+                            ),
+                            onPressed: () => Navigator.of(c2).pop(true),
+                            child: const Text('Удалить'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (c.mounted) {
+                      Navigator.of(c).pop();
+                    }
+                    if (ok == true) {
+                      try {
+                        await ChatService.deleteConversationCompletely(item.id);
+                        if (!mounted) {
+                          return;
+                        }
+                        await _load();
+                        if (!mounted) {
+                          return;
+                        }
+                        await ChatUnreadBadge.refresh();
+                        if (!mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Чат удалён')),
+                        );
+                      } on Object catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                item.isGroup
+                                    ? 'Только владелец группы может удалить её целиком: $e'
+                                    : 'Ошибка: $e',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    }
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   List<ConversationListItem> get _filtered {
     if (_q.isEmpty) {
       return _all;
@@ -104,7 +340,8 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     return _all
         .where(
           (ConversationListItem c) =>
-              c.title.toLowerCase().contains(_q) || c.subtitle.toLowerCase().contains(_q),
+              c.title.toLowerCase().contains(_q) ||
+              c.subtitle.toLowerCase().contains(_q),
         )
         .toList();
   }
@@ -134,10 +371,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                 const Center(
                   child: Text(
                     'Новый чат',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -152,7 +386,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                   },
                   style: FilledButton.styleFrom(
                     backgroundColor: Theme.of(c).colorScheme.secondaryContainer,
-                    foregroundColor: Theme.of(c).colorScheme.onSecondaryContainer,
+                    foregroundColor: Theme.of(
+                      c,
+                    ).colorScheme.onSecondaryContainer,
                   ),
                   icon: const Icon(Icons.group_add_outlined),
                   label: const Text('Создать группу'),
@@ -254,8 +490,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       return;
     }
     try {
-      final String conv = await ChatService.getOrCreateDirectConversation(other);
-      final String name = (await ChatService.displayNameForUserId(other)) ?? 'Чат';
+      final String conv = await ChatService.getOrCreateDirectConversation(
+        other,
+      );
+      final String name =
+          (await ChatService.displayNameForUserId(other)) ?? 'Чат';
       if (!mounted) {
         return;
       }
@@ -278,9 +517,9 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       }
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось открыть чат')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось открыть чат')));
       }
     }
   }
@@ -303,11 +542,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
     if (!mounted) {
       return;
     }
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext c) => const ContactPickerPage(),
-        ),
-      );
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext c) => const ContactPickerPage(),
+      ),
+    );
     await _load();
     await ChatUnreadBadge.refresh();
   }
@@ -315,9 +554,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
-      return const Scaffold(
-        body: Center(child: Text('Supabase не настроен')),
-      );
+      return const Scaffold(body: Center(child: Text('Supabase не настроен')));
     }
     return Scaffold(
       backgroundColor: Colors.white,
@@ -354,7 +591,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 4,
+                ),
                 isDense: true,
               ),
             ),
@@ -391,26 +631,31 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                         : ListView.separated(
                             itemCount: _filtered.length,
                             padding: const EdgeInsets.only(top: 4, bottom: 80),
-                            separatorBuilder: (BuildContext c, int i) => const Padding(
-                              padding: EdgeInsets.only(left: 80),
-                              child: Divider(
-                                height: 1,
-                                thickness: 1,
-                                color: Color(0xFFE8E8ED),
-                              ),
-                            ),
+                            separatorBuilder: (BuildContext c, int i) =>
+                                const Padding(
+                                  padding: EdgeInsets.only(left: 80),
+                                  child: Divider(
+                                    height: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFE8E8ED),
+                                  ),
+                                ),
                             itemBuilder: (BuildContext c, int i) {
                               final ConversationListItem item = _filtered[i];
                               return _ChatListTile(
                                 item: item,
+                                onLongPress: () {
+                                  unawaited(_onChatLongPress(item));
+                                },
                                 onTap: () async {
                                   await Navigator.of(context).push<void>(
                                     MaterialPageRoute<void>(
-                                      builder: (BuildContext c) => UserChatThreadScreen(
-                                        conversationId: item.id,
-                                        title: item.title,
-                                        listItem: item,
-                                      ),
+                                      builder: (BuildContext c) =>
+                                          UserChatThreadScreen(
+                                            conversationId: item.id,
+                                            title: item.title,
+                                            listItem: item,
+                                          ),
                                     ),
                                   );
                                   if (!mounted) {
@@ -435,10 +680,15 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 }
 
 class _ChatListTile extends StatelessWidget {
-  const _ChatListTile({required this.item, required this.onTap});
+  const _ChatListTile({
+    required this.item,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   final ConversationListItem item;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -446,6 +696,7 @@ class _ChatListTile extends StatelessWidget {
       color: Colors.white,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
@@ -479,7 +730,9 @@ class _ChatListTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: item.hasUnread ? FontWeight.w700 : FontWeight.w600,
+                              fontWeight: item.hasUnread
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
                               color: const Color(0xFF1A1A1A),
                             ),
                           ),

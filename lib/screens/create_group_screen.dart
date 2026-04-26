@@ -28,9 +28,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   void _showErr(String text) {
     final String t = text.length > 220 ? '${text.substring(0, 220)}…' : text;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(t)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
   }
 
   Future<void> _create() async {
@@ -40,9 +38,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     final String t = _name.text.trim();
     if (t.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Введите название')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Введите название')));
       }
       return;
     }
@@ -81,10 +79,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
           e.message.isNotEmpty
               ? e.message
               : (e.details != null && e.details.toString().trim().isNotEmpty
-                  ? e.details.toString()
-                  : (e.hint != null && e.hint!.trim().isNotEmpty
-                      ? e.hint!
-                      : 'Ошибка сервера при создании группы')),
+                    ? e.details.toString()
+                    : (e.hint != null && e.hint!.trim().isNotEmpty
+                          ? e.hint!
+                          : 'Ошибка сервера при создании группы')),
         );
       }
     } on StateError catch (e) {

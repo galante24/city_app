@@ -69,7 +69,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     _phoneE164 = phone;
     try {
       if (!supabaseAppReady) {
-        throw StateError('Supabase не инициализирован. Проверьте kSupabaseUrl / ключ.');
+        throw StateError(
+          'Supabase не инициализирован. Проверьте kSupabaseUrl / ключ.',
+        );
       }
       final client = Supabase.instance.client;
       await client.auth.signInWithOtp(phone: phone);
@@ -78,7 +80,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           _codeSent = true;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Код отправлен. Введите SMS на этот номер.')),
+          const SnackBar(
+            content: Text('Код отправлен. Введите SMS на этот номер.'),
+          ),
         );
       }
     } on AuthException catch (e) {
@@ -90,7 +94,8 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     } on Exception {
       if (mounted) {
         setState(() {
-          _error = 'Не удалось отправить SMS. Проверьте номер и настройки Supabase (Phone).';
+          _error =
+              'Не удалось отправить SMS. Проверьте номер и настройки Supabase (Phone).';
         });
       }
     } finally {
@@ -101,7 +106,8 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   }
 
   Future<void> _verifyOtp() async {
-    final phone = _phoneE164 ?? normalizeRussianPhoneToE164(_phoneController.text.trim());
+    final phone =
+        _phoneE164 ?? normalizeRussianPhoneToE164(_phoneController.text.trim());
     if (!phone.startsWith('+')) {
       return;
     }
@@ -125,9 +131,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       );
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Вы вошли в аккаунт')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Вы вошли в аккаунт')));
       }
     } on AuthException catch (e) {
       if (mounted) {

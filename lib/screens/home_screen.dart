@@ -33,11 +33,7 @@ List<BoxShadow> cardFloatingShadows() {
   ];
 }
 
-enum NewsCategory {
-  smi,
-  administration,
-  discussion,
-}
+enum NewsCategory { smi, administration, discussion }
 
 String categoryLabelRu(NewsCategory c) {
   return switch (c) {
@@ -128,8 +124,7 @@ Future<String> _uploadCityMediaFile(
   }
   final String ext = _fileExtFromName(file.name);
   final String uid = c.auth.currentUser?.id ?? 'anon';
-  final String path =
-      'news/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+  final String path = 'news/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
   final String contentType = _contentTypeForMedia(mediaKind, ext);
   final bucket = c.storage.from(CityDataService.cityMediaBucket);
   if (kIsWeb) {
@@ -137,26 +132,21 @@ Future<String> _uploadCityMediaFile(
     await bucket.uploadBinary(
       path,
       bytes,
-      fileOptions: FileOptions(
-        upsert: true,
-        contentType: contentType,
-      ),
+      fileOptions: FileOptions(upsert: true, contentType: contentType),
     );
   } else {
     await bucket.upload(
       path,
       File(file.path),
-      fileOptions: FileOptions(
-        upsert: true,
-        contentType: contentType,
-      ),
+      fileOptions: FileOptions(upsert: true, contentType: contentType),
     );
   }
   return bucket.getPublicUrl(path);
 }
 
 SocialPost socialPostFromMap(Map<String, dynamic> m) {
-  final String bodyRaw = (m['body'] as String?)?.trim() ??
+  final String bodyRaw =
+      (m['body'] as String?)?.trim() ??
       (m['content'] as String?)?.trim() ??
       (m['text'] as String?)?.trim() ??
       '';
@@ -211,8 +201,10 @@ class SocialPost {
   String title;
   String body;
   final NewsCategory category;
+
   /// Публичный URL из [city_media] или старые поля.
   final String? mediaUrl;
+
   /// `image` или `video`.
   final String? mediaType;
   int likes;
@@ -240,16 +232,16 @@ class _HomeScreenState extends State<HomeScreen>
     _tabController = TabController(length: 3, vsync: this);
     if (supabaseAppReady) {
       _newsStream = CityDataService.watchNewsList();
-      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
-        (AuthState data) {
-          if (data.event == AuthChangeEvent.signedIn ||
-              data.event == AuthChangeEvent.signedOut) {
-            if (mounted) {
-              setState(() {});
-            }
+      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((
+        AuthState data,
+      ) {
+        if (data.event == AuthChangeEvent.signedIn ||
+            data.event == AuthChangeEvent.signedOut) {
+          if (mounted) {
+            setState(() {});
           }
-        },
-      );
+        }
+      });
     }
   }
 
@@ -260,10 +252,7 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  List<SocialPost> postsInCategory(
-    List<SocialPost> all,
-    NewsCategory c,
-  ) {
+  List<SocialPost> postsInCategory(List<SocialPost> all, NewsCategory c) {
     return all.where((p) => p.category == c).toList();
   }
 
@@ -274,16 +263,18 @@ class _HomeScreenState extends State<HomeScreen>
           padding: const EdgeInsets.all(24),
           child: Text(
             'Пока нет публикаций',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
+            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
           ),
         ),
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+      padding: const EdgeInsets.fromLTRB(
+        kScreenHorizontalPadding,
+        12,
+        kScreenHorizontalPadding,
+        100,
+      ),
       itemCount: items.length,
       separatorBuilder: (BuildContext context, int index) =>
           const SizedBox(height: 20),
@@ -308,9 +299,7 @@ class _HomeScreenState extends State<HomeScreen>
           },
           onShare: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Поделиться в чате — в разработке'),
-              ),
+              const SnackBar(content: Text('Поделиться в чате — в разработке')),
             );
           },
         );
@@ -346,238 +335,245 @@ class _HomeScreenState extends State<HomeScreen>
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
           ),
           child: StatefulBuilder(
-            builder: (BuildContext context, void Function(void Function()) setModal) {
-              return Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    const Text(
-                      'Новая публикация',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: kNewsTextPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    DropdownButtonFormField<NewsCategory>(
-                      key: ValueKey<NewsCategory>(targetCategory),
-                      initialValue: targetCategory,
-                      decoration: const InputDecoration(
-                        labelText: 'Категория',
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: kNewsScaffoldBg,
-                      ),
-                      items: NewsCategory.values
-                          .map(
-                            (NewsCategory c) => DropdownMenuItem<NewsCategory>(
-                              value: c,
-                              child: Text(categoryLabelRu(c)),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (NewsCategory? c) {
-                        if (c == null) {
-                          return;
-                        }
-                        setModal(() {
-                          targetCategory = c;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      decoration: const InputDecoration(
-                        labelText: 'Заголовок',
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: kNewsScaffoldBg,
-                      ),
-                      maxLines: 2,
-                      validator: (String? v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Введите заголовок';
-                        }
-                        return null;
-                      },
-                      onSaved: (String? v) => title = v?.trim() ?? '',
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      decoration: const InputDecoration(
-                        labelText: 'Текст',
-                        border: OutlineInputBorder(),
-                        filled: true,
-                        fillColor: kNewsScaffoldBg,
-                        alignLabelWithHint: true,
-                        hintText: 'Текст новости',
-                      ),
-                      minLines: 4,
-                      maxLines: 10,
-                      validator: (String? v) {
-                        if (v == null || v.trim().isEmpty) {
-                          return 'Введите текст';
-                        }
-                        return null;
-                      },
-                      onSaved: (String? v) => body = v?.trim() ?? '',
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+            builder:
+                (
+                  BuildContext context,
+                  void Function(void Function()) setModal,
+                ) {
+                  return Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        IconButton(
-                          icon: Icon(
-                            Icons.photo_camera_outlined,
-                            color: pickedFile != null && pickedKind == 'image'
-                                ? kPrimaryBlue
-                                : kNewsTextSecondary,
-                            size: 28,
-                          ),
-                          tooltip: 'Фото',
-                          onPressed: () async {
-                            final XFile? x = await _mediaPicker.pickImage(
-                              source: ImageSource.gallery,
-                              maxWidth: 1920,
-                              imageQuality: 85,
-                            );
-                            if (x == null) {
-                              return;
-                            }
-                            setModal(() {
-                              pickedFile = x;
-                              pickedKind = 'image';
-                            });
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.videocam_outlined,
-                            color: pickedFile != null && pickedKind == 'video'
-                                ? kPrimaryBlue
-                                : kNewsTextSecondary,
-                            size: 28,
-                          ),
-                          tooltip: 'Видео',
-                          onPressed: () async {
-                            final XFile? x = await _mediaPicker.pickVideo(
-                              source: ImageSource.gallery,
-                            );
-                            if (x == null) {
-                              return;
-                            }
-                            setModal(() {
-                              pickedFile = x;
-                              pickedKind = 'video';
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                    if (pickedFile != null) ...<Widget>[
-                      const SizedBox(height: 4),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          pickedKind == 'video'
-                              ? 'Видео: ${pickedFile!.name}'
-                              : 'Фото: ${pickedFile!.name}',
+                        const Text(
+                          'Новая публикация',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: kNewsTextSecondary,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: kNewsTextPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        DropdownButtonFormField<NewsCategory>(
+                          key: ValueKey<NewsCategory>(targetCategory),
+                          initialValue: targetCategory,
+                          decoration: const InputDecoration(
+                            labelText: 'Категория',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: kNewsScaffoldBg,
+                          ),
+                          items: NewsCategory.values
+                              .map(
+                                (NewsCategory c) =>
+                                    DropdownMenuItem<NewsCategory>(
+                                      value: c,
+                                      child: Text(categoryLabelRu(c)),
+                                    ),
+                              )
+                              .toList(),
+                          onChanged: (NewsCategory? c) {
+                            if (c == null) {
+                              return;
+                            }
+                            setModal(() {
+                              targetCategory = c;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          decoration: const InputDecoration(
+                            labelText: 'Заголовок',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: kNewsScaffoldBg,
                           ),
                           maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          validator: (String? v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Введите заголовок';
+                            }
+                            return null;
+                          },
+                          onSaved: (String? v) => title = v?.trim() ?? '',
                         ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: () async {
-                        if (!formKey.currentState!.validate()) {
-                          return;
-                        }
-                        if (!CityDataService.isCurrentUserAdminSync()) {
-                          if (sheetContext.mounted) {
-                            ScaffoldMessenger.of(sheetContext).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Войдите как администратор: Профиль → вход по email',
-                                ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          decoration: const InputDecoration(
+                            labelText: 'Текст',
+                            border: OutlineInputBorder(),
+                            filled: true,
+                            fillColor: kNewsScaffoldBg,
+                            alignLabelWithHint: true,
+                            hintText: 'Текст новости',
+                          ),
+                          minLines: 4,
+                          maxLines: 10,
+                          validator: (String? v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Введите текст';
+                            }
+                            return null;
+                          },
+                          onSaved: (String? v) => body = v?.trim() ?? '',
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            IconButton(
+                              icon: Icon(
+                                Icons.photo_camera_outlined,
+                                color:
+                                    pickedFile != null && pickedKind == 'image'
+                                    ? kPrimaryBlue
+                                    : kNewsTextSecondary,
+                                size: 28,
                               ),
-                            );
-                          }
-                          return;
-                        }
-                        formKey.currentState!.save();
-                        String? mediaUrl;
-                        String? mediaType;
-                        if (pickedFile != null && pickedKind != null) {
-                          try {
-                            mediaUrl = await _uploadCityMediaFile(
-                              pickedFile!,
-                              mediaKind: pickedKind!,
-                            );
-                            mediaType = pickedKind;
-                          } on Object catch (e) {
+                              tooltip: 'Фото',
+                              onPressed: () async {
+                                final XFile? x = await _mediaPicker.pickImage(
+                                  source: ImageSource.gallery,
+                                  maxWidth: 1920,
+                                  imageQuality: 85,
+                                );
+                                if (x == null) {
+                                  return;
+                                }
+                                setModal(() {
+                                  pickedFile = x;
+                                  pickedKind = 'image';
+                                });
+                              },
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.videocam_outlined,
+                                color:
+                                    pickedFile != null && pickedKind == 'video'
+                                    ? kPrimaryBlue
+                                    : kNewsTextSecondary,
+                                size: 28,
+                              ),
+                              tooltip: 'Видео',
+                              onPressed: () async {
+                                final XFile? x = await _mediaPicker.pickVideo(
+                                  source: ImageSource.gallery,
+                                );
+                                if (x == null) {
+                                  return;
+                                }
+                                setModal(() {
+                                  pickedFile = x;
+                                  pickedKind = 'video';
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        if (pickedFile != null) ...<Widget>[
+                          const SizedBox(height: 4),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(
+                              pickedKind == 'video'
+                                  ? 'Видео: ${pickedFile!.name}'
+                                  : 'Фото: ${pickedFile!.name}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: kNewsTextSecondary,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: () async {
+                            if (!formKey.currentState!.validate()) {
+                              return;
+                            }
+                            if (!CityDataService.isCurrentUserAdminSync()) {
+                              if (sheetContext.mounted) {
+                                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Войдите как администратор: Профиль → вход по email',
+                                    ),
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                            formKey.currentState!.save();
+                            String? mediaUrl;
+                            String? mediaType;
+                            if (pickedFile != null && pickedKind != null) {
+                              try {
+                                mediaUrl = await _uploadCityMediaFile(
+                                  pickedFile!,
+                                  mediaKind: pickedKind!,
+                                );
+                                mediaType = pickedKind;
+                              } on Object catch (e) {
+                                if (sheetContext.mounted) {
+                                  ScaffoldMessenger.of(
+                                    sheetContext,
+                                  ).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Загрузка файла: $e'),
+                                    ),
+                                  );
+                                }
+                                return;
+                              }
+                            }
+                            try {
+                              await CityDataService.insertNewsRow(
+                                category: categoryToDb(targetCategory),
+                                title: title,
+                                body: body,
+                                mediaUrl: mediaUrl,
+                                mediaType: mediaType,
+                              );
+                            } on Object catch (e) {
+                              if (sheetContext.mounted) {
+                                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                  SnackBar(content: Text('Сохранение: $e')),
+                                );
+                              }
+                              return;
+                            }
                             if (sheetContext.mounted) {
-                              ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                SnackBar(
-                                  content: Text('Загрузка файла: $e'),
+                              Navigator.pop(sheetContext);
+                            }
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Публикация сохранена'),
                                 ),
                               );
                             }
-                            return;
-                          }
-                        }
-                        try {
-                          await CityDataService.insertNewsRow(
-                            category: categoryToDb(targetCategory),
-                            title: title,
-                            body: body,
-                            mediaUrl: mediaUrl,
-                            mediaType: mediaType,
-                          );
-                        } on Object catch (e) {
-                          if (sheetContext.mounted) {
-                            ScaffoldMessenger.of(sheetContext).showSnackBar(
-                              SnackBar(
-                                content: Text('Сохранение: $e'),
-                              ),
-                            );
-                          }
-                          return;
-                        }
-                        if (sheetContext.mounted) {
-                          Navigator.pop(sheetContext);
-                        }
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Публикация сохранена'),
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: kPrimaryBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          );
-                        }
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: kPrimaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text('Опубликовать'),
                         ),
-                      ),
-                      child: const Text('Опубликовать'),
+                      ],
                     ),
-                  ],
-                ),
-              );
-            },
+                  );
+                },
           ),
         );
       },
@@ -590,142 +586,138 @@ class _HomeScreenState extends State<HomeScreen>
       return Scaffold(
         backgroundColor: kNewsScaffoldBg,
         appBar: AppBar(
-          title: const Text('Главная'),
-          actions: const <Widget>[WeatherAppBarAction()],
+          leading: const SizedBox(width: 56),
+          leadingWidth: 56,
+          title: const Text(
+            'Главная',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+          ),
+          centerTitle: true,
+          actions: const <Widget>[
+            SizedBox(
+              width: 56,
+              child: Center(child: WeatherAppBarAction(compact: true)),
+            ),
+          ],
         ),
         body: const Center(
-          child: Text('Подключите Supabase (см. lib/config/supabase_config.dart)'),
+          child: Text(
+            'Подключите Supabase (см. lib/config/supabase_config.dart)',
+          ),
         ),
       );
     }
 
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _newsStream!,
-      builder: (
-        BuildContext context,
-        AsyncSnapshot<List<Map<String, dynamic>>> newsSnap,
-      ) {
-        final bool isAdmin = CityDataService.isCurrentUserAdminSync();
-        final bool newsWaiting = newsSnap.connectionState ==
-                ConnectionState.waiting &&
-            !newsSnap.hasData;
-        final List<Map<String, dynamic>> raw =
-            newsSnap.data ?? <Map<String, dynamic>>[];
-        final List<SocialPost> posts =
-            raw.map(socialPostFromMap).toList();
+      builder:
+          (
+            BuildContext context,
+            AsyncSnapshot<List<Map<String, dynamic>>> newsSnap,
+          ) {
+            final bool isAdmin = CityDataService.isCurrentUserAdminSync();
+            final bool newsWaiting =
+                newsSnap.connectionState == ConnectionState.waiting &&
+                !newsSnap.hasData;
+            final List<Map<String, dynamic>> raw =
+                newsSnap.data ?? <Map<String, dynamic>>[];
+            final List<SocialPost> posts = raw.map(socialPostFromMap).toList();
 
-        return Scaffold(
-          backgroundColor: kNewsScaffoldBg,
-          appBar: AppBar(
-            backgroundColor: kPrimaryBlue,
-            foregroundColor: Colors.white,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            shadowColor: Colors.transparent,
-            title: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
+            return Scaffold(
+              backgroundColor: kNewsScaffoldBg,
+              appBar: AppBar(
+                backgroundColor: kPrimaryBlue,
+                foregroundColor: Colors.white,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                shadowColor: Colors.transparent,
+                leading: const SizedBox(width: 56),
+                leadingWidth: 56,
+                title: const Text(
                   'Главная',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 18,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Новости и важные объявления',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w400,
-                    fontSize: 12,
-                    height: 1.2,
+                centerTitle: true,
+                actions: const <Widget>[
+                  SizedBox(
+                    width: 56,
+                    child: Center(child: WeatherAppBarAction(compact: true)),
                   ),
-                ),
-              ],
-            ),
-            centerTitle: true,
-            actions: const <Widget>[WeatherAppBarAction()],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(104),
-              child: Material(
-                color: kNewsCardBg,
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: kPrimaryBlue,
-                  unselectedLabelColor: kNewsTextSecondary,
-                  indicatorColor: kPrimaryBlue,
-                  indicatorWeight: 3,
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    height: 1.2,
+                ],
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(92),
+                  child: Material(
+                    color: kNewsCardBg,
+                    child: TabBar(
+                      controller: _tabController,
+                      labelColor: kPrimaryBlue,
+                      unselectedLabelColor: kNewsTextSecondary,
+                      indicatorColor: kPrimaryBlue,
+                      indicatorWeight: 3,
+                      labelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
+                      indicatorSize: TabBarIndicatorSize.label,
+                      tabs: const <Widget>[
+                        Tab(
+                          height: 50,
+                          icon: Icon(Icons.newspaper, size: 20),
+                          text: 'СМИ',
+                        ),
+                        Tab(
+                          height: 50,
+                          icon: Icon(Icons.campaign, size: 20),
+                          text: 'Важные',
+                        ),
+                        Tab(
+                          height: 50,
+                          icon: Icon(Icons.forum, size: 20),
+                          text: 'Обсуждение',
+                        ),
+                      ],
+                    ),
                   ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12,
-                    height: 1.2,
-                  ),
-                  indicatorSize: TabBarIndicatorSize.label,
-                  tabs: const <Widget>[
-                    Tab(
-                      height: 58,
-                      icon: Icon(Icons.newspaper, size: 22),
-                      text: 'СМИ',
-                    ),
-                    Tab(
-                      height: 58,
-                      icon: Icon(Icons.campaign, size: 22),
-                      text: 'Важные',
-                    ),
-                    Tab(
-                      height: 58,
-                      icon: Icon(Icons.forum, size: 22),
-                      text: 'Обсуждение',
-                    ),
-                  ],
                 ),
               ),
-            ),
-          ),
-          floatingActionButton: isAdmin
-              ? FloatingActionButton(
-                  onPressed: openCreateSheet,
-                  backgroundColor: kPrimaryBlue,
-                  foregroundColor: Colors.white,
-                  child: const Icon(Icons.add, size: 30),
-                )
-              : null,
-          body: Column(
-            children: <Widget>[
-              if (newsWaiting)
-                const LinearProgressIndicator(minHeight: 2),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  physics: const BouncingScrollPhysics(),
-                  children: <Widget>[
-                    buildCategoryFeed(
-                      postsInCategory(posts, NewsCategory.smi),
+              floatingActionButton: isAdmin
+                  ? FloatingActionButton(
+                      onPressed: openCreateSheet,
+                      backgroundColor: kPrimaryBlue,
+                      foregroundColor: Colors.white,
+                      child: const Icon(Icons.add, size: 30),
+                    )
+                  : null,
+              body: Column(
+                children: <Widget>[
+                  if (newsWaiting) const LinearProgressIndicator(minHeight: 2),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      physics: const BouncingScrollPhysics(),
+                      children: <Widget>[
+                        buildCategoryFeed(
+                          postsInCategory(posts, NewsCategory.smi),
+                        ),
+                        buildCategoryFeed(
+                          postsInCategory(posts, NewsCategory.administration),
+                        ),
+                        buildCategoryFeed(
+                          postsInCategory(posts, NewsCategory.discussion),
+                        ),
+                      ],
                     ),
-                    buildCategoryFeed(
-                      postsInCategory(
-                        posts,
-                        NewsCategory.administration,
-                      ),
-                    ),
-                    buildCategoryFeed(
-                      postsInCategory(
-                        posts,
-                        NewsCategory.discussion,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
-      },
+            );
+          },
     );
   }
 }
@@ -843,7 +835,7 @@ class SocialNewsCard extends StatelessWidget {
                       child: CircularProgressIndicator(
                         value: progress.expectedTotalBytes != null
                             ? progress.cumulativeBytesLoaded /
-                                progress.expectedTotalBytes!
+                                  progress.expectedTotalBytes!
                             : null,
                         color: kPrimaryBlue,
                       ),
@@ -857,9 +849,7 @@ class SocialNewsCard extends StatelessWidget {
             child: Row(
               children: [
                 ActionChipPill(
-                  icon: post.isLiked
-                      ? Icons.favorite
-                      : Icons.favorite_border,
+                  icon: post.isLiked ? Icons.favorite : Icons.favorite_border,
                   label: post.likes.toString(),
                   iconColor: post.isLiked
                       ? const Color(0xFFE91E63)
@@ -925,11 +915,7 @@ class ActionChipPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 24,
-                color: iconColor ?? kNewsTextSecondary,
-              ),
+              Icon(icon, size: 24, color: iconColor ?? kNewsTextSecondary),
               if (label.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 Text(
@@ -968,21 +954,23 @@ class _InlineVideoBlockState extends State<InlineVideoBlock> {
     super.initState();
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
       ..addListener(_tick)
-      ..initialize().then((_) {
-        if (mounted) {
-          setState(() {
-            _inited = true;
-            _error = null;
+      ..initialize()
+          .then((_) {
+            if (mounted) {
+              setState(() {
+                _inited = true;
+                _error = null;
+              });
+            }
+          })
+          .catchError((Object e) {
+            if (mounted) {
+              setState(() {
+                _error = 'Видео не загружено';
+                _inited = false;
+              });
+            }
           });
-        }
-      }).catchError((Object e) {
-        if (mounted) {
-          setState(() {
-            _error = 'Видео не загружено';
-            _inited = false;
-          });
-        }
-      });
   }
 
   void _tick() {
@@ -1015,9 +1003,7 @@ class _InlineVideoBlockState extends State<InlineVideoBlock> {
     if (!_inited || !_controller.value.isInitialized) {
       return const SizedBox(
         height: 220,
-        child: Center(
-          child: CircularProgressIndicator(color: kPrimaryBlue),
-        ),
+        child: Center(child: CircularProgressIndicator(color: kPrimaryBlue)),
       );
     }
     return AspectRatio(

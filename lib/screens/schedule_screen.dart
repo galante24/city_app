@@ -29,16 +29,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     if (supabaseAppReady) {
       _ferryStream = CityDataService.watchFerrySchedule();
       _busStream = CityDataService.watchBusSchedules();
-      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
-        (AuthState data) {
-          if (data.event == AuthChangeEvent.signedIn ||
-              data.event == AuthChangeEvent.signedOut) {
-            if (mounted) {
-              setState(() {});
-            }
+      _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((
+        AuthState data,
+      ) {
+        if (data.event == AuthChangeEvent.signedIn ||
+            data.event == AuthChangeEvent.signedOut) {
+          if (mounted) {
+            setState(() {});
           }
-        },
-      );
+        }
+      });
     }
   }
 
@@ -107,9 +107,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   );
                 } on Object catch (e) {
                   if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      SnackBar(content: Text('Сохранение: $e')),
-                    );
+                    ScaffoldMessenger.of(
+                      dialogContext,
+                    ).showSnackBar(SnackBar(content: Text('Сохранение: $e')));
                   }
                   return;
                 }
@@ -126,9 +126,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     statusController.dispose();
     timeController.dispose();
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Статус обновлён')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Статус обновлён')));
     }
   }
 
@@ -144,15 +144,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final routeC = TextEditingController(text: row?.routeNumber ?? '');
     final destC = TextEditingController(text: row?.destination ?? '');
     final timesC = TextEditingController(
-      text: row == null
-          ? ''
-          : row.departureTimes.join(', '),
+      text: row == null ? '' : row.departureTimes.join(', '),
     );
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (BuildContext ctx) {
         return AlertDialog(
-          title: Text(row == null ? 'Новый маршрут' : 'Редактирование маршрута'),
+          title: Text(
+            row == null ? 'Новый маршрут' : 'Редактирование маршрута',
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -195,7 +195,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               onPressed: () {
                 if (routeC.text.trim().isEmpty || destC.text.trim().isEmpty) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(content: Text('Заполните маршрут и направление')),
+                    const SnackBar(
+                      content: Text('Заполните маршрут и направление'),
+                    ),
                   );
                   return;
                 }
@@ -236,15 +238,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         );
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сохранено')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Сохранено')));
       }
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
     routeC.dispose();
@@ -275,15 +277,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     try {
       await CityDataService.deleteBusSchedule(row.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Удалено')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Удалено')));
       }
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -295,8 +297,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }) {
     final String text = ferry == null
         ? (loading
-            ? 'Загрузка статуса парома...'
-            : 'Расписание парома пока не настроено. Обратитесь к администратору.')
+              ? 'Загрузка статуса парома...'
+              : 'Расписание парома пока не настроено. Обратитесь к администратору.')
         : ferry.statusText;
     final String? timeLine = ferry?.timeText;
     final bool run = ferry == null || ferry.isRunning;
@@ -367,9 +369,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     if (!supabaseAppReady || _ferryStream == null || _busStream == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Расписание')),
-        body: const Center(
-          child: Text('Supabase не подключён'),
-        ),
+        body: const Center(child: Text('Supabase не подключён')),
       );
     }
     final bool isAdmin = CityDataService.isCurrentUserAdminSync();
@@ -379,168 +379,181 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       builder: (BuildContext c, AsyncSnapshot<List<Map<String, dynamic>>> fSnap) {
         return StreamBuilder<List<Map<String, dynamic>>>(
           stream: _busStream!,
-          builder: (BuildContext c, AsyncSnapshot<List<Map<String, dynamic>>> bSnap) {
-            final bool fWait = fSnap.connectionState == ConnectionState.waiting &&
-                !fSnap.hasData;
-            final FerryStatusRow? ferry = fSnap.data != null && fSnap.data!.isNotEmpty
-                ? CityDataService.ferryFromScheduleRow(fSnap.data!.first)
-                : null;
-            final List<BusScheduleRow> buses = (bSnap.data ?? <Map<String, dynamic>>[])
-                .map(BusScheduleRow.fromMap)
-                .whereType<BusScheduleRow>()
-                .toList();
-            final bool bWait = bSnap.connectionState == ConnectionState.waiting &&
-                !bSnap.hasData;
+          builder:
+              (
+                BuildContext c,
+                AsyncSnapshot<List<Map<String, dynamic>>> bSnap,
+              ) {
+                final bool fWait =
+                    fSnap.connectionState == ConnectionState.waiting &&
+                    !fSnap.hasData;
+                final FerryStatusRow? ferry =
+                    fSnap.data != null && fSnap.data!.isNotEmpty
+                    ? CityDataService.ferryFromScheduleRow(fSnap.data!.first)
+                    : null;
+                final List<BusScheduleRow> buses =
+                    (bSnap.data ?? <Map<String, dynamic>>[])
+                        .map(BusScheduleRow.fromMap)
+                        .whereType<BusScheduleRow>()
+                        .toList();
+                final bool bWait =
+                    bSnap.connectionState == ConnectionState.waiting &&
+                    !bSnap.hasData;
 
-            return Scaffold(
-              backgroundColor: const Color(0xFFF2F2F7),
-              appBar: AppBar(
-                title: const Text('Расписание'),
-                backgroundColor: kPrimaryBlue,
-                foregroundColor: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-              ),
-              floatingActionButton: isAdmin
-                  ? FloatingActionButton(
-                      onPressed: () => unawaited(_showBusDialog()),
-                      backgroundColor: kPrimaryBlue,
-                      foregroundColor: Colors.white,
-                      child: const Icon(Icons.add),
-                    )
-                  : null,
-              body: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
-                children: <Widget>[
-                  if (fWait)
-                    const LinearProgressIndicator(minHeight: 2),
-                  Card(
-                    color: _kPanelBg,
-                    clipBehavior: Clip.antiAlias,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: _ferryStrip(
-                      ferry: ferry,
-                      loading: fWait,
-                      isAdmin: isAdmin,
-                    ),
+                return Scaffold(
+                  backgroundColor: const Color(0xFFF2F2F7),
+                  appBar: AppBar(
+                    title: const Text('Расписание'),
+                    backgroundColor: kPrimaryBlue,
+                    foregroundColor: Colors.white,
+                    surfaceTintColor: Colors.transparent,
+                    elevation: 0,
                   ),
-                  const SizedBox(height: 20),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 8),
-                    child: Text(
-                      'Автобусы',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: _kTextPrimary,
-                      ),
-                    ),
-                  ),
-                  if (bWait)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  else if (buses.isEmpty)
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text(
-                          'Нет маршрутов. Админ может добавить кнопкой +.',
-                        ),
-                      ),
-                    )
-                  else
-                    ...buses.map(
-                      (BusScheduleRow b) => Card(
-                        margin: const EdgeInsets.only(bottom: 10),
+                  floatingActionButton: isAdmin
+                      ? FloatingActionButton(
+                          onPressed: () => unawaited(_showBusDialog()),
+                          backgroundColor: kPrimaryBlue,
+                          foregroundColor: Colors.white,
+                          child: const Icon(Icons.add),
+                        )
+                      : null,
+                  body: ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+                    children: <Widget>[
+                      if (fWait) const LinearProgressIndicator(minHeight: 2),
+                      Card(
+                        color: _kPanelBg,
+                        clipBehavior: Clip.antiAlias,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              CircleAvatar(
-                                backgroundColor: kPrimaryBlue.withValues(alpha: 0.12),
-                                child: Text(
-                                  b.routeNumber.isNotEmpty
-                                      ? b.routeNumber
-                                      : '?',
-                                  style: const TextStyle(
-                                    color: kPrimaryBlue,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      b.destination,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: _kTextPrimary,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 4,
-                                      children: b.departureTimes
-                                          .map(
-                                            (t) => Chip(
-                                              label: Text(t),
-                                              visualDensity: VisualDensity.compact,
-                                              materialTapTargetSize:
-                                                  MaterialTapTargetSize.shrinkWrap,
-                                            ),
-                                          )
-                                          .toList(),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (isAdmin)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: <Widget>[
-                                    IconButton(
-                                      onPressed: () => unawaited(
-                                        _showBusDialog(row: b),
-                                      ),
-                                      icon: const Icon(Icons.edit, color: kPrimaryBlue),
-                                      tooltip: 'Изменить',
-                                    ),
-                                    IconButton(
-                                      onPressed: () => unawaited(
-                                        _confirmDelete(b),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        color: Color(0xFFC62828),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                            ],
+                        child: _ferryStrip(
+                          ferry: ferry,
+                          loading: fWait,
+                          isAdmin: isAdmin,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Padding(
+                        padding: EdgeInsets.only(left: 4, bottom: 8),
+                        child: Text(
+                          'Автобусы',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: _kTextPrimary,
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            );
-          },
+                      if (bWait)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      else if (buses.isEmpty)
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Text(
+                              'Нет маршрутов. Админ может добавить кнопкой +.',
+                            ),
+                          ),
+                        )
+                      else
+                        ...buses.map(
+                          (BusScheduleRow b) => Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  CircleAvatar(
+                                    backgroundColor: kPrimaryBlue.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    child: Text(
+                                      b.routeNumber.isNotEmpty
+                                          ? b.routeNumber
+                                          : '?',
+                                      style: const TextStyle(
+                                        color: kPrimaryBlue,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          b.destination,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: _kTextPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          children: b.departureTimes
+                                              .map(
+                                                (t) => Chip(
+                                                  label: Text(t),
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  materialTapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                ),
+                                              )
+                                              .toList(),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isAdmin)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        IconButton(
+                                          onPressed: () =>
+                                              unawaited(_showBusDialog(row: b)),
+                                          icon: const Icon(
+                                            Icons.edit,
+                                            color: kPrimaryBlue,
+                                          ),
+                                          tooltip: 'Изменить',
+                                        ),
+                                        IconButton(
+                                          onPressed: () =>
+                                              unawaited(_confirmDelete(b)),
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Color(0xFFC62828),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
         );
       },
     );

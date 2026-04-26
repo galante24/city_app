@@ -46,9 +46,11 @@ class JobVacancyService {
     }
     final String name = file.name;
     final int dot = name.lastIndexOf('.');
-    final String ext =
-        dot >= 0 && dot < name.length - 1 ? name.substring(dot + 1).toLowerCase() : 'jpg';
-    final String path = 'vacancies/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final String ext = dot >= 0 && dot < name.length - 1
+        ? name.substring(dot + 1).toLowerCase()
+        : 'jpg';
+    final String path =
+        'vacancies/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
     final String contentType = switch (ext) {
       'png' => 'image/png',
       'gif' => 'image/gif',

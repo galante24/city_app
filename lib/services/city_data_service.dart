@@ -93,9 +93,11 @@ class CityDataService {
     }
     final String name = file.name;
     final int dot = name.lastIndexOf('.');
-    final String ext =
-        dot >= 0 && dot < name.length - 1 ? name.substring(dot + 1).toLowerCase() : 'jpg';
-    final String path = 'avatars/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final String ext = dot >= 0 && dot < name.length - 1
+        ? name.substring(dot + 1).toLowerCase()
+        : 'jpg';
+    final String path =
+        'avatars/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
     const Map<String, String> ct = <String, String>{
       'png': 'image/png',
       'gif': 'image/gif',
@@ -129,7 +131,10 @@ class CityDataService {
     if (uid == null) {
       throw StateError('Нет сессии');
     }
-    await c.from('profiles').update(<String, dynamic>{'avatar_url': publicUrl}).eq('id', uid);
+    await c
+        .from('profiles')
+        .update(<String, dynamic>{'avatar_url': publicUrl})
+        .eq('id', uid);
   }
 
   /// Вложение в чат: `city_media/chat_media/<uid>/...`
@@ -144,9 +149,11 @@ class CityDataService {
     }
     final String name = file.name;
     final int dot = name.lastIndexOf('.');
-    final String ext =
-        dot >= 0 && dot < name.length - 1 ? name.substring(dot + 1).toLowerCase() : 'jpg';
-    final String path = 'chat_media/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final String ext = dot >= 0 && dot < name.length - 1
+        ? name.substring(dot + 1).toLowerCase()
+        : 'jpg';
+    final String path =
+        'chat_media/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
     const Map<String, String> ct = <String, String>{
       'png': 'image/png',
       'gif': 'image/gif',
@@ -183,9 +190,12 @@ class CityDataService {
     final String? iso = date == null
         ? null
         : '${date.year.toString().padLeft(4, '0')}-'
-            '${date.month.toString().padLeft(2, '0')}-'
-            '${date.day.toString().padLeft(2, '0')}';
-    await c.from('profiles').update(<String, dynamic>{'birth_date': iso}).eq('id', uid);
+              '${date.month.toString().padLeft(2, '0')}-'
+              '${date.day.toString().padLeft(2, '0')}';
+    await c
+        .from('profiles')
+        .update(<String, dynamic>{'birth_date': iso})
+        .eq('id', uid);
   }
 
   /// Все публикации; на главной фильтр по [category] — см. `_categoryFromDb` / вкладки.
@@ -260,24 +270,29 @@ class CityDataService {
       throw StateError('Supabase не готов');
     }
     final String t = timeText.trim();
-    await c.from('schedules').update(<String, dynamic>{
-      'status_text': statusText,
-      'is_running': isRunning,
-      'time_text': t.isEmpty ? null : t,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', kFerryScheduleRowId);
+    await c
+        .from('schedules')
+        .update(<String, dynamic>{
+          'status_text': statusText,
+          'is_running': isRunning,
+          'time_text': t.isEmpty ? null : t,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', kFerryScheduleRowId);
   }
 
   static FerryStatusRow? ferryFromScheduleRow(Map<String, dynamic> m) {
     final Object? id = m['id'];
-    final String text = (m['status_text'] as String?) ??
+    final String text =
+        (m['status_text'] as String?) ??
         (m['title'] as String?) ??
         (m['description'] as String?) ??
         (m['name'] as String?) ??
         (m['label'] as String?) ??
         (m['message'] as String?) ??
         '';
-    final bool run = (m['is_running'] as bool?) ??
+    final bool run =
+        (m['is_running'] as bool?) ??
         (m['is_active'] as bool?) ??
         (m['active'] as bool?) ??
         true;
@@ -377,12 +392,15 @@ class CityDataService {
     if (c == null) {
       throw StateError('Supabase не инициализирован');
     }
-    await c.from('bus_schedules').update(<String, dynamic>{
-      'route_number': routeNumber,
-      'destination': destination,
-      'departure_times': departureTimes,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', id);
+    await c
+        .from('bus_schedules')
+        .update(<String, dynamic>{
+          'route_number': routeNumber,
+          'destination': destination,
+          'departure_times': departureTimes,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', id);
   }
 
   static Future<void> deleteBusSchedule(Object id) async {
@@ -427,10 +445,12 @@ class FerryStatusRow {
     required this.isRunning,
     this.timeText,
   });
+
   /// id строки в [schedules] (int или uuid) — для .update
   final Object id;
   final String statusText;
   final bool isRunning;
+
   /// Подпись времени (колонка `time_text` в `schedules`), например ближайший рейс.
   final String? timeText;
 }
@@ -467,7 +487,10 @@ List<String> _parseStringList(Object? v) {
     return <String>[];
   }
   if (v is List) {
-    return v.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+    return v
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
   }
   if (v is String && v.isNotEmpty) {
     return v

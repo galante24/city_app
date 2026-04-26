@@ -77,8 +77,11 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     }
     setState(() => _busy = true);
     try {
-      final String conv = await ChatService.getOrCreateDirectConversation(_authorId);
-      final String name = (await ChatService.displayNameForUserId(_authorId)) ?? 'Чат';
+      final String conv = await ChatService.getOrCreateDirectConversation(
+        _authorId,
+      );
+      final String name =
+          (await ChatService.displayNameForUserId(_authorId)) ?? 'Чат';
       if (!mounted) {
         return;
       }
@@ -93,9 +96,9 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
       );
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось открыть чат')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось открыть чат')));
       }
     } finally {
       if (mounted) {
@@ -108,9 +111,9 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     final Uri? uri = _telUri(phone);
     if (uri == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Некорректный номер')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Некорректный номер')));
       }
       return;
     }
@@ -118,15 +121,17 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
       if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Не удалось открыть звонок (нет приложения)')),
+            const SnackBar(
+              content: Text('Не удалось открыть звонок (нет приложения)'),
+            ),
           );
         }
       }
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Звонок: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Звонок: $e')));
       }
     }
   }
@@ -174,15 +179,15 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
       await JobVacancyService.deleteById(_id);
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Вакансия удалена')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Вакансия удалена')));
       }
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     } finally {
       if (mounted) {
@@ -232,10 +237,15 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                 child: Image.network(
                   imageUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (BuildContext c, Object e, StackTrace? st) => Container(
-                    color: widget.accent.withValues(alpha: 0.12),
-                    child: Icon(Icons.work_outline, color: widget.accent, size: 48),
-                  ),
+                  errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
+                      Container(
+                        color: widget.accent.withValues(alpha: 0.12),
+                        child: Icon(
+                          Icons.work_outline,
+                          color: widget.accent,
+                          size: 48,
+                        ),
+                      ),
                 ),
               ),
             ),
@@ -280,13 +290,20 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Icon(Icons.place_outlined, size: 22, color: kPrimaryBlue),
+                  const Icon(
+                    Icons.place_outlined,
+                    size: 22,
+                    color: kPrimaryBlue,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        const Text('Адрес', style: TextStyle(fontSize: 13, color: textSecondary)),
+                        const Text(
+                          'Адрес',
+                          style: TextStyle(fontSize: 13, color: textSecondary),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           addr,
@@ -350,7 +367,10 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                     onTap: () => _call(phone),
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                       child: Row(
                         children: <Widget>[
                           const Icon(Icons.call, color: kPrimaryBlue, size: 24),
@@ -406,7 +426,10 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                       padding: EdgeInsets.only(right: 8),
                       child: Icon(Icons.chat_bubble_outline, size: 22),
                     ),
-                  const Text('Связаться в чате', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const Text(
+                    'Связаться в чате',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
             ),
@@ -414,10 +437,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             const Center(
               child: Text(
                 'Это ваша вакансия',
-                style: TextStyle(
-                  color: textSecondary,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: textSecondary, fontSize: 14),
               ),
             ),
           ],
@@ -439,10 +459,7 @@ class _InfoCard extends StatelessWidget {
       elevation: 0.4,
       shadowColor: Colors.black26,
       borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: child,
-      ),
+      child: Padding(padding: const EdgeInsets.all(16), child: child),
     );
   }
 }

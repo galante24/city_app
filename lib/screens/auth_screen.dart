@@ -40,7 +40,8 @@ String _ruAuthErrorMessage(String? message) {
   if (l.contains('email not confirmed') || l.contains('email not verified')) {
     return 'Сначала подтвердите email по ссылке из письма';
   }
-  if (l.contains('user already registered') || l.contains('already registered')) {
+  if (l.contains('user already registered') ||
+      l.contains('already registered')) {
     return 'Этот email уже зарегистрирован. Войдите или сбросьте пароль';
   }
   if (l.contains('email rate limit') || l.contains('rate limit')) {
@@ -229,17 +230,17 @@ class _AuthScreenState extends State<AuthScreen> {
     }
     if (password != _passwordRepeatController.text) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Пароли не совпадают')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Пароли не совпадают')));
       }
       return;
     }
     if (_birthDate == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Укажите дату рождения')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Укажите дату рождения')));
       }
       return;
     }
@@ -259,7 +260,8 @@ class _AuthScreenState extends State<AuthScreen> {
         data: <String, dynamic>{
           'first_name': _firstNameController.text.trim(),
           'last_name': _lastNameController.text.trim(),
-          'birth_date': '${_birthDate!.year.toString().padLeft(4, '0')}-'
+          'birth_date':
+              '${_birthDate!.year.toString().padLeft(4, '0')}-'
               '${_birthDate!.month.toString().padLeft(2, '0')}-'
               '${_birthDate!.day.toString().padLeft(2, '0')}',
         },
@@ -312,9 +314,7 @@ class _AuthScreenState extends State<AuthScreen> {
     if (email.isEmpty || !email.contains('@')) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Введите адрес в поле «Ваша почта»'),
-          ),
+          const SnackBar(content: Text('Введите адрес в поле «Ваша почта»')),
         );
       }
       return;
@@ -341,9 +341,9 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_ruAuthErrorMessage(e.message))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_ruAuthErrorMessage(e.message))));
       }
     }
   }
@@ -436,7 +436,10 @@ class _AuthScreenState extends State<AuthScreen> {
             bottom: false,
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints box) {
-                final double maxCardH = (box.maxHeight * 0.7).clamp(220.0, 520.0);
+                final double maxCardH = (box.maxHeight * 0.7).clamp(
+                  220.0,
+                  520.0,
+                );
                 return Align(
                   alignment: Alignment.bottomCenter,
                   child: Material(
@@ -485,9 +488,10 @@ class _AuthScreenState extends State<AuthScreen> {
                                       textInputAction: TextInputAction.next,
                                       textCapitalization:
                                           TextCapitalization.none,
-                                      inputFormatters: const <TextInputFormatter>[
-                                        _CapitalizeNameWordStartsFormatter(),
-                                      ],
+                                      inputFormatters:
+                                          const <TextInputFormatter>[
+                                            _CapitalizeNameWordStartsFormatter(),
+                                          ],
                                       decoration: _fieldDecoration(
                                         'Имя',
                                         icon: Icons.badge_outlined,
@@ -505,9 +509,10 @@ class _AuthScreenState extends State<AuthScreen> {
                                       textInputAction: TextInputAction.next,
                                       textCapitalization:
                                           TextCapitalization.none,
-                                      inputFormatters: const <TextInputFormatter>[
-                                        _CapitalizeNameWordStartsFormatter(),
-                                      ],
+                                      inputFormatters:
+                                          const <TextInputFormatter>[
+                                            _CapitalizeNameWordStartsFormatter(),
+                                          ],
                                       decoration: _fieldDecoration(
                                         'Фамилия',
                                         icon: Icons.badge_outlined,
@@ -526,19 +531,29 @@ class _AuthScreenState extends State<AuthScreen> {
                                       child: InkWell(
                                         onTap: () async {
                                           final DateTime now = DateTime.now();
-                                          final DateTime? d = await showDatePicker(
-                                            context: context,
-                                            initialDate: _birthDate ?? DateTime(now.year - 20, 1, 1),
-                                            firstDate: DateTime(1920, 1, 1),
-                                            lastDate: now,
-                                          );
+                                          final DateTime? d =
+                                              await showDatePicker(
+                                                context: context,
+                                                initialDate:
+                                                    _birthDate ??
+                                                    DateTime(
+                                                      now.year - 20,
+                                                      1,
+                                                      1,
+                                                    ),
+                                                firstDate: DateTime(1920, 1, 1),
+                                                lastDate: now,
+                                              );
                                           if (d != null) {
                                             setState(() => _birthDate = d);
                                           }
                                         },
                                         borderRadius: BorderRadius.circular(10),
                                         child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 14,
+                                          ),
                                           child: Row(
                                             children: <Widget>[
                                               const Icon(
@@ -552,14 +567,19 @@ class _AuthScreenState extends State<AuthScreen> {
                                                   _birthDate == null
                                                       ? 'Дата рождения (обязательно)'
                                                       : '${_birthDate!.day.toString().padLeft(2, '0')}.'
-                                                          '${_birthDate!.month.toString().padLeft(2, '0')}.'
-                                                          '${_birthDate!.year}',
+                                                            '${_birthDate!.month.toString().padLeft(2, '0')}.'
+                                                            '${_birthDate!.year}',
                                                   style: TextStyle(
                                                     fontSize: 16,
                                                     color: _birthDate == null
-                                                        ? const Color(0xFF8E8E93)
+                                                        ? const Color(
+                                                            0xFF8E8E93,
+                                                          )
                                                         : kAuthTitle,
-                                                    fontWeight: _birthDate == null ? FontWeight.w400 : FontWeight.w500,
+                                                    fontWeight:
+                                                        _birthDate == null
+                                                        ? FontWeight.w400
+                                                        : FontWeight.w500,
                                                   ),
                                                 ),
                                               ),
@@ -599,7 +619,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                       suffix: IconButton(
                                         onPressed: () {
                                           setState(() {
-                                            _obscurePassword = !_obscurePassword;
+                                            _obscurePassword =
+                                                !_obscurePassword;
                                           });
                                         },
                                         icon: Icon(
@@ -630,8 +651,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                           icon: Icon(
                                             _obscurePasswordRepeat
                                                 ? Icons.visibility_outlined
-                                                : Icons
-                                                    .visibility_off_outlined,
+                                                : Icons.visibility_off_outlined,
                                           ),
                                           color: const Color(0xFF8E8E93),
                                         ),
@@ -662,8 +682,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                       onPressed: _loading
                                           ? null
                                           : _isRegister
-                                              ? _signUp
-                                              : _signIn,
+                                          ? _signUp
+                                          : _signIn,
                                       style: FilledButton.styleFrom(
                                         backgroundColor: kAuthGreen,
                                         foregroundColor: Colors.white,
@@ -671,8 +691,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                           vertical: 16,
                                         ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                         elevation: 0,
                                       ),
@@ -720,8 +741,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                           vertical: 16,
                                         ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                       ),
                                       child: const Text(
@@ -781,8 +803,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                             vertical: 14,
                                           ),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                           elevation: 0,
                                         ),

@@ -9,10 +9,7 @@ import 'vacancy_form_screen.dart';
 const Color _kBg = Color(0xFFF5F5F7);
 const Color _kTextSecondary = Color(0xFF6C6C70);
 
-enum _VacancySort {
-  newest,
-  oldest,
-}
+enum _VacancySort { newest, oldest }
 
 class VacanciesScreen extends StatefulWidget {
   const VacanciesScreen({super.key});
@@ -69,10 +66,15 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
       return t.contains(q) || d.contains(q) || s.contains(q) || a.contains(q);
     }).toList();
     list.sort((Map<String, dynamic> a, Map<String, dynamic> b) {
-      final DateTime? da = DateTime.tryParse((a['created_at'] as String?) ?? '');
-      final DateTime? db = DateTime.tryParse((b['created_at'] as String?) ?? '');
-      final int cmp = (da ?? DateTime.fromMillisecondsSinceEpoch(0))
-          .compareTo(db ?? DateTime.fromMillisecondsSinceEpoch(0));
+      final DateTime? da = DateTime.tryParse(
+        (a['created_at'] as String?) ?? '',
+      );
+      final DateTime? db = DateTime.tryParse(
+        (b['created_at'] as String?) ?? '',
+      );
+      final int cmp = (da ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
+        db ?? DateTime.fromMillisecondsSinceEpoch(0),
+      );
       return _sort == _VacancySort.newest ? -cmp : cmp;
     });
     return list;
@@ -135,7 +137,10 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 4,
+                ),
               ),
             ),
           ),
@@ -159,7 +164,10 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: <Widget>[
-                const Text('Сортировка: ', style: TextStyle(color: _kTextSecondary, fontSize: 14)),
+                const Text(
+                  'Сортировка: ',
+                  style: TextStyle(color: _kTextSecondary, fontSize: 14),
+                ),
                 DropdownButtonHideUnderline(
                   child: DropdownButton<_VacancySort>(
                     value: _sort,
@@ -204,48 +212,49 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : shown.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Пока нет вакансий',
-                          style: TextStyle(color: _kTextSecondary, fontSize: 16),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                        itemCount: shown.length,
-                        separatorBuilder: (BuildContext c, int i) => const SizedBox(height: 10),
-                        itemBuilder: (BuildContext c, int i) {
-                          final Map<String, dynamic> m = shown[i];
-                          final String id = m['id']?.toString() ?? '';
-                          final String title = m['title'] as String? ?? '';
-                          final String salary = m['salary'] as String? ?? '';
-                          final String addr = m['work_address'] as String? ?? '';
-                          final String? imageUrl = m['image_url'] as String?;
-                          final String created = m['created_at'] as String? ?? '';
-                          final Color accent = _accentForId(id.isEmpty ? title : id);
-                          return _VacancyListTile(
-                            title: title,
-                            salary: salary,
-                            address: addr,
-                            dateLabel: _formatDate(created),
-                            imageUrl: imageUrl,
-                            accent: accent,
-                            onTap: () async {
-                              await Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder: (BuildContext c) => VacancyDetailScreen(
-                                    row: m,
-                                    accent: accent,
-                                  ),
-                                ),
-                              );
-                              if (mounted) {
-                                await _load();
-                              }
-                            },
+                ? const Center(
+                    child: Text(
+                      'Пока нет вакансий',
+                      style: TextStyle(color: _kTextSecondary, fontSize: 16),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    itemCount: shown.length,
+                    separatorBuilder: (BuildContext c, int i) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (BuildContext c, int i) {
+                      final Map<String, dynamic> m = shown[i];
+                      final String id = m['id']?.toString() ?? '';
+                      final String title = m['title'] as String? ?? '';
+                      final String salary = m['salary'] as String? ?? '';
+                      final String addr = m['work_address'] as String? ?? '';
+                      final String? imageUrl = m['image_url'] as String?;
+                      final String created = m['created_at'] as String? ?? '';
+                      final Color accent = _accentForId(
+                        id.isEmpty ? title : id,
+                      );
+                      return _VacancyListTile(
+                        title: title,
+                        salary: salary,
+                        address: addr,
+                        dateLabel: _formatDate(created),
+                        imageUrl: imageUrl,
+                        accent: accent,
+                        onTap: () async {
+                          await Navigator.of(context).push<void>(
+                            MaterialPageRoute<void>(
+                              builder: (BuildContext c) =>
+                                  VacancyDetailScreen(row: m, accent: accent),
+                            ),
                           );
+                          if (mounted) {
+                            await _load();
+                          }
                         },
-                      ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -356,7 +365,8 @@ class _VacancyListTile extends StatelessWidget {
                         height: 64,
                         fit: BoxFit.cover,
                         errorBuilder:
-                            (BuildContext c, Object e, StackTrace? st) => _vacancyImagePlaceholder(accent, 64),
+                            (BuildContext c, Object e, StackTrace? st) =>
+                                _vacancyImagePlaceholder(accent, 64),
                       )
                     : _vacancyImagePlaceholder(accent, 64),
               ),
@@ -391,14 +401,21 @@ class _VacancyListTile extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Icon(Icons.place_outlined, size: 16, color: Colors.grey[600]),
+                          Icon(
+                            Icons.place_outlined,
+                            size: 16,
+                            color: Colors.grey[600],
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               address,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                              ),
                             ),
                           ),
                         ],
@@ -408,7 +425,10 @@ class _VacancyListTile extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         dateLabel,
-                        style: const TextStyle(fontSize: 11, color: _kTextSecondary),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: _kTextSecondary,
+                        ),
                       ),
                     ],
                   ],
@@ -421,7 +441,6 @@ class _VacancyListTile extends StatelessWidget {
       ),
     );
   }
-
 }
 
 Widget _vacancyImagePlaceholder(Color accent, double size) {

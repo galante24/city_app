@@ -20,6 +20,8 @@ dependencies:
   url_launcher: ^6.3.2
   http: ^1.2.2
   emoji_picker_flutter: ^4.4.0
+  shared_preferences: ^2.5.3
+  flutter_local_notifications: ^19.0.0
 
 dev_dependencies:
   flutter_test:

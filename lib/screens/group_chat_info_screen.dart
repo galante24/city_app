@@ -38,7 +38,9 @@ class _GroupChatInfoScreenState extends State<GroupChatInfoScreen> {
     }
     setState(() => _loading = true);
     _myRole = await ChatService.getMyRoleInConversation(widget.conversationId);
-    _rows = await ChatService.fetchParticipantsWithProfiles(widget.conversationId);
+    _rows = await ChatService.fetchParticipantsWithProfiles(
+      widget.conversationId,
+    );
     if (mounted) {
       setState(() => _loading = false);
     }
@@ -68,8 +70,14 @@ class _GroupChatInfoScreenState extends State<GroupChatInfoScreen> {
         builder: (BuildContext c) => AlertDialog(
           title: const Text('Выйти из группы?'),
           actions: <Widget>[
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Нет')),
-            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Да')),
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Нет'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Да'),
+            ),
           ],
         ),
       );
@@ -81,9 +89,9 @@ class _GroupChatInfoScreenState extends State<GroupChatInfoScreen> {
           }
         } on Object {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Не удалось выйти')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Не удалось выйти')));
           }
         }
       }
@@ -110,8 +118,14 @@ class _GroupChatInfoScreenState extends State<GroupChatInfoScreen> {
       builder: (BuildContext c) => AlertDialog(
         title: const Text('Исключить из группы?'),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Нет')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Да')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Нет'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Да'),
+          ),
         ],
       ),
     );
@@ -121,9 +135,9 @@ class _GroupChatInfoScreenState extends State<GroupChatInfoScreen> {
         await _reload();
       } on Object {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ошибка')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Ошибка')));
         }
       }
     }
@@ -139,9 +153,9 @@ class _GroupChatInfoScreenState extends State<GroupChatInfoScreen> {
       await _reload();
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось')));
       }
     }
   }
@@ -179,13 +193,18 @@ class _GroupChatInfoScreenState extends State<GroupChatInfoScreen> {
               children: <Widget>[
                 ListTile(
                   title: Text(widget.title),
-                  subtitle: Text(widget.isOpen ? 'Открытая группа' : 'Закрытая группа (приглашения)'),
+                  subtitle: Text(
+                    widget.isOpen
+                        ? 'Открытая группа'
+                        : 'Закрытая группа (приглашения)',
+                  ),
                 ),
                 const Divider(),
                 ..._rows.map((Map<String, dynamic> m) {
                   final String uid = m['user_id'] as String? ?? '';
                   final String role = (m['role'] as String?) ?? 'member';
-                  final String? me = Supabase.instance.client.auth.currentUser?.id;
+                  final String? me =
+                      Supabase.instance.client.auth.currentUser?.id;
                   return ListTile(
                     title: Text(_line(m)),
                     subtitle: Text(
@@ -198,13 +217,22 @@ class _GroupChatInfoScreenState extends State<GroupChatInfoScreen> {
                       children: <Widget>[
                         if (_isOwner && role != 'owner') ...<Widget>[
                           TextButton(
-                            onPressed: () => _toggleMod(uid, role != 'moderator'),
-                            child: Text(role == 'moderator' ? 'Снять' : 'Модератор'),
+                            onPressed: () =>
+                                _toggleMod(uid, role != 'moderator'),
+                            child: Text(
+                              role == 'moderator' ? 'Снять' : 'Модератор',
+                            ),
                           ),
                         ],
-                        if (uid != me && role != 'owner' && (_isOwner || (_myRole == 'moderator' && role == 'member')))
+                        if (uid != me &&
+                            role != 'owner' &&
+                            (_isOwner ||
+                                (_myRole == 'moderator' && role == 'member')))
                           IconButton(
-                            icon: const Icon(Icons.remove_circle_outline, color: Color(0xFFC62828)),
+                            icon: const Icon(
+                              Icons.remove_circle_outline,
+                              color: Color(0xFFC62828),
+                            ),
                             onPressed: () => _remove(uid, role),
                             tooltip: 'Исключить',
                           ),
