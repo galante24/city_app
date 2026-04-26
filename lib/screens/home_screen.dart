@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../services/city_data_service.dart';
+import '../widgets/weather_app_bar_action.dart';
 
 /// Мягкие нейтральные тона ленты
 const Color kNewsScaffoldBg = Color(0xFFF2F2F7);
@@ -590,6 +591,7 @@ class _HomeScreenState extends State<HomeScreen>
         backgroundColor: kNewsScaffoldBg,
         appBar: AppBar(
           title: const Text('Главная'),
+          actions: const <Widget>[WeatherAppBarAction()],
         ),
         body: const Center(
           child: Text('Подключите Supabase (см. lib/config/supabase_config.dart)'),
@@ -642,6 +644,7 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
             centerTitle: true,
+            actions: const <Widget>[WeatherAppBarAction()],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(104),
               child: Material(

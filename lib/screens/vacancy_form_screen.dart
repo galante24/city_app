@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../app_constants.dart';
 import '../services/job_vacancy_service.dart';
+import '../utils/capitalize_first_formatter.dart';
 
 const Color _kFormBg = Color(0xFFF0F2F5);
 const Color _kFieldFill = Color(0xFFFFFFFF);
@@ -229,7 +230,8 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
               decoration: _decoration('Название вакансии'),
               minLines: 1,
               maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
+              textCapitalization: TextCapitalization.none,
+              inputFormatters: <TextInputFormatter>[CapitalizeFirstFormatter()],
               validator: _req,
               enabled: !_saving,
             ),
@@ -245,7 +247,11 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _salary,
-              decoration: _decoration('Зарплата', hint: 'например, от 60 000 ₽'),
+              decoration: _decoration('Зарплата', hint: 'только цифры, напр. 60000'),
+              keyboardType: TextInputType.number,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
               validator: _req,
               enabled: !_saving,
             ),

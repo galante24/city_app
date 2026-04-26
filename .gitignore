@@ -1,3 +1,6 @@
+# Локальные ключи API (скопируйте из api_keys.example.json)
+api_keys.json
+
 # Miscellaneous
 *.class
 *.log
