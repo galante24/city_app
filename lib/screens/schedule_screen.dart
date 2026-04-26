@@ -8,6 +8,7 @@ import '../config/supabase_ready.dart';
 import '../schedule/lesosibirsk_bus_widgets.dart';
 import '../services/city_data_service.dart';
 import '../widgets/soft_tab_header.dart';
+import '../widgets/weather_app_bar_action.dart';
 
 const Color _kPanelBg = Color(0xFFFFFFFF);
 const Color _kTextSecondary = Color(0xFF6C6C70);
@@ -216,10 +217,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           children: <Widget>[
             SoftTabHeader(
               title: 'Расписание',
-              trailing: Icon(
-                Icons.directions_bus_filled_rounded,
-                size: 28,
-                color: kSoftHeaderActionIconColor,
+              trailing: SoftHeaderWeatherWithAction(
+                action: Icon(
+                  Icons.directions_bus_filled_rounded,
+                  size: 28,
+                  color: kSoftHeaderActionIconColor,
+                ),
               ),
             ),
             const Expanded(
@@ -247,10 +250,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             children: <Widget>[
               SoftTabHeader(
                 title: 'Расписание',
-                trailing: Icon(
-                  Icons.directions_bus_filled_rounded,
-                  size: 28,
-                  color: kSoftHeaderActionIconColor,
+                trailing: SoftHeaderWeatherWithAction(
+                  action: Icon(
+                    Icons.directions_bus_filled_rounded,
+                    size: 28,
+                    color: kSoftHeaderActionIconColor,
+                  ),
                 ),
               ),
               if (fWait) const LinearProgressIndicator(minHeight: 2),

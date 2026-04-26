@@ -245,6 +245,31 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
   }
 }
 
+/// Погода в шапке вкладки плюс опциональное действие справа (иконка, [IconButton] и т.д.).
+class SoftHeaderWeatherWithAction extends StatelessWidget {
+  const SoftHeaderWeatherWithAction({super.key, this.action});
+
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Padding(
+          padding: EdgeInsets.only(right: 4),
+          child: WeatherAppBarAction(
+            compact: true,
+            onLightBackground: true,
+          ),
+        ),
+        ?action,
+      ],
+    );
+  }
+}
+
 const Color kNewsScaffoldBg = Color(0xFFF2F2F7);
 const Color kNewsTextSecondary = Color(0xFF6C6C70);
 const Color kNewsTextPrimary = Color(0xFF1C1C1E);

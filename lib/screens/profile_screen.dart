@@ -8,6 +8,7 @@ import '../config/admin_config.dart';
 import '../config/supabase_ready.dart';
 import '../services/city_data_service.dart';
 import '../widgets/soft_tab_header.dart';
+import '../widgets/weather_app_bar_action.dart';
 import 'account_settings_screen.dart';
 import 'ferry_admin_screen.dart';
 
@@ -167,24 +168,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: <Widget>[
               SoftTabHeader(
                 title: 'Аккаунт',
-                trailing: IconButton(
-                  icon: Icon(
-                    Icons.settings_outlined,
-                    color: kSoftHeaderActionIconColor,
-                    size: 26,
+                trailing: SoftHeaderWeatherWithAction(
+                  action: IconButton(
+                    icon: Icon(
+                      Icons.settings_outlined,
+                      color: kSoftHeaderActionIconColor,
+                      size: 26,
+                    ),
+                    onPressed: () async {
+                      await Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (BuildContext c) =>
+                              const AccountSettingsScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        setState(() => _profileReload++);
+                      }
+                    },
+                    tooltip: 'Настройки',
                   ),
-                  onPressed: () async {
-                    await Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (BuildContext c) =>
-                            const AccountSettingsScreen(),
-                      ),
-                    );
-                    if (mounted) {
-                      setState(() => _profileReload++);
-                    }
-                  },
-                  tooltip: 'Настройки',
                 ),
               ),
               Expanded(

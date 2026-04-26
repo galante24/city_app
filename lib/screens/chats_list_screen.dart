@@ -11,6 +11,7 @@ import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../main_tab_index.dart';
 import '../widgets/soft_tab_header.dart';
+import '../widgets/weather_app_bar_action.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
@@ -577,14 +578,12 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           children: <Widget>[
             SoftTabHeader(
               title: 'Чаты',
-              trailing: IconButton(
-                icon: Icon(
+              trailing: SoftHeaderWeatherWithAction(
+                action: Icon(
                   Icons.chat_outlined,
                   color: kSoftHeaderActionIconColor,
                   size: 26,
                 ),
-                onPressed: null,
-                tooltip: 'Чаты',
               ),
             ),
             const Expanded(
@@ -601,14 +600,16 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         children: <Widget>[
           SoftTabHeader(
             title: 'Чаты',
-            trailing: IconButton(
-              icon: Icon(
-                Icons.add_circle_outline,
-                color: kSoftHeaderActionIconColor,
-                size: 28,
+            trailing: SoftHeaderWeatherWithAction(
+              action: IconButton(
+                icon: Icon(
+                  Icons.add_circle_outline,
+                  color: kSoftHeaderActionIconColor,
+                  size: 28,
+                ),
+                onPressed: _openAddChat,
+                tooltip: 'Новый чат',
               ),
-              onPressed: _openAddChat,
-              tooltip: 'Новый чат',
             ),
           ),
           Expanded(

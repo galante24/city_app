@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_constants.dart';
 import 'widgets/soft_tab_header.dart';
+import 'widgets/weather_app_bar_action.dart';
 import 'app_update_check.dart';
 import 'config/supabase_config.dart';
 import 'config/supabase_ready.dart';
@@ -118,6 +119,12 @@ class _MainScaffoldState extends State<MainScaffold> {
         body: IndexedStack(index: _currentIndex, children: _stackChildren),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
+          onDestinationSelected: (int i) {
+            setState(() => _currentIndex = i);
+            if (i == 3) {
+              unawaited(ChatUnreadBadge.refresh());
+            }
+          },
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
           shadowColor: const Color(0x14000000),
@@ -283,10 +290,12 @@ class ServicesGridScreen extends StatelessWidget {
         children: <Widget>[
           SoftTabHeader(
             title: 'Сервисы',
-            trailing: Icon(
-              Icons.grid_view_rounded,
-              size: 28,
-              color: kSoftHeaderActionIconColor,
+            trailing: SoftHeaderWeatherWithAction(
+              action: Icon(
+                Icons.grid_view_rounded,
+                size: 28,
+                color: kSoftHeaderActionIconColor,
+              ),
             ),
           ),
           Expanded(

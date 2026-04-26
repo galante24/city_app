@@ -589,15 +589,9 @@ class _HomeScreenState extends State<HomeScreen>
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            SoftTabHeader(
+            const SoftTabHeader(
               title: 'Главная',
-              trailing: const Padding(
-                padding: EdgeInsets.only(right: 4),
-                child: WeatherAppBarAction(
-                  compact: true,
-                  onLightBackground: true,
-                ),
-              ),
+              trailing: SoftHeaderWeatherWithAction(),
             ),
             const Expanded(
               child: Center(
@@ -641,13 +635,7 @@ class _HomeScreenState extends State<HomeScreen>
                 children: <Widget>[
                   SoftTabHeader(
                     title: 'Главная',
-                    trailing: const Padding(
-                      padding: EdgeInsets.only(right: 4),
-                      child: WeatherAppBarAction(
-                        compact: true,
-                        onLightBackground: true,
-                      ),
-                    ),
+                    trailing: const SoftHeaderWeatherWithAction(),
                     bottom: TabBar(
                       controller: _tabController,
                       labelColor: kPrimaryBlue,
