@@ -24,6 +24,9 @@ const Color kAuthVkBlue = Color(0xFF2787F5);
 const Color kAuthFieldBorder = Color(0xFFD1D1D6);
 const Color kAuthTitle = Color(0xFF1C1C1E);
 
+/// Фон панели входа/регистрации: белый с лёгкой прозрачностью поверх фото.
+const Color kAuthPanelBackground = Color(0xE0FFFFFF);
+
 /// Сообщения GoTrue/Supabase на английском — показ пользователю по-русски.
 String _ruAuthErrorMessage(String? message) {
   if (message == null || message.trim().isEmpty) {
@@ -421,8 +424,8 @@ class _AuthScreenState extends State<AuthScreen> {
           Positioned.fill(
             child: Image.asset(
               'assets/images/auth_bg.jpg',
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
               errorBuilder: (BuildContext c, Object e, StackTrace? st) {
                 return const ColoredBox(color: Color(0xFF4A7BA7));
               },
@@ -448,7 +451,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           top: Radius.circular(30),
                         ),
                         child: ColoredBox(
-                          color: Colors.white,
+                          color: kAuthPanelBackground,
                           child: SingleChildScrollView(
                             padding: EdgeInsets.fromLTRB(
                               24,
