@@ -4,8 +4,10 @@ import '../main_shell_navigation.dart';
 import '../theme/city_theme.dart';
 import '../widgets/city_main_navigation_bar.dart';
 import '../widgets/soft_tab_header.dart';
+import '../models/real_estate_listing_kind.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'garage_listings_screen.dart';
+import 'real_estate_category_listings_screen.dart';
 
 class _EstateCategory {
   const _EstateCategory({
@@ -92,6 +94,16 @@ class RealEstateScreen extends StatelessWidget {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => const GarageListingsScreen(),
+        ),
+      );
+      return;
+    }
+    final RealEstateListingKind? kind = RealEstateListingKind.tryParseId(c.id);
+    if (kind != null) {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) =>
+              RealEstateCategoryListingsScreen(kind: kind),
         ),
       );
       return;
