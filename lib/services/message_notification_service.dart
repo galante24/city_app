@@ -103,8 +103,15 @@ class MessageNotificationService {
       return;
     }
     String body = (rec['body'] as String?)?.trim() ?? '';
+    final String? fwdFrom =
+        (rec['forwarded_from_label'] as String?)?.trim();
     if (body.startsWith(ChatService.imageMessagePrefix)) {
       body = '📷 Фото';
+    } else if (body.startsWith(ChatService.fileMessagePrefix)) {
+      body = '📎 Файл';
+    }
+    if (fwdFrom != null && fwdFrom.isNotEmpty) {
+      body = '↪ $fwdFrom: ${body.isEmpty ? '…' : body}';
     }
     if (body.isEmpty) {
       body = 'Новое сообщение';

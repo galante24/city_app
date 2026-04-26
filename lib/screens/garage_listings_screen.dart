@@ -5,28 +5,24 @@ import 'package:share_plus/share_plus.dart';
 
 import '../app_constants.dart';
 import '../main_shell_navigation.dart';
-import '../services/job_vacancy_service.dart';
-import '../widgets/city_main_navigation_bar.dart';
+import '../services/garage_listing_service.dart';
 import '../utils/image_cache_extent.dart';
+import '../widgets/city_main_navigation_bar.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
-import 'vacancy_detail_screen.dart';
-import 'vacancy_form_screen.dart';
+import 'garage_listing_detail_screen.dart';
+import 'garage_listing_form_screen.dart';
 
-enum _VacancySort { newest, oldest }
-
-class VacanciesScreen extends StatefulWidget {
-  const VacanciesScreen({super.key});
+class GarageListingsScreen extends StatefulWidget {
+  const GarageListingsScreen({super.key});
 
   @override
-  State<VacanciesScreen> createState() => _VacanciesScreenState();
+  State<GarageListingsScreen> createState() => _GarageListingsScreenState();
 }
 
-class _VacanciesScreenState extends State<VacanciesScreen> {
+class _GarageListingsScreenState extends State<GarageListingsScreen> {
   final TextEditingController _search = TextEditingController();
-  /// Поиск: обновление только списка без полного пересборки экрана.
   final ValueNotifier<String> _searchQuery = ValueNotifier<String>('');
-  _VacancySort _sort = _VacancySort.newest;
   List<Map<String, dynamic>> _rows = <Map<String, dynamic>>[];
   bool _loading = true;
 
@@ -51,7 +47,7 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final List<Map<String, dynamic>> list = await JobVacancyService.fetchAll();
+    final List<Map<String, dynamic>> list = await GarageListingService.fetchAll();
     if (mounted) {
       setState(() {
         _rows = list;
@@ -60,30 +56,17 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _filteredAndSorted(String q) {
-    List<Map<String, dynamic>> list = _rows.where((Map<String, dynamic> m) {
-      if (q.isEmpty) {
-        return true;
-      }
+  List<Map<String, dynamic>> _filtered(String q) {
+    if (q.isEmpty) {
+      return List<Map<String, dynamic>>.from(_rows);
+    }
+    return _rows.where((Map<String, dynamic> m) {
       final String t = (m['title'] as String? ?? '').toLowerCase();
       final String d = (m['description'] as String? ?? '').toLowerCase();
-      final String s = (m['salary'] as String? ?? '').toLowerCase();
-      final String a = (m['work_address'] as String? ?? '').toLowerCase();
-      return t.contains(q) || d.contains(q) || s.contains(q) || a.contains(q);
+      final String p = (m['price'] as String? ?? '').toLowerCase();
+      final String a = (m['garage_address'] as String? ?? '').toLowerCase();
+      return t.contains(q) || d.contains(q) || p.contains(q) || a.contains(q);
     }).toList();
-    list.sort((Map<String, dynamic> a, Map<String, dynamic> b) {
-      final DateTime? da = DateTime.tryParse(
-        (a['created_at'] as String?) ?? '',
-      );
-      final DateTime? db = DateTime.tryParse(
-        (b['created_at'] as String?) ?? '',
-      );
-      final int cmp = (da ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
-        db ?? DateTime.fromMillisecondsSinceEpoch(0),
-      );
-      return _sort == _VacancySort.newest ? -cmp : cmp;
-    });
-    return list;
   }
 
   String _formatDate(String? iso) {
@@ -100,11 +83,11 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
 
   Color _accentForId(String id) {
     const List<Color> palette = <Color>[
+      Color(0xFF1565C0),
       Color(0xFF0288D1),
       Color(0xFF43A047),
       Color(0xFF7E57C2),
       Color(0xFFFF9800),
-      Color(0xFFD13F7A),
     ];
     int h = 0;
     for (int i = 0; i < id.length; i++) {
@@ -118,13 +101,13 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
     MainShellNavigation.goToTab(index);
   }
 
-  Future<void> _shareVacancy(Map<String, dynamic> m) async {
-    final String title = m['title'] as String? ?? 'Вакансия';
-    final String salary = m['salary'] as String? ?? '';
-    final String addr = m['work_address'] as String? ?? '';
-    final List<String> lines = <String>['Вакансия: $title'];
-    if (salary.isNotEmpty) {
-      lines.add('Зарплата: $salary');
+  Future<void> _shareListing(Map<String, dynamic> m) async {
+    final String title = m['title'] as String? ?? 'Гараж';
+    final String price = m['price'] as String? ?? '';
+    final String addr = m['garage_address'] as String? ?? '';
+    final List<String> lines = <String>['Гараж: $title'];
+    if (price.isNotEmpty) {
+      lines.add('Цена: $price');
     }
     if (addr.isNotEmpty) {
       lines.add('Адрес: $addr');
@@ -146,10 +129,10 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
         children: <Widget>[
           SoftTabHeader(
             leading: const SoftHeaderBackButton(),
-            title: 'Вакансии',
+            title: 'Гараж',
             trailing: SoftHeaderWeatherWithAction(
               action: Icon(
-                Icons.work_rounded,
+                Icons.garage_rounded,
                 size: 28,
                 color: softHeaderTrailingIconColor(context),
               ),
@@ -159,168 +142,121 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: _search,
-              decoration: InputDecoration(
-                hintText: 'Поиск вакансий',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: cs.surfaceContainerHigh,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 4,
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: _SuggestVacancyCard(
-              onOpen: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (BuildContext c) => const VacancyFormScreen(),
-                  ),
-                );
-                if (mounted) {
-                  await _load();
-                }
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: <Widget>[
-                Text(
-                  'Сортировка: ',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                ),
-                PopupMenuButton<_VacancySort>(
-                  initialValue: _sort,
-                  tooltip: 'Порядок сортировки',
-                  position: PopupMenuPosition.under,
-                  offset: const Offset(0, 4),
-                  onSelected: (_VacancySort v) {
-                    setState(() => _sort = v);
-                  },
-                  itemBuilder: (BuildContext context) {
-                    return <PopupMenuEntry<_VacancySort>>[
-                      const PopupMenuItem<_VacancySort>(
-                        value: _VacancySort.newest,
-                        child: Text('сначала новые'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: TextField(
+                    controller: _search,
+                    decoration: InputDecoration(
+                      hintText: 'Поиск объявлений',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: cs.surfaceContainerHigh,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
-                      const PopupMenuItem<_VacancySort>(
-                        value: _VacancySort.oldest,
-                        child: Text('сначала старые'),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 4,
                       ),
-                    ];
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Text(
-                          _sort == _VacancySort.newest
-                              ? 'сначала новые'
-                              : 'сначала старые',
-                          style: const TextStyle(
-                            color: kPrimaryBlue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Icon(
-                          Icons.arrow_drop_down_rounded,
-                          color: kPrimaryBlue,
-                          size: 22,
-                        ),
-                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Text(
-              'Актуальные вакансии',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface,
-              ),
-            ),
-          ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : ValueListenableBuilder<String>(
-                    valueListenable: _searchQuery,
-                    builder: (BuildContext context, String q, Widget? _) {
-                      final List<Map<String, dynamic>> shown =
-                          _filteredAndSorted(q);
-                      if (shown.isEmpty) {
-                        return Center(
-                          child: Text(
-                            'Пока нет вакансий',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 16,
-                            ),
-                          ),
-                        );
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: _PostGarageCard(
+                    onOpen: () async {
+                      await Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (BuildContext c) =>
+                              const GarageListingFormScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        await _load();
                       }
-                      return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: shown.length,
-                    separatorBuilder: (BuildContext c, int i) =>
-                        const SizedBox(height: 10),
-                    itemBuilder: (BuildContext c, int i) {
-                      final Map<String, dynamic> m = shown[i];
-                      final String id = m['id']?.toString() ?? '';
-                      final String title = m['title'] as String? ?? '';
-                      final String salary = m['salary'] as String? ?? '';
-                      final String addr = m['work_address'] as String? ?? '';
-                      final String? imageUrl = m['image_url'] as String?;
-                      final String created = m['created_at'] as String? ?? '';
-                      final Color accent = _accentForId(
-                        id.isEmpty ? title : id,
-                      );
-                      return _VacancyListTile(
-                        title: title,
-                        salary: salary,
-                        address: addr,
-                        dateLabel: _formatDate(created),
-                        imageUrl: imageUrl,
-                        accent: accent,
-                        onShare: () => unawaited(_shareVacancy(m)),
-                        onTap: () async {
-                          await Navigator.of(context).push<void>(
-                            MaterialPageRoute<void>(
-                              builder: (BuildContext c) =>
-                                  VacancyDetailScreen(row: m, accent: accent),
-                            ),
-                          );
-                          if (mounted) {
-                            await _load();
-                          }
-                        },
-                      );
-                    },
-                  );
                     },
                   ),
-          ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text(
+                    'Объявления',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : ValueListenableBuilder<String>(
+                          valueListenable: _searchQuery,
+                          builder: (BuildContext context, String q, Widget? _) {
+                            final List<Map<String, dynamic>> shown =
+                                _filtered(q);
+                            if (shown.isEmpty) {
+                              return Center(
+                                child: Text(
+                                  'Пока нет объявлений',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              );
+                            }
+                            return ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                              itemCount: shown.length,
+                              separatorBuilder: (BuildContext c, int i) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (BuildContext c, int i) {
+                                final Map<String, dynamic> m = shown[i];
+                                final String id = m['id']?.toString() ?? '';
+                                final String title =
+                                    m['title'] as String? ?? '';
+                                final String price =
+                                    m['price'] as String? ?? '';
+                                final String addr =
+                                    m['garage_address'] as String? ?? '';
+                                final String? imageUrl =
+                                    m['image_url'] as String?;
+                                final String created =
+                                    m['created_at'] as String? ?? '';
+                                final Color accent = _accentForId(
+                                  id.isEmpty ? title : id,
+                                );
+                                return _GarageListTile(
+                                  title: title,
+                                  price: price,
+                                  address: addr,
+                                  dateLabel: _formatDate(created),
+                                  imageUrl: imageUrl,
+                                  accent: accent,
+                                  onShare: () => unawaited(_shareListing(m)),
+                                  onTap: () async {
+                                    await Navigator.of(context).push<void>(
+                                      MaterialPageRoute<void>(
+                                        builder: (BuildContext c) =>
+                                            GarageListingDetailScreen(
+                                          row: m,
+                                          accent: accent,
+                                        ),
+                                      ),
+                                    );
+                                    if (mounted) {
+                                      await _load();
+                                    }
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        ),
+                ),
               ],
             ),
           ),
@@ -330,8 +266,8 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
   }
 }
 
-class _SuggestVacancyCard extends StatelessWidget {
-  const _SuggestVacancyCard({required this.onOpen});
+class _PostGarageCard extends StatelessWidget {
+  const _PostGarageCard({required this.onOpen});
 
   final VoidCallback onOpen;
 
@@ -351,23 +287,23 @@ class _SuggestVacancyCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             children: <Widget>[
-              Icon(Icons.work_rounded, size: 40, color: kPrimaryBlue),
+              Icon(Icons.garage_rounded, size: 40, color: kPrimaryBlue),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Предложить вакансию',
+                      'Выставить объявление',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      'Разместите вакансию и найдите подходящих сотрудников',
+                      'Разместите объявление о продаже или аренде гаража',
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurface
@@ -393,10 +329,10 @@ class _SuggestVacancyCard extends StatelessWidget {
   }
 }
 
-class _VacancyListTile extends StatelessWidget {
-  const _VacancyListTile({
+class _GarageListTile extends StatelessWidget {
+  const _GarageListTile({
     required this.title,
-    required this.salary,
+    required this.price,
     required this.address,
     required this.dateLabel,
     required this.imageUrl,
@@ -406,7 +342,7 @@ class _VacancyListTile extends StatelessWidget {
   });
 
   final String title;
-  final String salary;
+  final String price;
   final String address;
   final String dateLabel;
   final String? imageUrl;
@@ -440,9 +376,9 @@ class _VacancyListTile extends StatelessWidget {
                         cacheHeight: imageCacheExtentPx(context, 64),
                         errorBuilder:
                             (BuildContext c, Object e, StackTrace? st) =>
-                                _vacancyImagePlaceholder(accent, 64),
+                                _garageImagePlaceholder(accent, 64),
                       )
-                    : _vacancyImagePlaceholder(accent, 64),
+                    : _garageImagePlaceholder(accent, 64),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -459,11 +395,11 @@ class _VacancyListTile extends StatelessWidget {
                         color: cs.onSurface,
                       ),
                     ),
-                    if (salary.isNotEmpty) ...<Widget>[
+                    if (price.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 4),
                       Text(
-                        'Зарплата: $salary',
-                        style: TextStyle(
+                        'Цена: $price',
+                        style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: kPrimaryBlue,
@@ -530,11 +466,11 @@ class _VacancyListTile extends StatelessWidget {
   }
 }
 
-Widget _vacancyImagePlaceholder(Color accent, double size) {
+Widget _garageImagePlaceholder(Color accent, double size) {
   return Container(
     width: size,
     height: size,
     color: accent.withValues(alpha: 0.12),
-    child: Icon(Icons.work_outline_rounded, color: accent, size: 28),
+    child: Icon(Icons.garage_outlined, color: accent, size: 28),
   );
 }

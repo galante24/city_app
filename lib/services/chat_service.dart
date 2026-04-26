@@ -705,7 +705,12 @@ class ChatService {
     return out;
   }
 
-  static Future<void> sendMessage(String conversationId, String body) async {
+  static Future<void> sendMessage(
+    String conversationId,
+    String body, {
+    String? forwardedFromUserId,
+    String? forwardedFromLabel,
+  }) async {
     final SupabaseClient? c = _c;
     if (c == null) {
       throw StateError('Supabase не готов');
@@ -718,15 +723,24 @@ class ChatService {
     if (t.isEmpty) {
       return;
     }
-    await c.from('chat_messages').insert(<String, dynamic>{
+    final Map<String, dynamic> row = <String, dynamic>{
       'conversation_id': conversationId,
       'sender_id': uid,
       'body': t,
-    });
+    };
+    final String? fwdId = forwardedFromUserId?.trim();
+    final String? fwdLabel = forwardedFromLabel?.trim();
+    if (fwdId != null &&
+        fwdId.isNotEmpty &&
+        fwdLabel != null &&
+        fwdLabel.isNotEmpty) {
+      row['forwarded_from_user_id'] = fwdId;
+      row['forwarded_from_label'] = fwdLabel;
+    }
+    await c.from('chat_messages').insert(row);
   }
 
-  /// Копирует сообщения в другой чат (то же поле [body]: текст, фото, файлы).
-  /// Порядок [bodies] сохраняется. Пустые строки пропускаются.
+  /// Копирует сообщения без метки «переслано от» (устаревший сценарий).
   static Future<void> forwardMessageBodies(
     String toConversationId,
     List<String> bodies,

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../utils/image_cache_extent.dart';
+import '../models/chat_forward_draft.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_download_share.dart';
 import '../services/open_chat_tracker.dart';
@@ -34,6 +35,7 @@ class UserChatThreadScreen extends StatefulWidget {
     required this.title,
     this.listItem,
     this.directPeerUserId,
+    this.initialForwardDraft,
   });
 
   final String conversationId;
@@ -42,6 +44,9 @@ class UserChatThreadScreen extends StatefulWidget {
 
   /// Собеседник в личном чате, если экран открыт не из списка (например, из вакансии).
   final String? directPeerUserId;
+
+  /// Открыть чат с черновиком пересылки (панель над полем ввода, отправка по «Отправить»).
+  final List<ChatForwardDraft>? initialForwardDraft;
 
   @override
   State<UserChatThreadScreen> createState() => _UserChatThreadScreenState();
@@ -73,10 +78,17 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   List<Map<String, dynamic>> _messageRowsForForward =
       <Map<String, dynamic>>[];
 
+  List<ChatForwardDraft>? _pendingForwardDrafts;
+
   @override
   void initState() {
     super.initState();
     OpenChatTracker.setOpen(widget.conversationId);
+    if (widget.initialForwardDraft != null &&
+        widget.initialForwardDraft!.isNotEmpty) {
+      _pendingForwardDrafts =
+          List<ChatForwardDraft>.from(widget.initialForwardDraft!);
+    }
     _headerTitle = widget.title;
     _isGroup = widget.listItem?.isGroup;
     _isOpen = widget.listItem?.isOpen;
@@ -357,17 +369,36 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   }
 
   Future<void> _send() async {
-    if (!supabaseAppReady) {
+    if (!supabaseAppReady || _sending) {
       return;
     }
     final String t = _input.text.trim();
-    if (t.isEmpty || _sending) {
+    final bool hasForward = _pendingForwardDrafts != null &&
+        _pendingForwardDrafts!.isNotEmpty;
+    if (!hasForward && t.isEmpty) {
       return;
     }
     setState(() => _sending = true);
     try {
-      await ChatService.sendMessage(widget.conversationId, t);
-      _input.clear();
+      if (hasForward) {
+        for (final ChatForwardDraft d in _pendingForwardDrafts!) {
+          await ChatService.sendMessage(
+            widget.conversationId,
+            d.innerBody,
+            forwardedFromUserId: d.originalSenderId,
+            forwardedFromLabel: d.originalSenderLabel,
+          );
+        }
+        if (mounted) {
+          setState(() => _pendingForwardDrafts = null);
+        }
+        unawaited(ChatUnreadBadge.refresh());
+      }
+      if (t.isNotEmpty) {
+        await ChatService.sendMessage(widget.conversationId, t);
+        _input.clear();
+        unawaited(ChatUnreadBadge.refresh());
+      }
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -379,6 +410,66 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
         setState(() => _sending = false);
       }
     }
+  }
+
+  Future<String> _displayLabelForUserId(String userId) async {
+    final Map<String, dynamic>? row =
+        await CityDataService.fetchProfileRow(userId);
+    final String? uname = (row?['username'] as String?)?.trim();
+    final String fn = (row?['first_name'] as String?)?.trim() ?? '';
+    final String ln = (row?['last_name'] as String?)?.trim() ?? '';
+    final String full = ('$fn $ln').trim();
+    if (full.isNotEmpty) {
+      return full;
+    }
+    if (uname != null && uname.isNotEmpty) {
+      return '@$uname';
+    }
+    return 'Участник';
+  }
+
+  Future<List<ChatForwardDraft>> _buildForwardDrafts() async {
+    final List<ChatForwardDraft> out = <ChatForwardDraft>[];
+    final Map<String, String> labelCache = <String, String>{};
+    for (final Map<String, dynamic> row in _messageRowsForForward) {
+      final String? id = row['id']?.toString();
+      if (id == null || !_selectedMessageIds.contains(id)) {
+        continue;
+      }
+      if (row['deleted_at'] != null) {
+        continue;
+      }
+      final String raw = (row['body'] as String?) ?? '';
+      if (raw.trim().isEmpty) {
+        continue;
+      }
+      final String? existingFwdUid = row['forwarded_from_user_id']?.toString();
+      final String? existingFwdLabel = row['forwarded_from_label'] as String?;
+      final String origId;
+      final String origLabel;
+      if (existingFwdUid != null &&
+          existingFwdLabel != null &&
+          existingFwdLabel.trim().isNotEmpty) {
+        origId = existingFwdUid;
+        origLabel = existingFwdLabel.trim();
+      } else {
+        final String sid = row['sender_id']?.toString() ?? '';
+        if (sid.isEmpty) {
+          continue;
+        }
+        origId = sid;
+        origLabel = labelCache[sid] ?? await _displayLabelForUserId(sid);
+        labelCache[sid] = origLabel;
+      }
+      out.add(
+        ChatForwardDraft(
+          originalSenderId: origId,
+          originalSenderLabel: origLabel,
+          innerBody: raw,
+        ),
+      );
+    }
+    return out;
   }
 
   bool _canDeleteMessage(Map<String, dynamic> m, String? me) {
@@ -445,27 +536,16 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     if (_selectedMessageIds.isEmpty) {
       return;
     }
-    final List<String> bodies = <String>[];
-    for (final Map<String, dynamic> row in _messageRowsForForward) {
-      final String? id = row['id']?.toString();
-      if (id == null || !_selectedMessageIds.contains(id)) {
-        continue;
-      }
-      if (row['deleted_at'] != null) {
-        continue;
-      }
-      final String raw = (row['body'] as String?) ?? '';
-      if (raw.trim().isEmpty) {
-        continue;
-      }
-      bodies.add(raw);
-    }
-    if (bodies.isEmpty) {
+    final List<ChatForwardDraft> drafts = await _buildForwardDrafts();
+    if (drafts.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Нечего пересылать')),
         );
       }
+      return;
+    }
+    if (!mounted) {
       return;
     }
     final ConversationListItem? target =
@@ -479,22 +559,20 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     if (!mounted || target == null) {
       return;
     }
-    try {
-      await ChatService.forwardMessageBodies(target.id, bodies);
-      _exitMessageSelection();
-      unawaited(ChatUnreadBadge.refresh());
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Переслано в «${target.title}»')),
-        );
-      }
-    } on Object catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось переслать: $e')),
-        );
-      }
+    _exitMessageSelection();
+    if (!mounted) {
+      return;
     }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext c) => UserChatThreadScreen(
+          conversationId: target.id,
+          title: target.title,
+          listItem: target,
+          initialForwardDraft: drafts,
+        ),
+      ),
+    );
   }
 
   @override
@@ -667,6 +745,13 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                   ),
                 ),
               ),
+            ),
+          if (!_selectingMessages &&
+              _pendingForwardDrafts != null &&
+              _pendingForwardDrafts!.isNotEmpty)
+            _PendingForwardBanner(
+              drafts: _pendingForwardDrafts!,
+              onCancel: () => setState(() => _pendingForwardDrafts = null),
             ),
           if (!_selectingMessages)
             Material(
@@ -1052,6 +1137,10 @@ class _MessagesListState extends State<_MessagesList> {
             final bool mine = sid == me;
             final bool isDeleted = m['deleted_at'] != null;
             final String bodyRaw = (m['body'] as String?) ?? '';
+            final String? fwdLabel =
+                (m['forwarded_from_label'] as String?)?.trim();
+            final String? fwdUserId =
+                m['forwarded_from_user_id']?.toString();
             final String? imageUrl = !isDeleted
                 ? ChatService.imageUrlFromMessageBody(bodyRaw)
                 : null;
@@ -1212,6 +1301,19 @@ class _MessagesListState extends State<_MessagesList> {
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 mainAxisSize: MainAxisSize.min,
                                 children: <Widget>[
+                                  if (!isDeleted &&
+                                      fwdLabel != null &&
+                                      fwdLabel.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 8,
+                                      ),
+                                      child: _ForwardedBubbleHeader(
+                                        fromLabel: fwdLabel,
+                                        fromUserId: fwdUserId,
+                                        outgoing: false,
+                                      ),
+                                    ),
                                   if (!isDeleted)
                                     Material(
                                       color: Colors.transparent,
@@ -1438,6 +1540,20 @@ class _MessagesListState extends State<_MessagesList> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
+                      if (!isDeleted &&
+                          fwdLabel != null &&
+                          fwdLabel.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: _ForwardedBubbleHeader(
+                              fromLabel: fwdLabel,
+                              fromUserId: fwdUserId,
+                              outgoing: mine,
+                            ),
+                          ),
+                        ),
                       if (displayImageUrl != null && !isDeleted)
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
@@ -1565,6 +1681,203 @@ class _MessagesListState extends State<_MessagesList> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+}
+
+class _PendingForwardBanner extends StatelessWidget {
+  const _PendingForwardBanner({
+    required this.drafts,
+    required this.onCancel,
+  });
+
+  final List<ChatForwardDraft> drafts;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final ChatForwardDraft first = drafts.first;
+    final String title = drafts.length == 1
+        ? 'Переслать 1 сообщение'
+        : 'Переслать ${drafts.length} сообщений';
+    final String sub = drafts.length == 1
+        ? '${first.originalSenderLabel}: ${first.previewSnippet}'
+        : '${first.originalSenderLabel}: ${first.previewSnippet} — и ещё ${drafts.length - 1}…';
+
+    return Material(
+      color: cs.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 6, 0, 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(Icons.forward_rounded, color: kPrimaryBlue, size: 22),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    sub,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: cs.onSurfaceVariant,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Отменить пересылку',
+              onPressed: onCancel,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ForwardedBubbleHeader extends StatelessWidget {
+  const _ForwardedBubbleHeader({
+    required this.fromLabel,
+    required this.outgoing,
+    this.fromUserId,
+  });
+
+  final String fromLabel;
+  final bool outgoing;
+  final String? fromUserId;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final Color barColor =
+        outgoing ? Colors.white.withValues(alpha: 0.95) : kPrimaryBlue;
+    final Color captionColor = outgoing
+        ? Colors.white.withValues(alpha: 0.78)
+        : cs.onSurfaceVariant;
+    final Color nameColor =
+        outgoing ? Colors.white : kPrimaryBlue;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          width: 3,
+          height: 40,
+          decoration: BoxDecoration(
+            color: barColor,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Переслано от',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.1,
+                  color: captionColor,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Row(
+                children: <Widget>[
+                  if (fromUserId != null && fromUserId!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: _ForwardedTinyAvatar(
+                        userId: fromUserId!,
+                        outgoing: outgoing,
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      fromLabel,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: nameColor,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ForwardedTinyAvatar extends StatelessWidget {
+  const _ForwardedTinyAvatar({
+    required this.userId,
+    required this.outgoing,
+  });
+
+  final String userId;
+  final bool outgoing;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: CityDataService.fetchProfileRow(userId),
+      builder: (BuildContext context, AsyncSnapshot<Map<String, dynamic>?> s) {
+        final String? url =
+            (s.data?['avatar_url'] as String?)?.trim();
+        final String fn =
+            (s.data?['first_name'] as String?)?.trim() ?? '';
+        final String un =
+            (s.data?['username'] as String?)?.trim() ?? '';
+        final String letter = (fn.isNotEmpty
+                ? fn[0]
+                : (un.isNotEmpty ? un.replaceAll('@', '')[0] : '?'))
+            .toUpperCase();
+        return CircleAvatar(
+          radius: 11,
+          backgroundColor: outgoing
+              ? Colors.white.withValues(alpha: 0.25)
+              : kPrimaryBlue.withValues(alpha: 0.2),
+          backgroundImage:
+              url != null && url.isNotEmpty ? NetworkImage(url) : null,
+          child: url == null || url.isEmpty
+              ? Text(
+                  letter,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: outgoing ? Colors.white : kPrimaryBlue,
+                  ),
+                )
+              : null,
         );
       },
     );

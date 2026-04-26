@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_navigator_key.dart';
 import 'services/app_theme_controller.dart';
 import 'theme/city_theme.dart' show CityTheme;
 import 'widgets/soft_tab_header.dart';
@@ -17,9 +19,11 @@ import 'widgets/city_main_navigation_bar.dart';
 import 'screens/chats_list_screen.dart';
 import 'services/chat_unread_badge.dart';
 import 'services/message_notification_service.dart';
+import 'services/incoming_share_coordinator.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/schedule_screen.dart';
+import 'screens/real_estate_screen.dart';
 import 'screens/vacancies_screen.dart';
 
 Future<void> main() async {
@@ -40,6 +44,7 @@ class CityApp extends StatelessWidget {
       listenable: appThemeController,
       builder: (BuildContext context, Widget? _) {
         return MaterialApp(
+          navigatorKey: rootNavigatorKey,
           title: 'Лесосибирск',
           debugShowCheckedModeBanner: false,
           theme: CityTheme.light(),
@@ -52,8 +57,21 @@ class CityApp extends StatelessWidget {
   }
 }
 
-class _AuthStateGate extends StatelessWidget {
+class _AuthStateGate extends StatefulWidget {
   const _AuthStateGate();
+
+  @override
+  State<_AuthStateGate> createState() => _AuthStateGateState();
+}
+
+class _AuthStateGateState extends State<_AuthStateGate> {
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) {
+      unawaited(IncomingShareCoordinator.init());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +118,9 @@ class _MainScaffoldState extends State<MainScaffold> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(checkForAppUpdates(context));
+        if (!kIsWeb) {
+          IncomingShareCoordinator.tryFlushPendingShare();
+        }
       }
     });
   }
@@ -270,6 +291,12 @@ class ServicesGridScreen extends StatelessWidget {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => const VacanciesScreen(),
+        ),
+      );
+    } else if (c.id == 'estate') {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const RealEstateScreen(),
         ),
       );
     } else {

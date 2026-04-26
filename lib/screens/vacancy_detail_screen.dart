@@ -283,19 +283,23 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: widget.accent.withValues(alpha: 0.12),
+                color: kPrimaryBlue.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: <Widget>[
-                  Icon(Icons.payments_outlined, color: widget.accent, size: 22),
+                  const Icon(
+                    Icons.payments_outlined,
+                    color: kPrimaryBlue,
+                    size: 22,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'от $salary ₽',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
-                      color: widget.accent,
+                      color: kPrimaryBlue,
                     ),
                   ),
                 ],

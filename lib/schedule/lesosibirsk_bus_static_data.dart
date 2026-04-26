@@ -61,70 +61,6 @@ String? timeRangeLabel(Iterable<String> times) {
   return '${t.first} – ${t.last}';
 }
 
-int _mDay(String t) => timeToMinutes(t) % 1440;
-
-/// Утро 06:00–09:59, день 10:00–13:59, вечер 14:00–16:59, вечер/ночь 17:00+ и 00:00–05:59.
-List<List<String>> byDayparts(List<String> sorted) {
-  if (sorted.isEmpty) {
-    return <List<String>>[
-      <String>[],
-      <String>[],
-      <String>[],
-      <String>[],
-    ];
-  }
-  final List<String> s = List<String>.from(sorted);
-  s.sort((a, b) => timeToMinutes(a).compareTo(timeToMinutes(b)));
-  return <List<String>>[
-    s
-        .where(
-          (String t) {
-            final int m = _mDay(t);
-            return m >= 6 * 60 && m <= 9 * 60 + 59;
-          },
-        )
-        .toList(),
-    s
-        .where(
-          (String t) {
-            final int m = _mDay(t);
-            return m >= 10 * 60 && m <= 13 * 60 + 59;
-          },
-        )
-        .toList(),
-    s
-        .where(
-          (String t) {
-            final int m = _mDay(t);
-            return m >= 14 * 60 && m <= 16 * 60 + 59;
-          },
-        )
-        .toList(),
-    s
-        .where(
-          (String t) {
-            final int m = _mDay(t);
-            return m >= 17 * 60 || m < 6 * 60;
-          },
-        )
-        .toList(),
-  ];
-}
-
-String bandClockRange(int index) {
-  switch (index) {
-    case 0:
-      return '06:00 – 09:59';
-    case 1:
-      return '10:00 – 13:59';
-    case 2:
-      return '14:00 – 16:59';
-    case 3:
-    default:
-      return '17:00 – 23:59';
-  }
-}
-
 // --- маршрут 7 «Военкомат — Новоенисейск» (север / юг, две промежуточные колонки) ---
 
 const String _r7NorthVoenRaw =
@@ -182,7 +118,8 @@ String? get lesosibirskRoute7WorkHoursLabel => timeRangeLabel(<String>[
     ]);
 
 /// Цвет значка маршрута №7 в списке (как у других линий).
-const Color kLesosibirskRoute7Color = Color(0xFF00897B);
+/// Тот же акцент, что у маршрута №1 в списке (оранжевый автобус).
+const Color kLesosibirskRoute7Color = Color(0xFFFF9800);
 
 // --- остальные маршруты (два конца или две крупные остановки) ---
 

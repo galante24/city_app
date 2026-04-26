@@ -6,8 +6,6 @@ import 'lesosibirsk_bus_static_data.dart';
 const Color _kTextPrimary = Color(0xFF1C1C1E);
 const Color _kTextSecondary = Color(0xFF6C6C70);
 const Color _kCardBg = Color(0xFFFFFFFF);
-const Color _kNorthTint = Color(0xFFF1F6F0);
-const Color _kSouthTint = Color(0xFFF0F4FA);
 
 /// Цвета блока автобусов: в тёмной теме — [ColorScheme], иначе фиксированные светлые.
 final class _BusUiColors {
@@ -25,25 +23,8 @@ final class _BusUiColors {
 
   Color get textSecondary => dark ? cs.onSurfaceVariant : _kTextSecondary;
 
-  Color get northTint => dark
-      ? Color.alphaBlend(
-          const Color(0xFF43A047).withValues(alpha: 0.14),
-          cs.surface,
-        )
-      : _kNorthTint;
-
-  Color get southTint => dark
-      ? Color.alphaBlend(
-          kPrimaryBlue.withValues(alpha: 0.14),
-          cs.surface,
-        )
-      : _kSouthTint;
-
   Color get chipUnselectedBg =>
       dark ? cs.surfaceContainerLow : const Color(0xFFF2F2F7);
-
-  Color get routeColumnBorder =>
-      dark ? cs.outline.withValues(alpha: 0.35) : const Color(0x14000000);
 
   Color get chipTimeBg =>
       dark ? cs.surfaceContainerHigh : const Color(0xFFF2F2F7);
@@ -241,12 +222,12 @@ class _Route7ScheduleExpandable extends StatefulWidget {
 
 class _Route7ScheduleExpandableState extends State<_Route7ScheduleExpandable> {
   int _dir = 0;
-  bool _extraStopsOpen = true;
 
   @override
   Widget build(BuildContext context) {
     final _BusUiColors u = _BusUiColors(context);
-    final String leftA = _dir == 0 ? 'Военкомат' : 'мкр. «А»';
+    final String leftA =
+        _dir == 0 ? 'Военкомат' : 'Микрорайон «А»';
     const String rightB = 'Спорткомплекс';
     final List<String> leftT =
         _dir == 0 ? route7NorthVoen : route7SouthMkr;
@@ -255,188 +236,46 @@ class _Route7ScheduleExpandableState extends State<_Route7ScheduleExpandable> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 0),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _DirChip(
-                  label: 'Северное\nнаправление',
-                  selected: _dir == 0,
-                  arrowColor: const Color(0xFF27AE60),
-                  icon: Icons.north_east,
-                  onTap: () => setState(() => _dir = 0),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DirChip(
-                  label: 'Южное\nнаправление',
-                  selected: _dir == 1,
-                  arrowColor: kPrimaryBlue,
-                  icon: Icons.south_west,
-                  onTap: () => setState(() => _dir = 1),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Expanded(
-              child: _RouteColumn(
-                background: u.northTint,
-                title: leftA,
-                times: leftT,
-                onAllTrips: () => _showAllTrips(
-                  context,
-                  title: leftA,
-                  times: leftT,
-                ),
+              child: _DirChip(
+                label: 'Северное\nнаправление',
+                selected: _dir == 0,
+                arrowColor: const Color(0xFF27AE60),
+                icon: Icons.north_east,
+                onTap: () => setState(() => _dir = 0),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Expanded(
-              child: _RouteColumn(
-                background: u.southTint,
-                title: rightB,
-                times: rightT,
-                onAllTrips: () => _showAllTrips(
-                  context,
-                  title: rightB,
-                  times: rightT,
-                ),
+              child: _DirChip(
+                label: 'Южное\nнаправление',
+                selected: _dir == 1,
+                arrowColor: kPrimaryBlue,
+                icon: Icons.south_west,
+                onTap: () => setState(() => _dir = 1),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Material(
-          color: kPrimaryBlue.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => setState(() => _extraStopsOpen = !_extraStopsOpen),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              child: Row(
-                children: <Widget>[
-                  Icon(
-                    Icons.info_outline,
-                    size: 18,
-                    color: kPrimaryBlue.withValues(alpha: 0.9),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Также остановки: Спорткомплекс',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: kPrimaryBlue.withValues(alpha: 0.95),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    _extraStopsOpen ? Icons.expand_less : Icons.expand_more,
-                    color: kPrimaryBlue,
-                  ),
-                ],
-              ),
+        const SizedBox(height: 16),
+        _StopTimes(name: leftA, times: leftT),
+        const SizedBox(height: 20),
+        _StopTimes(name: rightB, times: rightT),
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Text(
+            'Время отправления с остановок «$leftA» и «$rightB» '
+            'в выбранном направлении.',
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.35,
+              color: u.textSecondary,
             ),
           ),
         ),
-        if (_extraStopsOpen)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'В выбранном направлении уточнённые отходы с остановок '
-              '«$leftA» и «$rightB» показаны в колонках выше.',
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.35,
-                color: u.textSecondary,
-              ),
-            ),
-          ),
       ],
-    );
-  }
-
-  void _showAllTrips(
-    BuildContext context, {
-    required String title,
-    required List<String> times,
-  }) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (BuildContext c) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.55,
-          maxChildSize: 0.92,
-          minChildSize: 0.35,
-          builder: (BuildContext _, ScrollController sc) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                const SizedBox(height: 8),
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
-                  child: Text(
-                    '№ 7 — $title (все рейсы)',
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListView.separated(
-                    controller: sc,
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: times.length,
-                    separatorBuilder: (BuildContext c, int i) =>
-                        const Divider(height: 1),
-                    itemBuilder: (BuildContext ctx, int i) {
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          times[i],
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
     );
   }
 }
@@ -490,163 +329,6 @@ class _DirChip extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _RouteColumn extends StatelessWidget {
-  const _RouteColumn({
-    required this.background,
-    required this.title,
-    required this.times,
-    required this.onAllTrips,
-  });
-  final Color background;
-  final String title;
-  final List<String> times;
-  final VoidCallback onAllTrips;
-
-  @override
-  Widget build(BuildContext context) {
-    final _BusUiColors u = _BusUiColors(context);
-    final List<List<String>> parts = byDayparts(times);
-    const List<String> labels = <String>['Утро', 'День', 'Вечер', 'Вечер и ночь'];
-    const List<IconData> icons = <IconData>[
-      Icons.wb_sunny_outlined,
-      Icons.light_mode_outlined,
-      Icons.wb_cloudy_outlined,
-      Icons.nightlight_round,
-    ];
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: u.routeColumnBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w700,
-              color: u.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          for (int i = 0; i < 4; i++) ...<Widget>[
-            if (i > 0) const SizedBox(height: 6),
-            _DaypartBlock(
-              label: labels[i],
-              bandRange: bandClockRange(i),
-              bandTimes: parts[i],
-              icon: icons[i],
-            ),
-          ],
-          const SizedBox(height: 6),
-          InkWell(
-            onTap: onAllTrips,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: <Widget>[
-                  Text(
-                    'Все рейсы',
-                    style: TextStyle(
-                      color: kPrimaryBlue.withValues(alpha: 0.95),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    Icons.chevron_right,
-                    size: 20,
-                    color: kPrimaryBlue.withValues(alpha: 0.95),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DaypartBlock extends StatelessWidget {
-  const _DaypartBlock({
-    required this.label,
-    required this.bandRange,
-    required this.bandTimes,
-    required this.icon,
-  });
-  final String label;
-  final String bandRange;
-  final List<String> bandTimes;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final _BusUiColors u = _BusUiColors(context);
-    final String? first = bandTimes.isEmpty ? null : bandTimes.first;
-    final String? last = bandTimes.isEmpty ? null : bandTimes.last;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Icon(icon, size: 16, color: u.textSecondary),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: u.textSecondary,
-                ),
-              ),
-              Text(
-                bandRange,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: u.textSecondary,
-                ),
-              ),
-              if (first != null && last != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '$first  …  $last',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: u.textPrimary,
-                    ),
-                  ),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    '—',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: u.textSecondary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
