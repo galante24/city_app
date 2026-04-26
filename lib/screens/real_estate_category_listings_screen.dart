@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart'
     show kPrimaryBlue, listingFloorAreaWithSuffix;
 import '../main_shell_navigation.dart';
@@ -237,7 +238,7 @@ class _RealEstateCategoryListingsScreenState
                                   const EdgeInsets.fromLTRB(16, 0, 16, 24),
                               itemCount: shown.length,
                               separatorBuilder: (BuildContext c, int i) =>
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: kCloudListSpacing),
                               itemBuilder: (BuildContext c, int i) {
                                 final Map<String, dynamic> m = shown[i];
                                 final String id = m['id']?.toString() ?? '';
@@ -311,59 +312,48 @@ class _PostListingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kPrimaryBlue.withValues(alpha: 0.35)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
-            children: <Widget>[
-              Icon(kind.headerIcon, size: 40, color: kPrimaryBlue),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Выставить объявление',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      kind.postCardSubtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.65),
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
+    return CloudInkCard(
+      onTap: onOpen,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        children: <Widget>[
+          Icon(kind.headerIcon, size: 40, color: kPrimaryBlue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Выставить объявление',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
-              ),
-              Container(
-                decoration: const BoxDecoration(
-                  color: kPrimaryBlue,
-                  shape: BoxShape.circle,
+                const SizedBox(height: 4),
+                Text(
+                  kind.postCardSubtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.65),
+                    height: 1.2,
+                  ),
                 ),
-                child: const Icon(Icons.chevron_right, color: Colors.white),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          Container(
+            decoration: const BoxDecoration(
+              color: kPrimaryBlue,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.chevron_right, color: Colors.white),
+          ),
+        ],
       ),
     );
   }
@@ -397,129 +387,143 @@ class _EstateListingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: imageUrl != null && imageUrl!.isNotEmpty
-                    ? Image.network(
-                        imageUrl!,
-                        width: 64,
-                        height: 64,
-                        fit: BoxFit.cover,
-                        cacheWidth: imageCacheExtentPx(context, 64),
-                        cacheHeight: imageCacheExtentPx(context, 64),
-                        errorBuilder:
-                            (BuildContext c, Object e, StackTrace? st) =>
-                                _listingImagePlaceholder(
-                          accent,
-                          64,
-                          placeholderIcon,
+    return CloudInkCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: imageUrl != null && imageUrl!.isNotEmpty
+                ? Image.network(
+                    imageUrl!,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    cacheWidth: imageCacheExtentPx(context, 64),
+                    cacheHeight: imageCacheExtentPx(context, 64),
+                    loadingBuilder: (
+                      BuildContext context,
+                      Widget child,
+                      ImageChunkEvent? progress,
+                    ) {
+                      if (progress == null) {
+                        return child;
+                      }
+                      return ColoredBox(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        child: const Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                         ),
-                      )
-                    : _listingImagePlaceholder(accent, 64, placeholderIcon),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      ),
+                      );
+                    },
+                    errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
+                        _listingImagePlaceholder(
+                      accent,
+                      64,
+                      placeholderIcon,
                     ),
-                    if (price.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Цена: $price',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: kPrimaryBlue,
-                        ),
+                  )
+                : _listingImagePlaceholder(accent, 64, placeholderIcon),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                if (price.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Цена: $price',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimaryBlue,
+                    ),
+                  ),
+                ],
+                if (floorLine != null && floorLine!.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Квадратура: $floorLine',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurface.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+                if (address.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Icon(
+                        Icons.place_outlined,
+                        size: 16,
+                        color: cs.onSurfaceVariant,
                       ),
-                    ],
-                    if (floorLine != null && floorLine!.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Квадратура: $floorLine',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: cs.onSurface.withValues(alpha: 0.85),
-                        ),
-                      ),
-                    ],
-                    if (address.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 6),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Icon(
-                            Icons.place_outlined,
-                            size: 16,
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          address,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
                             color: cs.onSurfaceVariant,
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              address,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (dateLabel.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 4),
-                      Text(
-                        dateLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.share_outlined, color: cs.primary),
-                tooltip: 'Поделиться',
-                onPressed: onShare,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.8),
-              ),
-            ],
+                  ),
+                ],
+                if (dateLabel.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    dateLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
+          IconButton(
+            icon: Icon(Icons.share_outlined, color: cs.primary),
+            tooltip: 'Поделиться',
+            onPressed: onShare,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
+          ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+          ),
+        ],
       ),
     );
   }

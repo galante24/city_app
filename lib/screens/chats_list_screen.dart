@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../main_tab_index.dart';
@@ -801,20 +802,14 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                                 )
                               : ListView.separated(
                                   itemCount: _filtered.length,
-                                  padding:
-                                      const EdgeInsets.only(top: 4, bottom: 80),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    8,
+                                    16,
+                                    80,
+                                  ),
                                   separatorBuilder: (BuildContext c, int i) =>
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 80),
-                                        child: Divider(
-                                          height: 1,
-                                          thickness: 1,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .outlineVariant
-                                              .withValues(alpha: 0.5),
-                                        ),
-                                      ),
+                                      const SizedBox(height: kCloudListSpacing),
                                   itemBuilder: (BuildContext c, int i) {
                                     final ConversationListItem item =
                                         _filtered[i];
@@ -872,16 +867,13 @@ class _ChatListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.surface,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
+    return CloudInkCard(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
               CircleAvatar(
                 backgroundColor: kPrimaryBlue.withValues(alpha: 0.2),
                 backgroundImage: !item.isGroup &&
@@ -969,8 +961,6 @@ class _ChatListTile extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 }

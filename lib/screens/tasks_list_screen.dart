@@ -1,12 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../main_shell_navigation.dart';
 import '../services/task_service.dart';
+import '../utils/author_embed.dart';
+import '../utils/social_time_format.dart';
 import '../widgets/city_main_navigation_bar.dart';
+import '../widgets/social_header.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'task_detail_screen.dart';
@@ -63,20 +68,28 @@ class _TasksListScreenState extends State<TasksListScreen> {
       final String t = (m['title'] as String? ?? '').toLowerCase();
       final String d = (m['description'] as String? ?? '').toLowerCase();
       final String p = (m['phone'] as String? ?? '').toLowerCase();
-      return t.contains(q) || d.contains(q) || p.contains(q);
+      final String priceStr = (m['price']?.toString() ?? '').toLowerCase();
+      return t.contains(q) ||
+          d.contains(q) ||
+          p.contains(q) ||
+          priceStr.contains(q);
     }).toList();
   }
 
-  String _formatDate(String? iso) {
-    if (iso == null) {
-      return '';
+  String? _cardPriceLabel(dynamic raw) {
+    if (raw == null) {
+      return null;
     }
-    final DateTime? d = DateTime.tryParse(iso);
-    if (d == null) {
-      return '';
+    final num? n = raw is num ? raw : num.tryParse(raw.toString());
+    if (n == null || n <= 0) {
+      return null;
     }
-    final DateTime l = d.toLocal();
-    return '${l.day.toString().padLeft(2, '0')}.${l.month.toString().padLeft(2, '0')}.${l.year}';
+    final NumberFormat fmt = NumberFormat.currency(
+      locale: 'ru',
+      symbol: '₽',
+      decimalDigits: 0,
+    );
+    return fmt.format(n);
   }
 
   Color _accentForId(String id) {
@@ -148,73 +161,65 @@ class _TasksListScreenState extends State<TasksListScreen> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Material(
-                    color: cs.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      onTap: () async {
-                        await Navigator.of(context).push<void>(
-                          MaterialPageRoute<void>(
-                            builder: (BuildContext c) => const TaskFormScreen(),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: CloudInkCard(
+                    onTap: () async {
+                      await Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (BuildContext c) => const TaskFormScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        await _load();
+                      }
+                    },
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.add_task_rounded,
+                          size: 40,
+                          color: kPrimaryBlue,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Подать объявление',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Найти исполнителя или предложить услугу',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: cs.onSurface.withValues(alpha: 0.65),
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                        if (mounted) {
-                          await _load();
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: kPrimaryBlue.withValues(alpha: 0.35),
+                        ),
+                        Container(
+                          decoration: const BoxDecoration(
+                            color: kPrimaryBlue,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.white,
                           ),
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          children: <Widget>[
-                            Icon(Icons.add_task_rounded, size: 40, color: kPrimaryBlue),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    'Подать объявление',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: cs.onSurface,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Найти исполнителя или предложить услугу',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: cs.onSurface.withValues(alpha: 0.65),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              decoration: const BoxDecoration(
-                                color: kPrimaryBlue,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.chevron_right,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
@@ -251,96 +256,107 @@ class _TasksListScreenState extends State<TasksListScreen> {
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                               itemCount: shown.length,
                               separatorBuilder: (BuildContext c, int i) =>
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: kCloudListSpacing),
                               itemBuilder: (BuildContext c, int i) {
                                 final Map<String, dynamic> m = shown[i];
                                 final String id = m['id']?.toString() ?? '';
                                 final String title = m['title'] as String? ?? '';
-                                final String created =
-                                    m['created_at'] as String? ?? '';
+                                final String authorId =
+                                    m['author_id']?.toString() ?? '';
+                                final String? priceLine = _cardPriceLabel(
+                                  m['price'],
+                                );
                                 final Color accent = _accentForId(
                                   id.isEmpty ? title : id,
                                 );
-                                return Material(
-                                  color: cs.surface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: InkWell(
-                                    onTap: () async {
-                                      await Navigator.of(context).push<void>(
-                                        MaterialPageRoute<void>(
-                                          builder: (BuildContext c) =>
-                                              TaskDetailScreen(
-                                            row: m,
-                                            accent: accent,
-                                          ),
+                                return CloudInkCard(
+                                  onTap: () async {
+                                    await Navigator.of(context).push<void>(
+                                      MaterialPageRoute<void>(
+                                        builder: (BuildContext c) =>
+                                            TaskDetailScreen(
+                                          row: m,
+                                          accent: accent,
                                         ),
-                                      );
-                                      if (mounted) {
-                                        await _load();
-                                      }
-                                    },
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Row(
-                                        children: <Widget>[
-                                          Container(
-                                            width: 48,
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              color: accent.withValues(alpha: 0.15),
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                            ),
-                                            child: Icon(
-                                              Icons.task_alt_rounded,
-                                              color: accent,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: <Widget>[
-                                                Text(
-                                                  title,
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: cs.onSurface,
-                                                  ),
-                                                ),
-                                                if (_formatDate(created)
-                                                    .isNotEmpty) ...<Widget>[
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    _formatDate(created),
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: cs.onSurfaceVariant,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                          IconButton(
-                                            onPressed: () => unawaited(_share(m)),
-                                            icon: Icon(
-                                              Icons.share_outlined,
-                                              color: cs.primary,
-                                            ),
-                                          ),
-                                          Icon(
-                                            Icons.chevron_right_rounded,
-                                            color: cs.onSurfaceVariant,
-                                          ),
-                                        ],
                                       ),
-                                    ),
+                                    );
+                                    if (mounted) {
+                                      await _load();
+                                    }
+                                  },
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    children: <Widget>[
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: accent.withValues(alpha: 0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: Icon(
+                                          Icons.task_alt_rounded,
+                                          color: accent,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: <Widget>[
+                                            if (authorId.isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 8,
+                                                ),
+                                                child: SocialHeader(
+                                                  userId: authorId,
+                                                  author: authorMapFromRow(m),
+                                                  createdAt: parseIsoUtc(
+                                                    m['created_at'] as String?,
+                                                  ),
+                                                  dense: true,
+                                                ),
+                                              ),
+                                            Text(
+                                              title,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                color: cs.onSurface,
+                                              ),
+                                            ),
+                                            if (priceLine != null) ...<Widget>[
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                priceLine,
+                                                style: const TextStyle(
+                                                  fontSize: 17,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: Color(0xFF2E7D32),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: () =>
+                                            unawaited(_share(m)),
+                                        icon: Icon(
+                                          Icons.share_outlined,
+                                          color: cs.primary,
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                    ],
                                   ),
                                 );
                               },

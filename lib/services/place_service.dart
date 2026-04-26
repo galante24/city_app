@@ -131,6 +131,56 @@ class PlaceService {
     }
   }
 
+  /// Модераторы заведения с полями профиля для UI (порядок как в [place_moderators]).
+  static Future<List<Map<String, dynamic>>> fetchPlaceModeratorsWithProfiles(
+    String placeId,
+  ) async {
+    final c = _c;
+    if (c == null) {
+      return <Map<String, dynamic>>[];
+    }
+    try {
+      final List<dynamic> modRows = await c
+          .from('place_moderators')
+          .select('user_id')
+          .eq('place_id', placeId);
+      final List<String> ids = modRows
+          .cast<Map<String, dynamic>>()
+          .map((Map<String, dynamic> m) => m['user_id']?.toString() ?? '')
+          .where((String s) => s.isNotEmpty)
+          .toList();
+      if (ids.isEmpty) {
+        return <Map<String, dynamic>>[];
+      }
+      final List<dynamic> profRows = await c
+          .from('profiles')
+          .select('id, username, first_name, last_name, avatar_url')
+          .inFilter('id', ids);
+      final Map<String, Map<String, dynamic>> byId =
+          <String, Map<String, dynamic>>{};
+      for (final dynamic p in profRows) {
+        final Map<String, dynamic> m = p as Map<String, dynamic>;
+        final String id = m['id']?.toString() ?? '';
+        if (id.isNotEmpty) {
+          byId[id] = m;
+        }
+      }
+      return ids
+          .map(
+            (String id) => <String, dynamic>{
+              'user_id': id,
+              'username': byId[id]?['username'],
+              'first_name': byId[id]?['first_name'],
+              'last_name': byId[id]?['last_name'],
+              'avatar_url': byId[id]?['avatar_url'],
+            },
+          )
+          .toList();
+    } on Exception {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
   /// Клиентская проверка: совпадает с [public.can_moderate_place] (владелец, модераторы,
   /// [profiles.is_admin]; флаг [isDbAdmin] — как у [CityDataService.isProfilesOrEmailAdmin]).
   static Future<bool> canModeratePlace(
@@ -252,10 +302,14 @@ class PlaceService {
     });
   }
 
+  /// Снять модератора (RLS: только администратор профиля; дублируем проверку на клиенте).
   static Future<void> removeModerator(String placeId, String userId) async {
     final c = _c;
     if (c == null) {
       throw StateError('Supabase не готов');
+    }
+    if (!await CityDataService.isProfilesOrEmailAdmin()) {
+      throw StateError('Только администратор может снять модератора');
     }
     await c
         .from('place_moderators')
@@ -270,11 +324,37 @@ class PlaceService {
       return null;
     }
     try {
-      return await c.from('place_posts').select().eq('id', postId).maybeSingle();
+      return await c
+          .from('place_posts')
+          .select(_placePostSelectWithAuthor)
+          .eq('id', postId)
+          .maybeSingle();
     } on Exception {
       return null;
     }
   }
+
+  static const String _placePostSelectWithAuthor = '''
+*,
+author:profiles!place_posts_author_id_fkey(
+  id,
+  first_name,
+  last_name,
+  username,
+  avatar_url
+)
+''';
+
+  static const String _placeCommentSelectWithAuthor = '''
+*,
+author:profiles!place_post_comments_user_id_fkey(
+  id,
+  first_name,
+  last_name,
+  username,
+  avatar_url
+)
+''';
 
   static Future<List<Map<String, dynamic>>> fetchPosts(String placeId) async {
     final c = _c;
@@ -284,7 +364,7 @@ class PlaceService {
     try {
       final List<dynamic> res = await c
           .from('place_posts')
-          .select()
+          .select(_placePostSelectWithAuthor)
           .eq('place_id', placeId)
           .order('created_at', ascending: false);
       return res.cast<Map<String, dynamic>>();
@@ -313,7 +393,7 @@ class PlaceService {
           if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
           'notify_subscribers': notifySubscribers,
         })
-        .select()
+        .select(_placePostSelectWithAuthor)
         .single();
     return row;
   }
@@ -372,7 +452,7 @@ class PlaceService {
     try {
       final List<dynamic> res = await c
           .from('place_post_comments')
-          .select()
+          .select(_placeCommentSelectWithAuthor)
           .eq('post_id', postId)
           .order('created_at', ascending: true);
       return res.cast<Map<String, dynamic>>();

@@ -119,7 +119,18 @@ class _PlaceNewPostScreenState extends State<PlaceNewPostScreen> {
                         },
                 ),
                 if (_image != null && !kIsWeb)
-                  Image.file(File(_image!.path), height: 160, fit: BoxFit.cover),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.file(
+                        File(_image!.path),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 CheckboxListTile(
                   value: _notify,

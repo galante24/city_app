@@ -19,6 +19,17 @@ class JobVacancyService {
 
   static const String _table = 'job_vacancies';
 
+  static const String _selectWithAuthor = '''
+*,
+author:profiles!job_vacancies_author_id_fkey(
+  id,
+  first_name,
+  last_name,
+  username,
+  avatar_url
+)
+''';
+
   static Future<List<Map<String, dynamic>>> fetchAll() async {
     final c = _c;
     if (c == null) {
@@ -27,7 +38,7 @@ class JobVacancyService {
     try {
       final List<dynamic> res = await c
           .from(_table)
-          .select()
+          .select(_selectWithAuthor)
           .order('created_at', ascending: false);
       return res.cast<Map<String, dynamic>>();
     } on Exception {

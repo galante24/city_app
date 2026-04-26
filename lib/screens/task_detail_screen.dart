@@ -1,13 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
+import '../services/task_push_service.dart';
 import '../services/task_service.dart';
+import '../utils/author_embed.dart';
+import '../utils/mention_utils.dart';
+import '../utils/social_time_format.dart';
+import '../widgets/social_comment_tile.dart';
+import '../widgets/social_header.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'user_chat_thread_screen.dart';
@@ -30,6 +38,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final ScrollController _scroll = ScrollController();
   final GlobalKey _commentsKey = GlobalKey();
   final TextEditingController _commentInput = TextEditingController();
+  final FocusNode _commentFocus = FocusNode();
 
   bool _busy = false;
   bool? _canDelete;
@@ -50,6 +59,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   void dispose() {
     _scroll.dispose();
     _commentInput.dispose();
+    _commentFocus.dispose();
     super.dispose();
   }
 
@@ -193,6 +203,20 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
   }
 
+  void _insertMention(String snippet) {
+    final String s = snippet.trim();
+    if (s.isEmpty) {
+      return;
+    }
+    final TextEditingValue v = _commentInput.value;
+    final String next = '${v.text}$s';
+    _commentInput.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    _commentFocus.requestFocus();
+  }
+
   Future<void> _sendComment() async {
     final String? me = Supabase.instance.client.auth.currentUser?.id;
     if (me == null) {
@@ -206,6 +230,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       return;
     }
     try {
+      final List<String> mentioned =
+          await resolveMentionedUserIds(t);
+      final List<String> targets = mentioned
+          .where((String id) => id != me)
+          .toList();
       await TaskService.addComment(_id, t);
       if (!mounted) {
         return;
@@ -213,6 +242,17 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       _commentInput.clear();
       FocusScope.of(context).unfocus();
       await _loadComments();
+      final String taskTitle =
+          (widget.row['title'] as String?)?.trim() ?? 'Задача';
+      if (targets.isNotEmpty) {
+        unawaited(
+          TaskPushService.notifyMentionsIfNeeded(
+            taskId: _id,
+            taskTitle: taskTitle,
+            mentionedUserIds: targets,
+          ),
+        );
+      }
     } on Object catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -220,6 +260,22 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         );
       }
     }
+  }
+
+  String? _formatTaskPrice(dynamic raw) {
+    if (raw == null) {
+      return null;
+    }
+    final num? n = raw is num ? raw : num.tryParse(raw.toString());
+    if (n == null || n <= 0) {
+      return null;
+    }
+    final NumberFormat fmt = NumberFormat.currency(
+      locale: 'ru',
+      symbol: '₽',
+      decimalDigits: 0,
+    );
+    return fmt.format(n);
   }
 
   Future<void> _delete() async {
@@ -274,6 +330,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final String desc = widget.row['description'] as String? ?? '';
     final String phoneRaw = (widget.row['phone'] as String? ?? '').trim();
     final bool hasPhone = phoneRaw.isNotEmpty;
+    final String? priceLabel = _formatTaskPrice(widget.row['price']);
     final String? me = Supabase.instance.client.auth.currentUser?.id;
     final bool isOwner = me != null && me == _authorId;
     final bool showChat = me != null && !isOwner && _authorId.isNotEmpty;
@@ -308,31 +365,80 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               children: <Widget>[
+                if (_authorId.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      decoration: cloudCardDecoration(context, radius: 18),
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: SocialHeader(
+                        userId: _authorId,
+                        author: authorMapFromRow(widget.row),
+                        createdAt: parseIsoUtc(
+                          widget.row['created_at'] as String?,
+                        ),
+                      ),
+                    ),
+                  ),
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 26,
                     fontWeight: FontWeight.w800,
                     color: cs.onSurface,
                     height: 1.2,
                   ),
                 ),
+                if (priceLabel != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text(
+                    priceLabel,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2E7D32),
+                      height: 1.1,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
-                Material(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      desc,
-                      style: TextStyle(
-                        fontSize: 15,
-                        height: 1.45,
-                        color: cs.onSurface.withValues(alpha: 0.92),
-                      ),
+                Container(
+                  decoration: cloudCardDecoration(context, radius: 18),
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    desc,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.45,
+                      color: cs.onSurface.withValues(alpha: 0.92),
                     ),
                   ),
                 ),
+                if (showCall) ...<Widget>[
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: _busy ? null : () => unawaited(_call(phoneRaw)),
+                    icon: const Icon(Icons.phone_in_talk_rounded),
+                    label: const Text(
+                      'Позвонить',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Row(
                   key: _commentsKey,
@@ -376,43 +482,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 else
                   ..._comments.map((Map<String, dynamic> m) {
                     final String uid = m['user_id']?.toString() ?? '';
-                    final String text =
-                        (m['text'] as String?) ?? '';
+                    final String text = (m['text'] as String?) ?? '';
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: Material(
-                        color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              FutureBuilder<String?>(
-                                future: ChatService.displayNameForUserId(uid),
-                                builder: (BuildContext c, AsyncSnapshot<String?> s) {
-                                  return Text(
-                                    s.data ?? 'Пользователь',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                      color: cs.primary,
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                text,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  height: 1.35,
-                                  color: cs.onSurface,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      child: SocialCommentTile(
+                        userId: uid,
+                        bodyText: text,
+                        author: authorMapFromRow(m),
+                        createdAtIso: m['created_at'] as String?,
+                        onMentionInsert: _insertMention,
                       ),
                     );
                   }),
@@ -422,16 +500,27 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: <Widget>[
                       Expanded(
-                        child: TextField(
-                          controller: _commentInput,
-                          minLines: 1,
-                          maxLines: 4,
-                          decoration: InputDecoration(
-                            hintText: 'Уточняющий вопрос…',
-                            filled: true,
-                            fillColor: cs.surface,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          decoration:
+                              cloudCardDecoration(context, radius: 14),
+                          child: TextField(
+                            controller: _commentInput,
+                            focusNode: _commentFocus,
+                            minLines: 1,
+                            maxLines: 4,
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Уточняющий вопрос… (@ник для упоминания)',
+                              filled: true,
+                              fillColor: Colors.transparent,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
                             ),
                           ),
                         ),

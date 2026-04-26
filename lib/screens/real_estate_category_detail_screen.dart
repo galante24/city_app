@@ -259,13 +259,33 @@ class _RealEstateCategoryDetailScreenState
                     elevation: 0.5,
                     borderRadius: BorderRadius.circular(16),
                     clipBehavior: Clip.antiAlias,
+                    color: cs.surfaceContainerHighest,
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
                       child: Image.network(
                         imageUrl,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.center,
+                        width: double.infinity,
+                        height: double.infinity,
                         cacheWidth: imageCacheExtentPx(context, detailImgW),
                         cacheHeight: imageCacheExtentPx(context, detailImgH),
+                        loadingBuilder: (
+                          BuildContext context,
+                          Widget child,
+                          ImageChunkEvent? progress,
+                        ) {
+                          if (progress == null) {
+                            return child;
+                          }
+                          return const Center(
+                            child: SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        },
                         errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
                             Container(
                           color: widget.accent.withValues(alpha: 0.12),

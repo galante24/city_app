@@ -2,17 +2,21 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../services/place_service.dart';
 import '../utils/image_cache_extent.dart';
+import '../utils/author_embed.dart';
 import '../utils/place_phone.dart';
+import '../utils/social_time_format.dart';
 import '../widgets/conversation_pick_list.dart';
+import '../widgets/social_comment_tile.dart';
+import '../widgets/social_header.dart';
 import '../widgets/places_style.dart';
 import 'place_assign_moderator_screen.dart';
 import 'place_edit_field_screen.dart';
@@ -788,20 +792,6 @@ class _PlacePostCardState extends State<_PlacePostCard> {
     }
   }
 
-  DateTime _postCreatedAt() {
-    final dynamic v = widget.post['created_at'];
-    if (v == null) {
-      return DateTime.now();
-    }
-    if (v is DateTime) {
-      return v;
-    }
-    if (v is String) {
-      return DateTime.tryParse(v) ?? DateTime.now();
-    }
-    return DateTime.now();
-  }
-
   Future<void> _syncLiked() async {
     final String pid = widget.post['id']?.toString() ?? '';
     if (pid.isEmpty) {
@@ -924,8 +914,7 @@ class _PlacePostCardState extends State<_PlacePostCard> {
         widget.placePhotoUrl != null && widget.placePhotoUrl!.trim().isNotEmpty
             ? widget.placePhotoUrl!.trim()
             : null;
-    final String timeLabel =
-        timeago.format(_postCreatedAt(), locale: 'ru', allowFromNow: true);
+    final String authorId = widget.post['author_id']?.toString() ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -944,56 +933,72 @@ class _PlacePostCardState extends State<_PlacePostCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: kPrimaryBlue.withValues(alpha: 0.14),
-                  backgroundImage:
-                      photo != null ? NetworkImage(photo) : null,
-                  child: photo == null
-                      ? Icon(
-                          Icons.storefront_outlined,
-                          color: kPrimaryBlue,
-                          size: 24,
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          widget.placeTitle.isEmpty
-                              ? 'Заведение'
-                              : widget.placeTitle,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            height: 1.25,
-                            color: cs.onSurface,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        timeLabel,
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.2,
-                          color: cs.onSurface.withValues(alpha: 0.55),
-                        ),
-                      ),
-                    ],
+            if (authorId.isNotEmpty)
+              SocialHeader(
+                userId: authorId,
+                author: authorMapFromRow(widget.post),
+                createdAt: parseIsoUtc(widget.post['created_at'] as String?),
+              )
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: kPrimaryBlue.withValues(alpha: 0.14),
+                    backgroundImage:
+                        photo != null ? NetworkImage(photo) : null,
+                    child: photo == null
+                        ? Icon(
+                            Icons.storefront_outlined,
+                            color: kPrimaryBlue,
+                            size: 24,
+                          )
+                        : null,
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.placeTitle.isEmpty
+                          ? 'Заведение'
+                          : widget.placeTitle,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        height: 1.25,
+                        color: cs.onSurface,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            if (widget.placeTitle.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 6),
+              Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.storefront_outlined,
+                    size: 16,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '«${widget.placeTitle}»',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (body.isNotEmpty && body != ' ') ...<Widget>[
               const SizedBox(height: 12),
               Text(
@@ -1008,58 +1013,62 @@ class _PlacePostCardState extends State<_PlacePostCard> {
             if (img != null) ...<Widget>[
               const SizedBox(height: 12),
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Image.network(
-                    img,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    width: double.infinity,
-                    height: double.infinity,
-                    cacheWidth: imageCacheExtentPx(
-                      context,
-                      MediaQuery.sizeOf(context).width - 64,
-                    ),
-                    cacheHeight: imageCacheExtentPx(
-                      context,
-                      (MediaQuery.sizeOf(context).width - 64) * 9 / 16,
-                    ),
-                    loadingBuilder: (
-                      BuildContext context,
-                      Widget child,
-                      ImageChunkEvent? progress,
-                    ) {
-                      if (progress == null) {
-                        return child;
-                      }
-                      return ColoredBox(
-                        color: cs.surfaceContainerHighest,
-                        child: const Center(
-                          child: SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                borderRadius: BorderRadius.circular(16),
+                child: LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints bc) {
+                    final double w = bc.maxWidth;
+                    double h = w / (16 / 9);
+                    if (h > 300) {
+                      h = 300;
+                    }
+                    return SizedBox(
+                      width: w,
+                      height: h,
+                      child: Image.network(
+                        img,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                        width: w,
+                        height: h,
+                        cacheWidth: imageCacheExtentPx(context, w),
+                        cacheHeight: imageCacheExtentPx(context, h),
+                        loadingBuilder: (
+                          BuildContext context,
+                          Widget child,
+                          ImageChunkEvent? progress,
+                        ) {
+                          if (progress == null) {
+                            return child;
+                          }
+                          return ColoredBox(
+                            color: cs.surfaceContainerHighest,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (
+                          BuildContext context,
+                          Object error,
+                          StackTrace? st,
+                        ) =>
+                            ColoredBox(
+                          color: kPrimaryBlue.withValues(alpha: 0.12),
+                          child: const Center(
+                            child: Icon(
+                              Icons.image_outlined,
+                              color: kPrimaryBlue,
+                              size: 40,
+                            ),
                           ),
                         ),
-                      );
-                    },
-                    errorBuilder: (
-                      BuildContext context,
-                      Object error,
-                      StackTrace? st,
-                    ) =>
-                        ColoredBox(
-                      color: kPrimaryBlue.withValues(alpha: 0.12),
-                      child: const Center(
-                        child: Icon(
-                          Icons.image_outlined,
-                          color: kPrimaryBlue,
-                          size: 40,
-                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -1177,6 +1186,7 @@ class _CommentsSheet extends StatefulWidget {
 
 class _CommentsSheetState extends State<_CommentsSheet> {
   final TextEditingController _input = TextEditingController();
+  final FocusNode _inputFocus = FocusNode();
   List<Map<String, dynamic>> _rows = <Map<String, dynamic>>[];
   bool _loading = true;
 
@@ -1189,7 +1199,22 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   @override
   void dispose() {
     _input.dispose();
+    _inputFocus.dispose();
     super.dispose();
+  }
+
+  void _insertMention(String snippet) {
+    final String s = snippet.trim();
+    if (s.isEmpty) {
+      return;
+    }
+    final TextEditingValue v = _input.value;
+    final String next = '${v.text}$s';
+    _input.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    _inputFocus.requestFocus();
   }
 
   Future<void> _load() async {
@@ -1242,28 +1267,18 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       itemCount: _rows.length,
                       separatorBuilder: (BuildContext context, int index) =>
-                          const Divider(height: 1),
+                          const SizedBox(height: 10),
                       itemBuilder: (BuildContext c, int i) {
                         final Map<String, dynamic> m = _rows[i];
                         final String uid = m['user_id']?.toString() ?? '';
                         final String text =
                             m['content'] as String? ?? '';
-                        return FutureBuilder<String?>(
-                          future: ChatService.displayNameForUserId(uid),
-                          builder: (BuildContext ctx, AsyncSnapshot<String?> s) {
-                            final String name = s.data ?? uid;
-                            return ListTile(
-                              dense: true,
-                              title: Text(
-                                name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              subtitle: Text(text),
-                            );
-                          },
+                        return SocialCommentTile(
+                          userId: uid,
+                          bodyText: text,
+                          author: authorMapFromRow(m),
+                          createdAtIso: m['created_at'] as String?,
+                          onMentionInsert: _insertMention,
                         );
                       },
                     ),
@@ -1273,12 +1288,25 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               child: Row(
                 children: <Widget>[
                   Expanded(
-                    child: TextField(
-                      controller: _input,
-                      decoration: const InputDecoration(
-                        hintText: 'Комментарий…',
-                        border: OutlineInputBorder(),
-                        isDense: true,
+                    child: Container(
+                      decoration: cloudCardDecoration(context, radius: 14),
+                      child: TextField(
+                        controller: _input,
+                        focusNode: _inputFocus,
+                        decoration: InputDecoration(
+                          hintText: 'Комментарий… (@ник)',
+                          filled: true,
+                          fillColor: Colors.transparent,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
                       ),
                     ),
                   ),

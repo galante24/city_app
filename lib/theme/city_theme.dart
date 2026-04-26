@@ -26,7 +26,7 @@ abstract final class CityTheme {
       useMaterial3: true,
       colorScheme: cs,
       pageTransitionsTheme: kCityPageTransitions,
-      scaffoldBackgroundColor: const Color(0xFFF5F5F7),
+      scaffoldBackgroundColor: kAppScaffoldBg,
       appBarTheme: const AppBarTheme(
         backgroundColor: kPrimaryBlue,
         foregroundColor: Colors.white,

@@ -49,6 +49,59 @@ Widget _chatBubbleImagePlaceholder() {
   );
 }
 
+/// Лёгкая «скелетон»-подсветка во время загрузки превью в пузырьке.
+class _ChatBubbleImageSkeleton extends StatefulWidget {
+  const _ChatBubbleImageSkeleton();
+
+  @override
+  State<_ChatBubbleImageSkeleton> createState() =>
+      _ChatBubbleImageSkeletonState();
+}
+
+class _ChatBubbleImageSkeletonState extends State<_ChatBubbleImageSkeleton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (BuildContext context, Widget? child) {
+        final double t = _controller.value;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(-1.2 + t * 2.4, 0),
+              end: Alignment(-0.2 + t * 2.4, 0),
+              colors: const <Color>[
+                Color(0xFFE8EAED),
+                Color(0xFFF2F4F7),
+                Color(0xFFE8EAED),
+              ],
+              stops: const <double>[0.35, 0.5, 0.65],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class UserChatThreadScreen extends StatefulWidget {
   const UserChatThreadScreen({
     super.key,
@@ -1459,10 +1512,11 @@ class _MessagesListState extends State<_MessagesList> {
     required bool outgoing,
   }) {
     final Size mq = MediaQuery.sizeOf(context);
-    final double maxW = mq.width * 0.7;
-    const double maxH = 300;
-    const double aspect = 16 / 9;
+    final double maxAllowed = mq.width * 0.7;
+    const double boxH = 200.0;
+    final double minW = maxAllowed >= 150 ? 150.0 : maxAllowed;
     final BorderRadius clipR = BorderRadius.circular(16);
+    final (int iw, int ih) = _bubbleImageCachePx(context, maxAllowed, boxH);
     return GestureDetector(
       onTap: () => _openChatImage(context, m, me, displayImageUrl),
       child: ClipRRect(
@@ -1470,66 +1524,60 @@ class _MessagesListState extends State<_MessagesList> {
         clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: maxW,
-            maxHeight: maxH,
+            minWidth: minW,
+            maxWidth: maxAllowed,
+            minHeight: boxH,
+            maxHeight: boxH,
           ),
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints c) {
-              final double availW = c.maxWidth;
-              final double availH = c.maxHeight;
-              double w = availW;
-              double h = w / aspect;
-              if (h > availH) {
-                h = availH;
-                w = h * aspect;
-              }
-              final (int iw, int ih) = _bubbleImageCachePx(context, w, h);
-              return SizedBox(
-                width: w,
-                height: h,
-                child: Image.network(
-                  displayImageUrl,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.center,
-                  width: w,
-                  height: h,
-                  filterQuality: FilterQuality.medium,
-                  cacheWidth: iw,
-                  cacheHeight: ih,
-                  loadingBuilder: (
-                    BuildContext _,
-                    Widget child,
-                    ImageChunkEvent? loadingProgress,
-                  ) {
-                    if (loadingProgress == null) {
-                      return child;
-                    }
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: <Widget>[
-                        _chatBubbleImagePlaceholder(),
-                        const Center(
-                          child: SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                  errorBuilder: (
-                    BuildContext context,
-                    Object error,
-                    StackTrace? st,
-                  ) =>
-                      _chatBubbleImagePlaceholder(),
-                ),
-              );
-            },
+          child: SizedBox(
+            width: maxAllowed,
+            height: boxH,
+            child: Image.network(
+              displayImageUrl,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              width: maxAllowed,
+              height: boxH,
+              filterQuality: FilterQuality.medium,
+              cacheWidth: iw,
+              cacheHeight: ih,
+              loadingBuilder: (
+                BuildContext _,
+                Widget child,
+                ImageChunkEvent? loadingProgress,
+              ) {
+                if (loadingProgress == null) {
+                  return child;
+                }
+                return const _ChatBubbleImageSkeleton();
+              },
+              errorBuilder: (
+                BuildContext context,
+                Object error,
+                StackTrace? st,
+              ) =>
+                  _chatBubbleImagePlaceholder(),
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _wrapPlaceShareBubbleTap({
+    required BuildContext context,
+    required ChatPlaceShareParsed? placeShare,
+    required bool isDeleted,
+    required bool selectingMessages,
+    required Widget child,
+  }) {
+    if (placeShare == null || isDeleted || selectingMessages) {
+      return child;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => unawaited(_openSharedPlace(context, placeShare)),
+      child: child,
     );
   }
 
@@ -1769,7 +1817,13 @@ class _MessagesListState extends State<_MessagesList> {
                                           ),
                                         ],
                                       ),
-                                      child: Column(
+                                      child: _wrapPlaceShareBubbleTap(
+                                        context: ctx,
+                                        placeShare: placeShare,
+                                        isDeleted: isDeleted,
+                                        selectingMessages:
+                                            widget.selectingMessages,
+                                        child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
@@ -1911,6 +1965,7 @@ class _MessagesListState extends State<_MessagesList> {
                                   ),
                                 ],
                               ),
+                                        ),
                                     ),
                                     if (!widget.selectingMessages && !isDeleted)
                                       Positioned(
@@ -2008,7 +2063,12 @@ class _MessagesListState extends State<_MessagesList> {
                             ),
                           ],
                         ),
-                        child: Column(
+                        child: _wrapPlaceShareBubbleTap(
+                          context: context,
+                          placeShare: placeShare,
+                          isDeleted: isDeleted,
+                          selectingMessages: widget.selectingMessages,
+                          child: Column(
                           crossAxisAlignment: mine
                               ? CrossAxisAlignment.end
                               : CrossAxisAlignment.start,
@@ -2128,6 +2188,7 @@ class _MessagesListState extends State<_MessagesList> {
                               ],
                             ),
                           ],
+                        ),
                         ),
                       ),
                       if (!widget.selectingMessages && !isDeleted)
@@ -2425,6 +2486,25 @@ Future<_ResolvedPlaceShare?> _resolvePlaceShare(
   );
 }
 
+Future<void> _openSharedPlace(
+  BuildContext context,
+  ChatPlaceShareParsed share,
+) async {
+  String openId = (share.directPlaceId ?? '').trim();
+  if (openId.isEmpty) {
+    final _ResolvedPlaceShare? r = await _resolvePlaceShare(share);
+    openId = (r?.placeId ?? '').trim();
+  }
+  if (!context.mounted || openId.isEmpty) {
+    return;
+  }
+  await Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (BuildContext c) => PlaceDetailScreen(placeId: openId),
+    ),
+  );
+}
+
 /// Превью заведения в пузырьке (шаринг из ленты мест).
 class _ChatPlaceShareBubble extends StatelessWidget {
   const _ChatPlaceShareBubble({
@@ -2463,26 +2543,22 @@ class _ChatPlaceShareBubble extends StatelessWidget {
             outgoing ? kPrimaryBlue : const Color(0xFF2E7D32);
         final Color actionCol =
             outgoing ? kPrimaryBlue.withValues(alpha: 0.9) : kPrimaryBlue;
+        final double cardMaxW = MediaQuery.sizeOf(context).width * 0.68;
+        const double thumb = 76;
 
-        return Material(
-          color: cardBg,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: borderCol),
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: 200,
+            maxWidth: cardMaxW.clamp(200, 400),
           ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: canOpen
-                ? () {
-                    Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (BuildContext c) =>
-                            PlaceDetailScreen(placeId: openId),
-                      ),
-                    );
-                  }
-                : null,
+          child: Material(
+            color: cardBg,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: borderCol),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
               child: Row(
@@ -2491,14 +2567,25 @@ class _ChatPlaceShareBubble extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: SizedBox(
-                      width: 48,
-                      height: 48,
+                      width: thumb,
+                      height: thumb,
                       child: photo != null && photo.isNotEmpty
                           ? Image.network(
                               photo,
                               fit: BoxFit.cover,
-                              cacheWidth: imageCacheExtentPx(context, 48),
-                              cacheHeight: imageCacheExtentPx(context, 48),
+                              alignment: Alignment.center,
+                              cacheWidth: imageCacheExtentPx(context, thumb),
+                              cacheHeight: imageCacheExtentPx(context, thumb),
+                              loadingBuilder: (
+                                BuildContext context,
+                                Widget child,
+                                ImageChunkEvent? progress,
+                              ) {
+                                if (progress == null) {
+                                  return child;
+                                }
+                                return const _ChatBubbleImageSkeleton();
+                              },
                               errorBuilder:
                                   (BuildContext c, Object e, StackTrace? st) =>
                                       ColoredBox(
@@ -2506,7 +2593,7 @@ class _ChatPlaceShareBubble extends StatelessWidget {
                                 child: const Icon(
                                   Icons.store_rounded,
                                   color: kPrimaryBlue,
-                                  size: 26,
+                                  size: 32,
                                 ),
                               ),
                             )
@@ -2515,7 +2602,7 @@ class _ChatPlaceShareBubble extends StatelessWidget {
                               child: const Icon(
                                 Icons.store_rounded,
                                 color: kPrimaryBlue,
-                                size: 26,
+                                size: 32,
                               ),
                             ),
                     ),

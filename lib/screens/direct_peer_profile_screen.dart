@@ -178,11 +178,35 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
                                 return Image.network(
                                   photos[i],
                                   fit: BoxFit.cover,
+                                  alignment: Alignment.center,
                                   cacheWidth: imageCacheExtentPx(ctx, bannerW),
                                   cacheHeight: imageCacheExtentPx(ctx, bannerH),
+                                  loadingBuilder: (
+                                    BuildContext context,
+                                    Widget child,
+                                    ImageChunkEvent? progress,
+                                  ) {
+                                    if (progress == null) {
+                                      return child;
+                                    }
+                                    return ColoredBox(
+                                      color: cs.surfaceContainerHighest,
+                                      child: const Center(
+                                        child: SizedBox(
+                                          width: 32,
+                                          height: 32,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                   errorBuilder:
                                       (BuildContext _, Object _, StackTrace? _) {
-                                    return ColoredBox(color: cs.surfaceContainerHigh);
+                                    return ColoredBox(
+                                      color: cs.surfaceContainerHigh,
+                                    );
                                   },
                                 );
                               },
@@ -561,8 +585,30 @@ class _MediaTab extends StatelessWidget {
                   Image.network(
                     it.url,
                     fit: BoxFit.cover,
+                    alignment: Alignment.center,
                     cacheWidth: imageCacheExtentPx(c, thumb),
                     cacheHeight: imageCacheExtentPx(c, thumb),
+                    loadingBuilder: (
+                      BuildContext context,
+                      Widget child,
+                      ImageChunkEvent? progress,
+                    ) {
+                      if (progress == null) {
+                        return child;
+                      }
+                      return ColoredBox(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        child: const Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      );
+                    },
                     errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
                         ColoredBox(
                       color:

@@ -137,10 +137,17 @@ class _PlaceCreateScreenState extends State<PlaceCreateScreen> {
                   onTap: _saving ? null : () => _pick(true),
                 ),
                 if (_cover != null && !kIsWeb)
-                  Image.file(
-                    File(_cover!.path),
-                    height: 120,
-                    fit: BoxFit.cover,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image.file(
+                        File(_cover!.path),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                      ),
+                    ),
                   ),
                 const SizedBox(height: 8),
                 ListTile(
@@ -149,7 +156,19 @@ class _PlaceCreateScreenState extends State<PlaceCreateScreen> {
                   onTap: _saving ? null : () => _pick(false),
                 ),
                 if (_photo != null && !kIsWeb)
-                  Image.file(File(_photo!.path), height: 100, fit: BoxFit.cover),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      width: 100,
+                      height: 100,
+                      child: Image.file(
+                        File(_photo!.path),
+                        fit: BoxFit.cover,
+                        width: 100,
+                        height: 100,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 32),
                 FilledButton(
                   onPressed: _saving ? null : _submit,

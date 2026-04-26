@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
+import '../utils/author_embed.dart';
+import '../utils/social_time_format.dart';
+import '../widgets/social_header.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/vacancy_card.dart';
 import '../widgets/weather_app_bar_action.dart';
@@ -210,6 +214,7 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     final String? imageUrl = widget.row['image_url'] as String?;
     final String? me = Supabase.instance.client.auth.currentUser?.id;
     final bool isOwner = me != null && me == _authorId;
+    final String authorId = _authorId;
     final ColorScheme cs = Theme.of(context).colorScheme;
     final Color textPrimary = cs.onSurface;
     final Color textSecondary = cs.onSurfaceVariant;
@@ -241,9 +246,24 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: <Widget>[
+          if (authorId.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Container(
+                decoration: cloudCardDecoration(context, radius: 18),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: SocialHeader(
+                  userId: authorId,
+                  author: authorMapFromRow(widget.row),
+                  createdAt: parseIsoUtc(widget.row['created_at'] as String?),
+                ),
+              ),
+            ),
           VacancyCoverImage(
             imageUrl: imageUrl,
             borderRadius: 16,
+            fit: BoxFit.contain,
+            letterboxColor: cs.surfaceContainerHighest,
           ),
           const SizedBox(height: 16),
           Text(

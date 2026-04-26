@@ -283,11 +283,48 @@ class _PlaceMenuManageScreenState extends State<PlaceMenuManageScreen> {
                                                           ? Image.network(
                                                               photo,
                                                               fit: BoxFit.cover,
+                                                              alignment:
+                                                                  Alignment.center,
                                                               cacheWidth:
                                                                   imageCacheExtentPx(
                                                                 context,
-                                                                144,
+                                                                72,
                                                               ),
+                                                              cacheHeight:
+                                                                  imageCacheExtentPx(
+                                                                context,
+                                                                72,
+                                                              ),
+                                                              loadingBuilder: (
+                                                                BuildContext context,
+                                                                Widget child,
+                                                                ImageChunkEvent?
+                                                                    progress,
+                                                              ) {
+                                                                if (progress ==
+                                                                    null) {
+                                                                  return child;
+                                                                }
+                                                                return ColoredBox(
+                                                                  color: Theme.of(
+                                                                    context,
+                                                                  ).colorScheme
+                                                                      .surfaceContainerHighest,
+                                                                  child:
+                                                                      const Center(
+                                                                    child:
+                                                                        SizedBox(
+                                                                      width: 22,
+                                                                      height: 22,
+                                                                      child:
+                                                                          CircularProgressIndicator(
+                                                                        strokeWidth:
+                                                                            2,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              },
                                                               errorBuilder:
                                                                   (
                                                                 BuildContext context,

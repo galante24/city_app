@@ -7,33 +7,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../services/city_data_service.dart';
 import '../utils/image_cache_extent.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
-
-List<BoxShadow> cardFloatingShadows(BuildContext context) {
-  final double a = Theme.of(context).brightness == Brightness.dark
-      ? 0.35
-      : 0.06;
-  final double a2 = Theme.of(context).brightness == Brightness.dark
-      ? 0.22
-      : 0.04;
-  return <BoxShadow>[
-    BoxShadow(
-      color: const Color(0xFF0A0A0A).withValues(alpha: a),
-      blurRadius: 20,
-      offset: const Offset(0, 6),
-    ),
-    BoxShadow(
-      color: const Color(0xFF0A0A0A).withValues(alpha: a2),
-      blurRadius: 4,
-      offset: const Offset(0, 1),
-    ),
-  ];
-}
 
 enum NewsCategory { smi, administration, discussion }
 
@@ -287,10 +267,7 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  Widget buildCategoryFeed(
-    List<SocialPost> items,
-    List<BoxShadow> cardShadows,
-  ) {
+  Widget buildCategoryFeed(List<SocialPost> items) {
     if (items.isEmpty) {
       return Center(
         child: Padding(
@@ -311,12 +288,11 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       itemCount: items.length,
       separatorBuilder: (BuildContext context, int index) =>
-          const SizedBox(height: 20),
+          const SizedBox(height: kCloudListSpacing),
       itemBuilder: (BuildContext context, int index) {
         final p = items[index];
         return SocialNewsCard(
           post: p,
-          cardShadows: cardShadows,
           onLike: () {
             setState(() {
               if (p.isLiked) {
@@ -655,8 +631,6 @@ class _HomeScreenState extends State<HomeScreen>
                 newsSnap.data ?? <Map<String, dynamic>>[];
             final List<SocialPost> posts = raw.map(socialPostFromMap).toList();
             final _PostsBuckets byCat = _splitPostsByCategory(posts);
-            final List<BoxShadow> newsCardShadows = cardFloatingShadows(context);
-
             return Scaffold(
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               floatingActionButton: isAdmin
@@ -719,22 +693,13 @@ class _HomeScreenState extends State<HomeScreen>
                       physics: const BouncingScrollPhysics(),
                       children: <Widget>[
                         _KeepAliveFeed(
-                          child: buildCategoryFeed(
-                            byCat.smi,
-                            newsCardShadows,
-                          ),
+                          child: buildCategoryFeed(byCat.smi),
                         ),
                         _KeepAliveFeed(
-                          child: buildCategoryFeed(
-                            byCat.administration,
-                            newsCardShadows,
-                          ),
+                          child: buildCategoryFeed(byCat.administration),
                         ),
                         _KeepAliveFeed(
-                          child: buildCategoryFeed(
-                            byCat.discussion,
-                            newsCardShadows,
-                          ),
+                          child: buildCategoryFeed(byCat.discussion),
                         ),
                       ],
                     ),
@@ -772,14 +737,12 @@ class SocialNewsCard extends StatelessWidget {
   const SocialNewsCard({
     super.key,
     required this.post,
-    required this.cardShadows,
     required this.onLike,
     required this.onComment,
     required this.onShare,
   });
 
   final SocialPost post;
-  final List<BoxShadow> cardShadows;
   final VoidCallback onLike;
   final VoidCallback onComment;
   final VoidCallback onShare;
@@ -789,17 +752,9 @@ class SocialNewsCard extends StatelessWidget {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final Color onSurface = cs.onSurface;
     final Color muted = onSurface.withValues(alpha: 0.65);
-    final double feedImageW =
-        MediaQuery.sizeOf(context).width - 2 * kScreenHorizontalPadding;
-    final int imgCacheW = imageCacheExtentPx(context, feedImageW);
-    final int imgCacheH = imageCacheExtentPx(context, 260);
     return RepaintBoundary(
       child: Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: cardShadows,
-        ),
+        decoration: cloudCardDecoration(context),
         clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -875,31 +830,65 @@ class SocialNewsCard extends StatelessWidget {
             if (post.mediaType == 'video')
               InlineVideoBlock(url: post.mediaUrl!)
             else
-              Image.network(
-                post.mediaUrl!,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                cacheWidth: imgCacheW,
-                cacheHeight: imgCacheH,
-                errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                    _brokenImagePlaceholder(context),
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) {
-                    return child;
-                  }
-                  return SizedBox(
-                    height: 220,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: progress.expectedTotalBytes != null
-                            ? progress.cumulativeBytesLoaded /
-                                  progress.expectedTotalBytes!
-                            : null,
-                        color: kPrimaryBlue,
-                      ),
-                    ),
-                  );
-                },
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: LayoutBuilder(
+                    builder: (BuildContext context, BoxConstraints bc) {
+                      final double w = bc.maxWidth;
+                      double h = w / (16 / 9);
+                      if (h > 300) {
+                        h = 300;
+                      }
+                      return SizedBox(
+                        width: w,
+                        height: h,
+                        child: Image.network(
+                          post.mediaUrl!,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          width: w,
+                          height: h,
+                          cacheWidth: imageCacheExtentPx(context, w),
+                          cacheHeight: imageCacheExtentPx(context, h),
+                          errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
+                              ColoredBox(
+                            color: cs.surfaceContainerHighest,
+                            child: Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                size: 48,
+                                color: cs.onSurface.withValues(alpha: 0.45),
+                              ),
+                            ),
+                          ),
+                          loadingBuilder: (
+                            BuildContext context,
+                            Widget child,
+                            ImageChunkEvent? progress,
+                          ) {
+                            if (progress == null) {
+                              return child;
+                            }
+                            return ColoredBox(
+                              color: cs.surfaceContainerHighest,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  value: progress.expectedTotalBytes != null
+                                      ? progress.cumulativeBytesLoaded /
+                                            progress.expectedTotalBytes!
+                                      : null,
+                                  color: kPrimaryBlue,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
           ],
           Padding(
@@ -932,21 +921,6 @@ class SocialNewsCard extends StatelessWidget {
     ),
     );
   }
-}
-
-Widget _brokenImagePlaceholder(BuildContext context) {
-  final ColorScheme cs = Theme.of(context).colorScheme;
-  return Container(
-    height: 200,
-    color: cs.surfaceContainerHighest,
-    child: Center(
-      child: Icon(
-        Icons.broken_image_outlined,
-        size: 48,
-        color: cs.onSurface.withValues(alpha: 0.45),
-      ),
-    ),
-  );
 }
 
 class ActionChipPill extends StatelessWidget {

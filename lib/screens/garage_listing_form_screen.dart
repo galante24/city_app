@@ -292,12 +292,14 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
                       onTap: _saving ? null : _pickImage,
                       child: Container(
                         width: double.infinity,
-                        height: 160,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: frameOutline),
                         ),
-                        child: _previewBlock(),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: _previewBlock(),
+                        ),
                       ),
                     ),
                   ),
@@ -467,7 +469,7 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
             s.data!,
             fit: BoxFit.cover,
             width: double.infinity,
-            height: 160,
+            height: double.infinity,
           );
         },
       );
@@ -476,7 +478,7 @@ class _GarageListingFormScreenState extends State<GarageListingFormScreen> {
       File(f.path),
       fit: BoxFit.cover,
       width: double.infinity,
-      height: 160,
+      height: double.infinity,
     );
   }
 }

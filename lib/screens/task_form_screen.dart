@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../services/task_service.dart';
 import '../utils/capitalize_first_formatter.dart';
@@ -27,35 +28,37 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _title = TextEditingController();
   final TextEditingController _description = TextEditingController();
-  final TextEditingController _phone = TextEditingController();
+  final TextEditingController _phone = TextEditingController(text: '+7');
+  final TextEditingController _price = TextEditingController();
 
   bool _saving = false;
-  static const double _radius = 14;
+  static const double _radius = 16;
 
-  InputDecoration _decoration(
+  InputDecoration _cloudFieldDecoration(
     BuildContext context,
     String label, {
     String? hint,
     Widget? prefixIcon,
+    String? helperText,
+    int? helperMaxLines,
   }) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final Color outline = cs.outline.withValues(
-      alpha: Theme.of(context).brightness == Brightness.dark ? 0.4 : 0.35,
-    );
     return InputDecoration(
       labelText: label,
       hintText: hint,
       prefixIcon: prefixIcon,
+      helperText: helperText,
+      helperMaxLines: helperMaxLines,
       filled: true,
-      fillColor: cs.surface,
+      fillColor: Colors.transparent,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_radius),
-        borderSide: BorderSide(color: outline),
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_radius),
-        borderSide: BorderSide(color: outline),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_radius),
@@ -65,6 +68,15 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         borderRadius: BorderRadius.circular(_radius),
         borderSide: const BorderSide(color: Color(0xFFE53935)),
       ),
+      labelStyle: TextStyle(color: cs.onSurfaceVariant),
+    );
+  }
+
+  Widget _cloudField(BuildContext context, {required Widget child}) {
+    return Container(
+      decoration: cloudCardDecoration(context, radius: _radius),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: child,
     );
   }
 
@@ -80,6 +92,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     _title.dispose();
     _description.dispose();
     _phone.dispose();
+    _price.dispose();
     super.dispose();
   }
 
@@ -116,11 +129,22 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
   String? _phoneOptional(String? v) {
     final String t = v?.trim() ?? '';
-    if (t.isEmpty) {
+    if (t.isEmpty || t == '+7') {
       return null;
     }
     if (!RegExp(r'^\+7\d{10}$').hasMatch(t)) {
       return 'Номер: +7 и 10 цифр или оставьте пустым';
+    }
+    return null;
+  }
+
+  String? _priceOptional(String? v) {
+    final String t = v?.trim() ?? '';
+    if (t.isEmpty) {
+      return null;
+    }
+    if (int.tryParse(t) == null) {
+      return 'Только целое число';
     }
     return null;
   }
@@ -132,10 +156,15 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     setState(() => _saving = true);
     try {
       final String p = _phone.text.trim();
+      final String pNorm = (p == '+7' || p.isEmpty) ? '' : p;
+      final String pr = _price.text.trim();
+      final double? priceVal =
+          pr.isEmpty ? null : double.tryParse(pr);
       await TaskService.insert(
         title: _title.text,
         description: _description.text,
-        phone: p.isEmpty ? null : p,
+        phone: pNorm.isEmpty ? null : pNorm,
+        price: priceVal,
       );
       if (mounted) {
         Navigator.of(context).pop();
@@ -153,7 +182,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
         SnackBar(
           content: Text(
             missing
-                ? 'Таблица tasks не найдена. Выполните миграцию 026 (supabase db push). ${_postgrestLine(e)}'
+                ? 'Таблица tasks не найдена. Выполните миграции 026 и 031 (supabase db push). ${_postgrestLine(e)}'
                 : _postgrestLine(e),
           ),
           duration: const Duration(seconds: 8),
@@ -199,46 +228,79 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _title,
-                    decoration: _decoration(context, 'Заголовок'),
-                    minLines: 1,
-                    maxLines: 3,
-                    textCapitalization: TextCapitalization.sentences,
-                    inputFormatters: <TextInputFormatter>[
-                      CapitalizeFirstFormatter(),
-                    ],
-                    validator: _req,
-                    enabled: !_saving,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _description,
-                    decoration: _decoration(context, 'Описание'),
-                    minLines: 4,
-                    maxLines: 12,
-                    validator: _req,
-                    enabled: !_saving,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _phone,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.allow(RegExp(r'[+\d]*')),
-                      LengthLimitingTextInputFormatter(12),
-                    ],
-                    decoration: _decoration(
-                      context,
-                      'Номер телефона',
-                      hint: '+7 (не обязательно)',
-                      prefixIcon: const Icon(Icons.phone_rounded, size: 22),
-                    ).copyWith(
-                      helperText: 'Необязательно: для кнопки «Позвонить» в объявлении',
-                      helperMaxLines: 2,
+                  _cloudField(
+                    context,
+                    child: TextFormField(
+                      controller: _title,
+                      decoration: _cloudFieldDecoration(context, 'Заголовок'),
+                      minLines: 1,
+                      maxLines: 3,
+                      textCapitalization: TextCapitalization.sentences,
+                      inputFormatters: <TextInputFormatter>[
+                        CapitalizeFirstFormatter(),
+                      ],
+                      validator: _req,
+                      enabled: !_saving,
                     ),
-                    validator: _phoneOptional,
-                    enabled: !_saving,
+                  ),
+                  const SizedBox(height: 14),
+                  _cloudField(
+                    context,
+                    child: TextFormField(
+                      controller: _description,
+                      decoration: _cloudFieldDecoration(context, 'Описание'),
+                      minLines: 4,
+                      maxLines: 12,
+                      validator: _req,
+                      enabled: !_saving,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _cloudField(
+                    context,
+                    child: TextFormField(
+                      controller: _price,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      decoration: _cloudFieldDecoration(
+                        context,
+                        'Сумма вознаграждения',
+                        hint: 'Необязательно, ₽',
+                        prefixIcon: Icon(
+                          Icons.currency_ruble_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 22,
+                        ),
+                        helperText: 'Только цифры; можно оставить пустым',
+                      ),
+                      validator: _priceOptional,
+                      enabled: !_saving,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _cloudField(
+                    context,
+                    child: TextFormField(
+                      controller: _phone,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.allow(RegExp(r'[+\d]*')),
+                        LengthLimitingTextInputFormatter(12),
+                      ],
+                      decoration: _cloudFieldDecoration(
+                        context,
+                        'Номер телефона',
+                        hint: '+7XXXXXXXXXX',
+                        prefixIcon: const Icon(Icons.phone_rounded, size: 22),
+                        helperText:
+                            'Необязательно: для кнопки «Позвонить» в объявлении',
+                        helperMaxLines: 2,
+                      ),
+                      validator: _phoneOptional,
+                      enabled: !_saving,
+                    ),
                   ),
                   const SizedBox(height: 28),
                   FilledButton(

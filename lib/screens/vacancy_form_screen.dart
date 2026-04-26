@@ -266,12 +266,14 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
                 onTap: _saving ? null : _pickImage,
                 child: Container(
                   width: double.infinity,
-                  height: 160,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: const Color(0xFFDDDFE2)),
                   ),
-                  child: _previewBlock(),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: _previewBlock(),
+                  ),
                 ),
               ),
             ),
@@ -420,7 +422,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
             s.data!,
             fit: BoxFit.cover,
             width: double.infinity,
-            height: 160,
+            height: double.infinity,
           );
         },
       );
@@ -429,7 +431,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
       File(f.path),
       fit: BoxFit.cover,
       width: double.infinity,
-      height: 160,
+      height: double.infinity,
     );
   }
 }

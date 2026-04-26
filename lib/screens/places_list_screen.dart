@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../services/city_data_service.dart';
 import '../services/place_service.dart';
+import '../utils/image_cache_extent.dart';
 import '../widgets/place_card.dart';
 import '../widgets/places_style.dart';
 import '../widgets/soft_tab_header.dart';
@@ -198,6 +200,26 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
     }
   }
 
+  Future<void> _openRemoveModerator(String placeId, String title) async {
+    final bool admin = await CityDataService.isProfilesOrEmailAdmin();
+    if (!mounted) {
+      return;
+    }
+    if (!admin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Доступно только администратору')),
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext c) => _RemovePlaceModeratorsDialog(
+        placeId: placeId,
+        placeTitle: title,
+      ),
+    );
+  }
+
   Future<void> _onPlaceAdminMenu(
     String value,
     String id,
@@ -208,6 +230,8 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
       await _openEditBasic(id, title, description);
     } else if (value == 'moderator') {
       await _openAssignModerator(id, title);
+    } else if (value == 'remove_moderator') {
+      await _openRemoveModerator(id, title);
     } else if (value == 'rename') {
       await _quickRenamePlace(id, title);
     } else if (value == 'delete') {
@@ -304,250 +328,231 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                 m['photo_url'] as String? ?? m['cover_url'] as String?;
                             final bool sub = _subscribed.contains(id);
                             return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Material(
-                                color: cs.surface,
-                                borderRadius: BorderRadius.circular(16),
-                                clipBehavior: Clip.antiAlias,
-                                child: InkWell(
-                                  onTap: id.isEmpty
-                                      ? null
-                                      : () async {
-                                          await Navigator.of(context)
-                                              .push<void>(
-                                            MaterialPageRoute<void>(
-                                              builder: (BuildContext c) =>
-                                                  PlaceDetailScreen(
-                                                placeId: id,
-                                              ),
+                              padding: const EdgeInsets.only(
+                                bottom: kCloudListSpacing,
+                              ),
+                              child: CloudInkCard(
+                                radius: 24,
+                                onTap: id.isEmpty
+                                    ? null
+                                    : () async {
+                                        await Navigator.of(context).push<void>(
+                                          MaterialPageRoute<void>(
+                                            builder: (BuildContext c) =>
+                                                PlaceDetailScreen(
+                                              placeId: id,
                                             ),
-                                          );
-                                          if (mounted) {
-                                            await _load();
-                                          }
-                                        },
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        PlaceListCoverImage(
-                                          imageUrl: photo != null &&
-                                                  photo.isNotEmpty
-                                              ? photo
-                                              : null,
-                                          width: 108,
-                                          borderRadius: 12,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: <Widget>[
-                                              Row(
+                                          ),
+                                        );
+                                        if (mounted) {
+                                          await _load();
+                                        }
+                                      },
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: <Widget>[
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        14,
+                                        14,
+                                        14,
+                                        14,
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          PlaceListSquareThumb(
+                                            imageUrl: photo != null &&
+                                                    photo.isNotEmpty
+                                                ? photo
+                                                : null,
+                                            size: 80,
+                                            borderRadius: 16,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Padding(
+                                              padding: EdgeInsets.only(
+                                                right:
+                                                    _isAdmin && id.isNotEmpty
+                                                        ? 36
+                                                        : 0,
+                                              ),
+                                              child: Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: <Widget>[
-                                                  Expanded(
-                                                    child: Text(
-                                                      title,
-                                                      maxLines: 2,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        fontSize: 17,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        color: cs.onSurface,
-                                                      ),
+                                                  Text(
+                                                    title,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      fontSize: 19,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      height: 1.2,
+                                                      letterSpacing: -0.2,
+                                                      color: cs.onSurface,
                                                     ),
                                                   ),
-                                                  if (_isAdmin &&
-                                                      id.isNotEmpty)
-                                                    PopupMenuButton<String>(
-                                                      tooltip: 'Управление',
-                                                      position:
-                                                          PopupMenuPosition
-                                                              .under,
-                                                      offset:
-                                                          const Offset(0, 4),
-                                                      padding: EdgeInsets.zero,
-                                                      constraints:
-                                                          const BoxConstraints(
-                                                        minWidth: 40,
-                                                        minHeight: 40,
+                                                  if (desc.isNotEmpty) ...<Widget>[
+                                                    const SizedBox(height: 6),
+                                                    Text(
+                                                      desc,
+                                                      maxLines: 2,
+                                                      overflow: TextOverflow
+                                                          .ellipsis,
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        height: 1.35,
+                                                        color: cs
+                                                            .onSurfaceVariant,
                                                       ),
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(
-                                                          14,
-                                                        ),
-                                                      ),
-                                                      color: cs
-                                                          .surfaceContainerHighest,
-                                                      icon: Icon(
-                                                        Icons
-                                                            .settings_outlined,
-                                                        size: 22,
-                                                        color: cs.primary,
-                                                      ),
-                                                      onSelected:
-                                                          (String v) {
-                                                        unawaited(
-                                                          _onPlaceAdminMenu(
-                                                            v,
-                                                            id,
-                                                            title,
-                                                            desc,
-                                                          ),
-                                                        );
-                                                      },
-                                                      itemBuilder:
-                                                          (BuildContext ctx) {
-                                                        return <PopupMenuEntry<
-                                                            String>>[
-                                                          PopupMenuItem<
-                                                              String>(
-                                                            value: 'edit',
-                                                            child: Row(
-                                                              children:
-                                                                  <Widget>[
-                                                                Icon(
-                                                                  Icons
-                                                                      .edit_outlined,
-                                                                  size: 22,
-                                                                  color: cs
-                                                                      .onSurface,
-                                                                ),
-                                                                const SizedBox(
-                                                                  width: 12,
-                                                                ),
-                                                                const Text(
-                                                                  'Редактировать',
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          PopupMenuItem<
-                                                              String>(
-                                                            value: 'moderator',
-                                                            child: Row(
-                                                              children:
-                                                                  <Widget>[
-                                                                Icon(
-                                                                  Icons
-                                                                      .person_add_outlined,
-                                                                  size: 22,
-                                                                  color: cs
-                                                                      .onSurface,
-                                                                ),
-                                                                const SizedBox(
-                                                                  width: 12,
-                                                                ),
-                                                                const Text(
-                                                                  'Назначить модератора',
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          PopupMenuItem<
-                                                              String>(
-                                                            value: 'rename',
-                                                            child: Row(
-                                                              children:
-                                                                  <Widget>[
-                                                                Icon(
-                                                                  Icons
-                                                                      .drive_file_rename_outline,
-                                                                  size: 22,
-                                                                  color: cs
-                                                                      .onSurface,
-                                                                ),
-                                                                const SizedBox(
-                                                                  width: 12,
-                                                                ),
-                                                                const Text(
-                                                                  'Переименовать',
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuDivider(),
-                                                          PopupMenuItem<
-                                                              String>(
-                                                            value: 'delete',
-                                                            child: Row(
-                                                              children:
-                                                                  <Widget>[
-                                                                const Icon(
-                                                                  Icons
-                                                                      .delete_outline,
-                                                                  size: 22,
-                                                                  color: Color(
-                                                                    0xFFC62828,
-                                                                  ),
-                                                                ),
-                                                                const SizedBox(
-                                                                  width: 12,
-                                                                ),
-                                                                Text(
-                                                                  'Удалить заведение',
-                                                                  style:
-                                                                      TextStyle(
-                                                                    color: Colors
-                                                                        .red
-                                                                        .shade800,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w600,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ];
-                                                      },
                                                     ),
+                                                  ],
+                                                  const SizedBox(height: 12),
+                                                  _PlaceSubscribeControl(
+                                                    subscribed: sub,
+                                                    enabled: id.isNotEmpty,
+                                                    onPressed: () =>
+                                                        unawaited(
+                                                      _toggleSubscribe(id),
+                                                    ),
+                                                  ),
                                                 ],
                                               ),
-                                              if (desc.isNotEmpty) ...<Widget>[
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  desc,
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 13,
-                                                    height: 1.35,
-                                                    color: cs.onSurfaceVariant,
-                                                  ),
-                                                ),
-                                              ],
-                                              const SizedBox(height: 10),
-                                              _SubscribeChip(
-                                                subscribed: sub,
-                                                compact: _isAdmin,
-                                                onTap: id.isEmpty
-                                                    ? null
-                                                    : () => unawaited(
-                                                          _toggleSubscribe(id),
-                                                        ),
-                                              ),
-                                            ],
+                                            ),
                                           ),
-                                        ),
-                                        Icon(
-                                          Icons.chevron_right_rounded,
-                                          color: cs.onSurfaceVariant,
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                    if (_isAdmin && id.isNotEmpty)
+                                      Positioned(
+                                        top: 4,
+                                        right: 2,
+                                        child: PopupMenuButton<String>(
+                                          tooltip: 'Управление',
+                                          position: PopupMenuPosition.under,
+                                          offset: const Offset(0, 4),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 36,
+                                            minHeight: 36,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          color: cs.surfaceContainerHighest,
+                                          icon: Icon(
+                                            Icons.settings_outlined,
+                                            size: 20,
+                                            color: cs.onSurfaceVariant
+                                                .withValues(alpha: 0.45),
+                                          ),
+                                          onSelected: (String v) {
+                                            unawaited(
+                                              _onPlaceAdminMenu(
+                                                v,
+                                                id,
+                                                title,
+                                                desc,
+                                              ),
+                                            );
+                                          },
+                                          itemBuilder: (BuildContext ctx) {
+                                            return <PopupMenuEntry<String>>[
+                                              PopupMenuItem<String>(
+                                                value: 'edit',
+                                                child: Row(
+                                                  children: <Widget>[
+                                                    Icon(
+                                                      Icons.edit_outlined,
+                                                      size: 22,
+                                                      color: cs.onSurface,
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    const Text('Редактировать'),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem<String>(
+                                                value: 'moderator',
+                                                child: Row(
+                                                  children: <Widget>[
+                                                    Icon(
+                                                      Icons.person_add_outlined,
+                                                      size: 22,
+                                                      color: cs.onSurface,
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    const Text(
+                                                      'Назначить модератора',
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem<String>(
+                                                value: 'remove_moderator',
+                                                child: Row(
+                                                  children: <Widget>[
+                                                    Icon(
+                                                      Icons.person_remove,
+                                                      size: 22,
+                                                      color: cs.onSurface,
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    const Text(
+                                                      'Убрать модератора',
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem<String>(
+                                                value: 'rename',
+                                                child: Row(
+                                                  children: <Widget>[
+                                                    Icon(
+                                                      Icons
+                                                          .drive_file_rename_outline,
+                                                      size: 22,
+                                                      color: cs.onSurface,
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    const Text('Переименовать'),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuDivider(),
+                                              PopupMenuItem<String>(
+                                                value: 'delete',
+                                                child: Row(
+                                                  children: <Widget>[
+                                                    const Icon(
+                                                      Icons.delete_outline,
+                                                      size: 22,
+                                                      color: Color(0xFFC62828),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Text(
+                                                      'Удалить заведение',
+                                                      style: TextStyle(
+                                                        color: Colors
+                                                            .red.shade800,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ];
+                                          },
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             );
@@ -562,93 +567,413 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
   }
 }
 
-class _SubscribeChip extends StatefulWidget {
-  const _SubscribeChip({
+class _PlaceSubscribeControl extends StatelessWidget {
+  const _PlaceSubscribeControl({
     required this.subscribed,
-    this.onTap,
-    this.compact = false,
+    required this.enabled,
+    required this.onPressed,
   });
 
   final bool subscribed;
-  final VoidCallback? onTap;
-  final bool compact;
-
-  @override
-  State<_SubscribeChip> createState() => _SubscribeChipState();
-}
-
-class _SubscribeChipState extends State<_SubscribeChip>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 220),
-  );
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  final bool enabled;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: Tween<double>(begin: 1, end: 0.94).animate(
-        CurvedAnimation(parent: _c, curve: Curves.easeOut),
-      ),
-      child: Material(
-        color: widget.subscribed
-            ? kPrimaryBlue.withValues(alpha: 0.12)
-            : kPrimaryBlue,
-        borderRadius: BorderRadius.circular(999),
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    if (!enabled) {
+      return const SizedBox.shrink();
+    }
+    if (subscribed) {
+      return Material(
+        color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: widget.onTap == null
-              ? null
-              : () async {
-                  await _c.forward();
-                  _c.reverse();
-                  widget.onTap!();
-                },
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(10),
           child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.compact ? 10 : 14,
-              vertical: widget.compact ? 6 : 8,
-            ),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              transitionBuilder: (Widget child, Animation<double> a) {
-                return FadeTransition(
-                  opacity: a,
-                  child: ScaleTransition(scale: a, child: child),
-                );
-              },
-              child: Row(
-                key: ValueKey<bool>(widget.subscribed),
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(
-                    widget.subscribed
-                        ? Icons.notifications_active_rounded
-                        : Icons.notifications_none_rounded,
-                    size: widget.compact ? 16 : 18,
-                    color: widget.subscribed ? kPrimaryBlue : Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  Icons.notifications_active_rounded,
+                  size: 18,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.75),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Вы подписаны',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.88),
                   ),
-                  SizedBox(width: widget.compact ? 5 : 6),
-                  Text(
-                    widget.subscribed ? 'Вы подписаны' : 'Подписаться',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: widget.compact ? 12 : 13,
-                      color: widget.subscribed ? kPrimaryBlue : Colors.white,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+        ),
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.add_rounded, size: 18),
+        label: const Text('Подписаться'),
+        style: FilledButton.styleFrom(
+          backgroundColor: kPrimaryBlue.withValues(alpha: 0.12),
+          foregroundColor: kPrimaryBlue,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
     );
   }
 }
+
+class _RemovePlaceModeratorsDialog extends StatefulWidget {
+  const _RemovePlaceModeratorsDialog({
+    required this.placeId,
+    required this.placeTitle,
+  });
+
+  final String placeId;
+  final String placeTitle;
+
+  @override
+  State<_RemovePlaceModeratorsDialog> createState() =>
+      _RemovePlaceModeratorsDialogState();
+}
+
+class _RemovePlaceModeratorsDialogState
+    extends State<_RemovePlaceModeratorsDialog> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  void _reload() {
+    setState(() {
+      _future = PlaceService.fetchPlaceModeratorsWithProfiles(widget.placeId);
+    });
+  }
+
+  String _label(Map<String, dynamic> row) {
+    final String? u = row['username'] as String?;
+    if (u != null && u.trim().isNotEmpty) {
+      return '@${u.trim()}';
+    }
+    final String fn = (row['first_name'] as String?)?.trim() ?? '';
+    final String ln = (row['last_name'] as String?)?.trim() ?? '';
+    final String name = '$fn $ln'.trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    final String id = row['user_id']?.toString() ?? '';
+    if (id.length >= 8) {
+      return 'Пользователь ${id.substring(0, 8)}…';
+    }
+    return 'Пользователь';
+  }
+
+  String _subtitle(Map<String, dynamic> row, String label) {
+    final String fn = (row['first_name'] as String?)?.trim() ?? '';
+    final String ln = (row['last_name'] as String?)?.trim() ?? '';
+    final String full = '$fn $ln'.trim();
+    final String? u = row['username'] as String?;
+    final String nick = (u != null && u.trim().isNotEmpty) ? '@${u.trim()}' : '';
+    if (label.startsWith('@')) {
+      return full.isNotEmpty ? full : '';
+    }
+    if (nick.isNotEmpty && label != nick) {
+      return nick;
+    }
+    return '';
+  }
+
+  String? _avatarUrl(Map<String, dynamic> row) {
+    final String? s = (row['avatar_url'] as String?)?.trim();
+    if (s == null || s.isEmpty) {
+      return null;
+    }
+    return s;
+  }
+
+  Future<void> _confirmRemove(Map<String, dynamic> row) async {
+    final String uid = row['user_id']?.toString() ?? '';
+    if (uid.isEmpty) {
+      return;
+    }
+    final String label = _label(row);
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext c) {
+        return AlertDialog(
+          title: const Text('Снять модератора?'),
+          content: Text(
+            '$label больше не сможет управлять меню и постами этого заведения.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(c).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Снять'),
+            ),
+          ],
+        );
+      },
+    );
+    if (ok != true || !mounted) {
+      return;
+    }
+    try {
+      await PlaceService.removeModerator(widget.placeId, uid);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Модератор успешно снят')),
+      );
+      _reload();
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+        ),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 8, 20),
+          decoration: cloudCardDecoration(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Текущие модераторы',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.placeTitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.25,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Закрыть',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kAppScaffoldBg,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _future,
+                    builder: (
+                      BuildContext context,
+                      AsyncSnapshot<List<Map<String, dynamic>>> snap,
+                    ) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      }
+                      final List<Map<String, dynamic>> list =
+                          snap.data ?? <Map<String, dynamic>>[];
+                      if (list.isEmpty) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              'Нет назначенных модераторов',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: list.length,
+                        separatorBuilder: (BuildContext context, int index) =>
+                            const SizedBox(height: kCloudListSpacing),
+                        itemBuilder: (BuildContext c, int i) {
+                          final Map<String, dynamic> row = list[i];
+                          final String lab = _label(row);
+                          final String sub = _subtitle(row, lab);
+                          return _ModeratorCloudTile(
+                            label: lab,
+                            subtitle: sub,
+                            avatarUrl: _avatarUrl(row),
+                            onRemove: () => unawaited(_confirmRemove(row)),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeratorCloudTile extends StatelessWidget {
+  const _ModeratorCloudTile({
+    required this.label,
+    required this.subtitle,
+    required this.avatarUrl,
+    required this.onRemove,
+  });
+
+  final String label;
+  final String subtitle;
+  final String? avatarUrl;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    const double side = 52;
+    return Container(
+      decoration: cloudCardDecoration(context),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              width: side,
+              height: side,
+              child: avatarUrl != null
+                  ? Image.network(
+                      avatarUrl!,
+                      fit: BoxFit.cover,
+                      width: side,
+                      height: side,
+                      cacheWidth: imageCacheExtentPx(context, side),
+                      cacheHeight: imageCacheExtentPx(context, side),
+                      errorBuilder:
+                          (BuildContext context, Object error, StackTrace? st) =>
+                              ColoredBox(
+                        color: kPrimaryBlue.withValues(alpha: 0.12),
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: kPrimaryBlue,
+                          size: 28,
+                        ),
+                      ),
+                    )
+                  : ColoredBox(
+                      color: kPrimaryBlue.withValues(alpha: 0.12),
+                      child: Icon(
+                        Icons.person_rounded,
+                        color: kPrimaryBlue,
+                        size: 28,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                if (subtitle.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Снять с роли',
+            onPressed: onRemove,
+            icon: Icon(
+              Icons.person_remove_rounded,
+              color: cs.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

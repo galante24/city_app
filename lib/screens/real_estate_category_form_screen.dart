@@ -293,12 +293,14 @@ class _RealEstateCategoryFormScreenState
                       onTap: _saving ? null : _pickImage,
                       child: Container(
                         width: double.infinity,
-                        height: 160,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: frameOutline),
                         ),
-                        child: _previewBlock(),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: _previewBlock(),
+                        ),
                       ),
                     ),
                   ),
@@ -471,7 +473,7 @@ class _RealEstateCategoryFormScreenState
             s.data!,
             fit: BoxFit.cover,
             width: double.infinity,
-            height: 160,
+            height: double.infinity,
           );
         },
       );
@@ -480,7 +482,7 @@ class _RealEstateCategoryFormScreenState
       File(f.path),
       fit: BoxFit.cover,
       width: double.infinity,
-      height: 160,
+      height: double.infinity,
     );
   }
 }

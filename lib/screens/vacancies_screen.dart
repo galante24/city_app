@@ -3,10 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../main_shell_navigation.dart';
 import '../services/job_vacancy_service.dart';
+import '../utils/author_embed.dart';
+import '../utils/social_time_format.dart';
 import '../widgets/city_main_navigation_bar.dart';
+import '../widgets/social_header.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/vacancy_card.dart';
 import '../widgets/weather_app_bar_action.dart';
@@ -84,18 +88,6 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
       return _sort == _VacancySort.newest ? -cmp : cmp;
     });
     return list;
-  }
-
-  String _formatDate(String? iso) {
-    if (iso == null) {
-      return '';
-    }
-    final DateTime? d = DateTime.tryParse(iso);
-    if (d == null) {
-      return '';
-    }
-    final DateTime l = d.toLocal();
-    return '${l.day.toString().padLeft(2, '0')}.${l.month.toString().padLeft(2, '0')}.${l.year}';
   }
 
   Color _accentForId(String id) {
@@ -284,7 +276,7 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                     itemCount: shown.length,
                     separatorBuilder: (BuildContext c, int i) =>
-                        const SizedBox(height: 10),
+                        const SizedBox(height: kCloudListSpacing),
                     itemBuilder: (BuildContext c, int i) {
                       final Map<String, dynamic> m = shown[i];
                       final String id = m['id']?.toString() ?? '';
@@ -292,15 +284,14 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                       final String salary = m['salary'] as String? ?? '';
                       final String addr = m['work_address'] as String? ?? '';
                       final String? imageUrl = m['image_url'] as String?;
-                      final String created = m['created_at'] as String? ?? '';
                       final Color accent = _accentForId(
                         id.isEmpty ? title : id,
                       );
                       return _VacancyListTile(
+                        row: m,
                         title: title,
                         salary: salary,
                         address: addr,
-                        dateLabel: _formatDate(created),
                         imageUrl: imageUrl,
                         onShare: () => unawaited(_shareVacancy(m)),
                         onTap: () async {
@@ -336,57 +327,48 @@ class _SuggestVacancyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onOpen,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kPrimaryBlue.withValues(alpha: 0.35)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
-            children: <Widget>[
-              Icon(Icons.work_rounded, size: 40, color: kPrimaryBlue),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Предложить вакансию',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Разместите вакансию и найдите подходящих сотрудников',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurface
-                            .withValues(alpha: 0.65),
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
+    return CloudInkCard(
+      onTap: onOpen,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.work_rounded, size: 40, color: kPrimaryBlue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Предложить вакансию',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
-              ),
-              Container(
-                decoration: const BoxDecoration(
-                  color: kPrimaryBlue,
-                  shape: BoxShape.circle,
+                const SizedBox(height: 4),
+                Text(
+                  'Разместите вакансию и найдите подходящих сотрудников',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.65),
+                    height: 1.2,
+                  ),
                 ),
-                child: const Icon(Icons.chevron_right, color: Colors.white),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          Container(
+            decoration: const BoxDecoration(
+              color: kPrimaryBlue,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.chevron_right, color: Colors.white),
+          ),
+        ],
       ),
     );
   }
@@ -394,19 +376,19 @@ class _SuggestVacancyCard extends StatelessWidget {
 
 class _VacancyListTile extends StatelessWidget {
   const _VacancyListTile({
+    required this.row,
     required this.title,
     required this.salary,
     required this.address,
-    required this.dateLabel,
     required this.imageUrl,
     required this.onShare,
     required this.onTap,
   });
 
+  final Map<String, dynamic> row;
   final String title;
   final String salary;
   final String address;
-  final String dateLabel;
   final String? imageUrl;
   final VoidCallback onShare;
   final VoidCallback onTap;
@@ -414,103 +396,97 @@ class _VacancyListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    return Material(
-      color: cs.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              VacancyCoverImage(
-                imageUrl: imageUrl,
-                width: 112,
-                borderRadius: 16,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      ),
+    final String authorId = row['author_id']?.toString() ?? '';
+    return CloudInkCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          VacancyCoverImage(
+            imageUrl: imageUrl,
+            width: 112,
+            borderRadius: 16,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (authorId.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SocialHeader(
+                      userId: authorId,
+                      author: authorMapFromRow(row),
+                      createdAt: parseIsoUtc(row['created_at'] as String?),
+                      dense: true,
                     ),
-                    if (salary.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Зарплата: $salary',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: kPrimaryBlue,
-                        ),
+                  ),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                if (salary.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Зарплата: $salary',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimaryBlue,
+                    ),
+                  ),
+                ],
+                if (address.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Icon(
+                        Icons.place_outlined,
+                        size: 16,
+                        color: cs.onSurfaceVariant,
                       ),
-                    ],
-                    if (address.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 6),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Icon(
-                            Icons.place_outlined,
-                            size: 16,
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          address,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
                             color: cs.onSurfaceVariant,
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              address,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (dateLabel.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 4),
-                      Text(
-                        dateLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.share_outlined, color: cs.primary),
-                tooltip: 'Поделиться',
-                onPressed: onShare,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: cs.onSurfaceVariant.withValues(alpha: 0.8),
-              ),
-            ],
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
+          IconButton(
+            icon: Icon(Icons.share_outlined, color: cs.primary),
+            tooltip: 'Поделиться',
+            onPressed: onShare,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
+          ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+          ),
+        ],
       ),
     );
   }

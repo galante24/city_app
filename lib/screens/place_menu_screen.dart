@@ -296,7 +296,7 @@ class _MenuShowcaseCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.07),
@@ -306,30 +306,71 @@ class _MenuShowcaseCard extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final double side = constraints.maxWidth;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              SizedBox(
-                width: side,
-                height: side,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: <Widget>[
-                if (photo != null && photo.isNotEmpty)
-                  Image.network(
-                    photo,
-                    fit: BoxFit.cover,
-                    cacheWidth: imageCacheExtentPx(context, side),
-                    cacheHeight: imageCacheExtentPx(context, side),
-                    errorBuilder: (
-                      BuildContext context,
-                      Object err,
-                      StackTrace? st,
-                    ) =>
-                        ColoredBox(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AspectRatio(
+            aspectRatio: 1,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  if (photo != null && photo.isNotEmpty)
+                    LayoutBuilder(
+                      builder: (BuildContext context, BoxConstraints bc) {
+                        final double side = bc.maxWidth;
+                        return Image.network(
+                          photo,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          width: side,
+                          height: side,
+                          cacheWidth: imageCacheExtentPx(context, side),
+                          cacheHeight: imageCacheExtentPx(context, side),
+                          loadingBuilder: (
+                            BuildContext context,
+                            Widget child,
+                            ImageChunkEvent? progress,
+                          ) {
+                            if (progress == null) {
+                              return child;
+                            }
+                            return ColoredBox(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (
+                            BuildContext context,
+                            Object err,
+                            StackTrace? st,
+                          ) =>
+                              ColoredBox(
+                            color: kPrimaryBlue.withValues(alpha: 0.1),
+                            child: const Center(
+                              child: Icon(
+                                Icons.fastfood_outlined,
+                                color: kPrimaryBlue,
+                                size: 40,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                  else
+                    ColoredBox(
                       color: kPrimaryBlue.withValues(alpha: 0.1),
                       child: const Center(
                         child: Icon(
@@ -339,18 +380,6 @@ class _MenuShowcaseCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  )
-                else
-                  ColoredBox(
-                    color: kPrimaryBlue.withValues(alpha: 0.1),
-                    child: const Center(
-                      child: Icon(
-                        Icons.fastfood_outlined,
-                        color: kPrimaryBlue,
-                        size: 40,
-                      ),
-                    ),
-                  ),
                 if (promo)
                   Positioned(
                     top: 8,
@@ -399,10 +428,11 @@ class _MenuShowcaseCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  ],
-                ),
+                ],
               ),
-              Expanded(
+            ),
+          ),
+          Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
                   child: Column(
@@ -461,9 +491,7 @@ class _MenuShowcaseCard extends StatelessWidget {
                 ),
               ),
             ],
-          );
-        },
-      ),
+          ),
     );
   }
 }
