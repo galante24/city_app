@@ -1,0 +1,18 @@
+---
+description: Версия и релиз при сборке APK
+globs:
+alwaysApply: false
+---
+
+# Сборка release APK
+
+Когда пользователь просит **собрать новый APK** (или аналогично release APK):
+
+1. В `pubspec.yaml` увеличь **только build number** в `version: MAJOR.MINOR.PATCH+X` — **X на 1** (например `1.0.0+3` → `1.0.0+4`). Семвер `1.0.0` не меняй без явного запроса.
+2. Выполни `flutter build apk --release` (после при необходимости `flutter pub get`).
+3. В конце ответа дай **одну строку PowerShell** для коммита и пуша:
+   `git add . ; git commit -m "Release v<полная_версия_из_pubspec>" ; git push`  
+   — подставь фактическую строку `version` (например `1.0.0+2`).
+4. Всегда добавь фразу пользователю: **Сборка готова. После пуша GitHub Actions сам обновит ссылку в Supabase**
+
+По желанию: напомни путь к APK: `build/app/outputs/flutter-apk/app-release.apk`.
