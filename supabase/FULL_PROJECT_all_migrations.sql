@@ -1,6 +1,6 @@
 -- =============================================================================
 -- ПОЛНАЯ СБОРКА СХЕМЫ ПРОЕКТА city_app (вставить в Supabase SQL Editor, выполнить целиком)
--- Состав: 001 → bootstrap → 002–006 → FINAL_all_in_one → 012 → 013 → 014
+-- Состав: 001 → bootstrap → 002–006 → FINAL_all_in_one → 012 → 013 → 014 → 015 → 016
 -- Идемпотентно где возможно. Зависимость: auth.users (Supabase Auth).
 -- =============================================================================
 
@@ -1291,7 +1291,7 @@ create policy "job_vacancies delete own or admin"
     )
   );
 
--- Фото в city_media: только папка vacancies/<uid>/...
+-- Фото в city_media: путь vacancies/<uid>/... (см. split_part в 014/016)
 drop policy if exists "city media vacancies insert own" on storage.objects;
 create policy "city media vacancies insert own"
   on storage.objects
@@ -1299,7 +1299,8 @@ create policy "city media vacancies insert own"
   to authenticated
   with check (
     bucket_id = 'city_media'
-    and name like ('vacancies/' || auth.uid()::text || '/%')
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
   );
 
 drop policy if exists "city media vacancies update own" on storage.objects;
@@ -1309,11 +1310,13 @@ create policy "city media vacancies update own"
   to authenticated
   using (
     bucket_id = 'city_media'
-    and name like ('vacancies/' || auth.uid()::text || '/%')
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
   )
   with check (
     bucket_id = 'city_media'
-    and name like ('vacancies/' || auth.uid()::text || '/%')
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
   );
 
 drop policy if exists "city media vacancies delete own" on storage.objects;
@@ -1323,6 +1326,66 @@ create policy "city media vacancies delete own"
   to authenticated
   using (
     bucket_id = 'city_media'
-    and name like ('vacancies/' || auth.uid()::text || '/%')
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
+  );
+
+
+-- >>>>>> BEGIN FILE: 015_ferry_schedule_seed.sql <<<<<<
+
+-- Сид парома: на экране «Расписание» ожидается строка с id = 00000000-0000-0000-0000-000000000001
+insert into public.schedules (id, title, status_text, is_running, time_text, updated_at)
+values (
+  '00000000-0000-0000-0000-000000000001',
+  'Паром',
+  'Паром ходит по расписанию',
+  true,
+  null,
+  now()
+)
+on conflict (id) do update set
+  title = coalesce(nullif(trim(excluded.title), ''), public.schedules.title),
+  status_text = coalesce(nullif(trim(excluded.status_text), ''), public.schedules.status_text);
+
+
+-- >>>>>> BEGIN FILE: 016_vacancy_storage_policies_ensure.sql <<<<<<
+
+-- Идемпотентное пересоздание политик (для БД, где 014 ещё с LIKE)
+drop policy if exists "city media vacancies insert own" on storage.objects;
+create policy "city media vacancies insert own"
+  on storage.objects
+  for insert
+  to authenticated
+  with check (
+    bucket_id = 'city_media'
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
+  );
+
+drop policy if exists "city media vacancies update own" on storage.objects;
+create policy "city media vacancies update own"
+  on storage.objects
+  for update
+  to authenticated
+  using (
+    bucket_id = 'city_media'
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
+  )
+  with check (
+    bucket_id = 'city_media'
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
+  );
+
+drop policy if exists "city media vacancies delete own" on storage.objects;
+create policy "city media vacancies delete own"
+  on storage.objects
+  for delete
+  to authenticated
+  using (
+    bucket_id = 'city_media'
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
   );
 

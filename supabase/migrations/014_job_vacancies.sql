@@ -69,7 +69,7 @@ create policy "job_vacancies delete own or admin"
     )
   );
 
--- Фото в city_media: только папка vacancies/<uid>/...
+-- Фото в city_media: путь vacancies/<uid>/... (split_part — надёжнее, чем like с UUID)
 drop policy if exists "city media vacancies insert own" on storage.objects;
 create policy "city media vacancies insert own"
   on storage.objects
@@ -77,7 +77,8 @@ create policy "city media vacancies insert own"
   to authenticated
   with check (
     bucket_id = 'city_media'
-    and name like ('vacancies/' || auth.uid()::text || '/%')
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
   );
 
 drop policy if exists "city media vacancies update own" on storage.objects;
@@ -87,11 +88,13 @@ create policy "city media vacancies update own"
   to authenticated
   using (
     bucket_id = 'city_media'
-    and name like ('vacancies/' || auth.uid()::text || '/%')
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
   )
   with check (
     bucket_id = 'city_media'
-    and name like ('vacancies/' || auth.uid()::text || '/%')
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
   );
 
 drop policy if exists "city media vacancies delete own" on storage.objects;
@@ -101,5 +104,6 @@ create policy "city media vacancies delete own"
   to authenticated
   using (
     bucket_id = 'city_media'
-    and name like ('vacancies/' || auth.uid()::text || '/%')
+    and split_part(name, '/', 1) = 'vacancies'
+    and split_part(name, '/', 2) = auth.uid()::text
   );

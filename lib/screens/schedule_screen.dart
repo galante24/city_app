@@ -296,7 +296,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final String text = ferry == null
         ? (loading
             ? 'Загрузка статуса парома...'
-            : 'Нет строки id=$kFerryScheduleRowId в schedules')
+            : 'Расписание парома пока не настроено. Обратитесь к администратору.')
         : ferry.statusText;
     final String? timeLine = ferry?.timeText;
     final bool run = ferry == null || ferry.isRunning;

@@ -8,6 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import '../app_constants.dart';
 import '../services/job_vacancy_service.dart';
 
+const Color _kFormBg = Color(0xFFF0F2F5);
+const Color _kFieldFill = Color(0xFFFFFFFF);
+
 class VacancyFormScreen extends StatefulWidget {
   const VacancyFormScreen({super.key});
 
@@ -25,6 +28,34 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
 
   XFile? _picked;
   bool _saving = false;
+
+  static const double _fieldRadius = 14;
+
+  InputDecoration _decoration(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: _kFieldFill,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_fieldRadius),
+        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_fieldRadius),
+        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_fieldRadius),
+        borderSide: const BorderSide(color: kPrimaryBlue, width: 1.4),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_fieldRadius),
+        borderSide: const BorderSide(color: Color(0xFFE53935)),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -101,7 +132,20 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
     try {
       String? imageUrl;
       if (_picked != null) {
-        imageUrl = await JobVacancyService.uploadVacancyImage(_picked!);
+        try {
+          imageUrl = await JobVacancyService.uploadVacancyImage(_picked!);
+        } on Object {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Фото не загрузилось (доступ к хранилищу). Публикуем без фото — '
+                  'при необходимости обновите приложение после согласования с администратором.',
+                ),
+              ),
+            );
+          }
+        }
       }
       await JobVacancyService.insert(
         title: _title.text,
@@ -133,114 +177,84 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: _kFormBg,
       appBar: AppBar(
         backgroundColor: kPrimaryBlue,
         foregroundColor: Colors.white,
+        elevation: 0,
         title: const Text('Новая вакансия'),
+        centerTitle: true,
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
           children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Column(
-                  children: <Widget>[
-                    Text(
-                      'Фото (необязательно)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Material(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        onTap: _saving ? null : _pickImage,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.black12),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: _preview(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    children: <Widget>[
-                      TextFormField(
-                        controller: _title,
-                        decoration: const InputDecoration(
-                          labelText: 'Название вакансии',
-                          border: OutlineInputBorder(),
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
-                        maxLines: 2,
-                        textCapitalization: TextCapitalization.sentences,
-                        validator: _req,
-                        enabled: !_saving,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            Text(
+              'Заполните поля. Фото — по желанию.',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[800],
+                height: 1.3,
+              ),
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _description,
-              decoration: const InputDecoration(
-                labelText: 'Описание вакансии',
-                border: OutlineInputBorder(),
-                alignLabelWithHint: true,
-                filled: true,
-                fillColor: Colors.white,
+            Material(
+              color: _kFieldFill,
+              borderRadius: BorderRadius.circular(16),
+              clipBehavior: Clip.antiAlias,
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              child: InkWell(
+                onTap: _saving ? null : _pickImage,
+                child: Container(
+                  width: double.infinity,
+                  height: 160,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFDDDFE2)),
+                  ),
+                  child: _previewBlock(),
+                ),
               ),
-              maxLines: 5,
-              validator: _req,
-              enabled: !_saving,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             TextFormField(
-              controller: _salary,
-              decoration: const InputDecoration(
-                labelText: 'Зарплата',
-                border: OutlineInputBorder(),
-                hintText: 'например, от 60 000 ₽',
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              validator: _req,
-              enabled: !_saving,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _address,
-              decoration: const InputDecoration(
-                labelText: 'Адрес работы',
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
-              ),
-              maxLines: 2,
+              controller: _title,
+              decoration: _decoration('Название вакансии'),
+              minLines: 1,
+              maxLines: 3,
               textCapitalization: TextCapitalization.sentences,
               validator: _req,
               enabled: !_saving,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _description,
+              decoration: _decoration('Описание вакансии'),
+              minLines: 4,
+              maxLines: 10,
+              validator: _req,
+              enabled: !_saving,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _salary,
+              decoration: _decoration('Зарплата', hint: 'например, от 60 000 ₽'),
+              validator: _req,
+              enabled: !_saving,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _address,
+              decoration: _decoration('Адрес работы'),
+              minLines: 1,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              validator: _req,
+              enabled: !_saving,
+            ),
+            const SizedBox(height: 14),
             TextFormField(
               controller: _phone,
               keyboardType: TextInputType.phone,
@@ -248,22 +262,21 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
                 FilteringTextInputFormatter.allow(RegExp(r'[+\d]*')),
                 LengthLimitingTextInputFormatter(12),
               ],
-              decoration: const InputDecoration(
-                labelText: 'Контакты (телефон)',
-                border: OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white,
-                hintText: '+7XXXXXXXXXX',
-              ),
+              decoration: _decoration('Контакты (телефон)', hint: '+7 и 10 цифр'),
               validator: _phoneValidator,
               enabled: !_saving,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             FilledButton(
               onPressed: _saving ? null : _submit,
               style: FilledButton.styleFrom(
                 backgroundColor: kPrimaryBlue,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
               ),
               child: _saving
                   ? const SizedBox(
@@ -274,7 +287,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text('Опубликовать'),
+                  : const Text('Опубликовать', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -282,14 +295,42 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
     );
   }
 
-  Widget _preview() {
+  Widget _previewBlock() {
     final XFile? f = _picked;
     if (f == null) {
-      return ColoredBox(
-        color: kPrimaryBlue.withValues(alpha: 0.08),
-        child: const Center(
-          child: Icon(Icons.add_photo_alternate_outlined, size: 40, color: kPrimaryBlue),
-        ),
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kPrimaryBlue.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.add_photo_alternate_rounded,
+              size: 40,
+              color: kPrimaryBlue,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Нажмите, чтобы выбрать фото',
+            style: TextStyle(
+              color: kPrimaryBlue,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Необязательно',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 12,
+            ),
+          ),
+        ],
       );
     }
     if (kIsWeb) {
@@ -299,15 +340,20 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
           if (!s.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          return Image.memory(s.data!, fit: BoxFit.cover, width: 100, height: 100);
+          return Image.memory(
+            s.data!,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: 160,
+          );
         },
       );
     }
     return Image.file(
       File(f.path),
       fit: BoxFit.cover,
-      width: 100,
-      height: 100,
+      width: double.infinity,
+      height: 160,
     );
   }
 }
