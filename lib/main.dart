@@ -14,6 +14,7 @@ import 'services/chat_unread_badge.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/schedule_screen.dart';
+import 'screens/vacancies_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -266,6 +267,12 @@ class ServicesGridScreen extends StatelessWidget {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => const FoodPlacesScreen(),
+        ),
+      );
+    } else if (c.id == 'jobs') {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const VacanciesScreen(),
         ),
       );
     } else {
