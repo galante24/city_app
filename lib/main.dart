@@ -193,6 +193,7 @@ class _ServiceCategory {
   const _ServiceCategory({
     required this.id,
     required this.label,
+    required this.description,
     required this.icon,
     required this.cardColor,
     required this.iconAndTitleColor,
@@ -200,6 +201,7 @@ class _ServiceCategory {
 
   final String id;
   final String label;
+  final String description;
   final IconData icon;
   final Color cardColor;
   final Color iconAndTitleColor;
@@ -212,6 +214,7 @@ class ServicesGridScreen extends StatelessWidget {
     _ServiceCategory(
       id: 'jobs',
       label: 'Вакансии',
+      description: 'Найдите подходящую работу или сотрудников',
       icon: Icons.work_rounded,
       cardColor: Color(0xFFE1F4FD),
       iconAndTitleColor: Color(0xFF0288D1),
@@ -219,13 +222,15 @@ class ServicesGridScreen extends StatelessWidget {
     _ServiceCategory(
       id: 'food',
       label: 'Еда',
-      icon: Icons.restaurant_rounded,
+      description: 'Рестораны, кафе и доставка еды к вам',
+      icon: Icons.local_dining_rounded,
       cardColor: Color(0xFFFFECDE),
       iconAndTitleColor: Color(0xFFE67E4A),
     ),
     _ServiceCategory(
       id: 'services',
       label: 'Услуги',
+      description: 'Различные услуги для вашего комфорта',
       icon: Icons.build_rounded,
       cardColor: Color(0xFFE2F2E3),
       iconAndTitleColor: Color(0xFF3D9B4C),
@@ -233,6 +238,7 @@ class ServicesGridScreen extends StatelessWidget {
     _ServiceCategory(
       id: 'sell',
       label: 'Продам',
+      description: 'Объявления о продаже товаров',
       icon: Icons.shopping_bag_rounded,
       cardColor: Color(0xFFFEE1EC),
       iconAndTitleColor: Color(0xFFD13F7A),
@@ -240,6 +246,7 @@ class ServicesGridScreen extends StatelessWidget {
     _ServiceCategory(
       id: 'free',
       label: 'Даром',
+      description: 'Отдавайте и находите вещи бесплатно',
       icon: Icons.card_giftcard_rounded,
       cardColor: Color(0xFFFFF4D8),
       iconAndTitleColor: Color(0xFFCC8500),
@@ -247,6 +254,7 @@ class ServicesGridScreen extends StatelessWidget {
     _ServiceCategory(
       id: 'estate',
       label: 'Недвижимость',
+      description: 'Покупка, аренда и продажа недвижимости',
       icon: Icons.home_rounded,
       cardColor: Color(0xFFEEE8F8),
       iconAndTitleColor: Color(0xFF7E57C2),
@@ -275,12 +283,12 @@ class ServicesGridScreen extends StatelessWidget {
         title: const Text('Сервисы'),
       ),
       body: GridView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 0.95,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.72,
         ),
         itemCount: _categories.length,
         itemBuilder: (BuildContext context, int index) {
@@ -301,6 +309,8 @@ class _BentoServiceCard extends StatelessWidget {
     required this.onTap,
   });
 
+  static const Color _kDescriptionColor = Color(0xFF6C6C70);
+
   final _ServiceCategory category;
   final VoidCallback onTap;
 
@@ -308,39 +318,85 @@ class _BentoServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: category.cardColor,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
+      elevation: 0,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         splashColor: category.iconAndTitleColor.withValues(alpha: 0.12),
         highlightColor: category.iconAndTitleColor.withValues(alpha: 0.08),
-        child: Container(
+        child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFF0A0A0A).withValues(alpha: 0.04),
+              color: const Color(0xFF0A0A0A).withValues(alpha: 0.05),
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                category.icon,
-                size: 44,
-                color: category.iconAndTitleColor,
+          child: Stack(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 14, 12, 36),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: <Widget>[
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: Color(0x14000000),
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        category.icon,
+                        size: 28,
+                        color: category.iconAndTitleColor,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      category.label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                        color: category.iconAndTitleColor,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: Text(
+                        category.description,
+                        textAlign: TextAlign.center,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          height: 1.25,
+                          color: _kDescriptionColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                category.label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 1.15,
+              Positioned(
+                right: 6,
+                bottom: 6,
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 24,
                   color: category.iconAndTitleColor,
                 ),
               ),
