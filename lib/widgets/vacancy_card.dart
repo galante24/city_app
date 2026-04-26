@@ -62,7 +62,19 @@ class VacancyCoverImage extends StatelessWidget {
         if (progress == null) {
           return child;
         }
-        return _grayPlaceholder(compact: compact);
+        return Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            _grayPlaceholder(compact: compact),
+            const Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ],
+        );
       },
       errorBuilder:
           (BuildContext context, Object error, StackTrace? stackTrace) =>

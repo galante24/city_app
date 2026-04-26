@@ -131,6 +131,8 @@ class PlaceService {
     }
   }
 
+  /// Клиентская проверка: совпадает с [public.can_moderate_place] (владелец, модераторы,
+  /// [profiles.is_admin]; флаг [isDbAdmin] — как у [CityDataService.isProfilesOrEmailAdmin]).
   static Future<bool> canModeratePlace(
     String placeId, {
     required bool isDbAdmin,
@@ -230,6 +232,15 @@ class PlaceService {
     await c.from('places').update(patch).eq('id', placeId);
   }
 
+  /// Удаление заведения (RLS: только администратор профиля).
+  static Future<void> deletePlace(String placeId) async {
+    final c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.from('places').delete().eq('id', placeId);
+  }
+
   static Future<void> addModerator(String placeId, String userId) async {
     final c = _c;
     if (c == null) {
@@ -251,6 +262,18 @@ class PlaceService {
         .delete()
         .eq('place_id', placeId)
         .eq('user_id', userId);
+  }
+
+  static Future<Map<String, dynamic>?> fetchPlacePostById(String postId) async {
+    final c = _c;
+    if (c == null) {
+      return null;
+    }
+    try {
+      return await c.from('place_posts').select().eq('id', postId).maybeSingle();
+    } on Exception {
+      return null;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> fetchPosts(String placeId) async {
@@ -395,5 +418,87 @@ class PlaceService {
     await c.from('profiles').update(<String, dynamic>{
       'fcm_token': token,
     }).eq('id', uid);
+  }
+
+  // ---------- menu_items (цифровое меню) ----------
+
+  static Future<List<Map<String, dynamic>>> fetchMenuItems(
+    String placeId,
+  ) async {
+    final c = _c;
+    if (c == null) {
+      return <Map<String, dynamic>>[];
+    }
+    try {
+      final List<dynamic> res = await c
+          .from('menu_items')
+          .select()
+          .eq('place_id', placeId)
+          .order('created_at', ascending: false);
+      return res.cast<Map<String, dynamic>>();
+    } on Exception {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  static Future<Map<String, dynamic>> insertMenuItem({
+    required String placeId,
+    required String title,
+    String description = '',
+    String category = '',
+    required num price,
+    num? oldPrice,
+    String? photoUrl,
+    bool isAvailable = true,
+  }) async {
+    final c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final Map<String, dynamic> data = <String, dynamic>{
+      'place_id': placeId,
+      'title': title.trim(),
+      'description': description.trim(),
+      'category': category.trim(),
+      'price': price,
+      'is_available': isAvailable,
+    };
+    if (oldPrice != null) {
+      data['old_price'] = oldPrice;
+    }
+    final String? pu = photoUrl?.trim();
+    if (pu != null && pu.isNotEmpty) {
+      data['photo_url'] = pu;
+    }
+    final Map<String, dynamic> row =
+        await c.from('menu_items').insert(data).select().single();
+    return row;
+  }
+
+  static Future<void> updateMenuItem(
+    String itemId,
+    Map<String, dynamic> patch,
+  ) async {
+    final c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    if (patch.isEmpty) {
+      return;
+    }
+    await c.from('menu_items').update(patch).eq('id', itemId);
+  }
+
+  static Future<void> deleteMenuItem(String itemId) async {
+    final c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c.from('menu_items').delete().eq('id', itemId);
+  }
+
+  /// Фото позиции меню: тот же бакет [CityDataService.cityMediaBucket], путь под `places/`.
+  static Future<String> uploadMenuItemPhoto(XFile file) async {
+    return uploadPlaceImage(file);
   }
 }

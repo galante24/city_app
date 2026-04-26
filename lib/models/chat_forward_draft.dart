@@ -21,6 +21,14 @@ class ChatForwardDraft {
       final ChatFileMeta? m = ChatService.fileMetaFromMessageBody(t);
       return m == null ? '📎 Файл' : m.name;
     }
+    final ChatPlaceShareParsed? ps = ChatService.parsePlaceShareBody(t);
+    if (ps != null) {
+      final String h = ps.headline.trim();
+      if (h.isEmpty) {
+        return '📍 Заведение';
+      }
+      return h.length > 80 ? '${h.substring(0, 77)}…' : h;
+    }
     if (t.length > 90) {
       return '${t.substring(0, 87)}…';
     }

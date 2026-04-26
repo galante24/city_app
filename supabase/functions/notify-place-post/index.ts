@@ -1,6 +1,7 @@
-// Рассылка FCM подписчикам заведения. Допишите отправку в FCM при наличии ключей.
+// Рассылка FCM подписчикам заведения. Секрет FCM_SERVER_KEY (Legacy server key).
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { sendFcmLegacyToTokens } from "../_shared/fcm_legacy.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -94,6 +95,7 @@ serve(async (req) => {
       );
     }
 
+    const fcmKey = Deno.env.get("FCM_SERVER_KEY") ?? "";
     const admin = createClient(supabaseUrl, service);
     const { data: subs } = await admin
       .from("place_subscriptions")
@@ -119,12 +121,43 @@ serve(async (req) => {
       )
       .map((p: { fcm_token: string }) => p.fcm_token);
 
+    if (!fcmKey || tokens.length === 0) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          recipient_tokens: tokens.length,
+          skipped: !fcmKey,
+        }),
+        { headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
+
+    const { data: placeRow } = await admin
+      .from("places")
+      .select("title")
+      .eq("id", placeId)
+      .maybeSingle();
+    const placeTitle =
+      ((placeRow?.title as string) ?? "Заведение").trim() || "Заведение";
+    let body = ((post.content as string) ?? "").trim();
+    if (body.length > 160) body = body.slice(0, 157) + "…";
+    if (!body) body = "Новая запись";
+
+    const sent = await sendFcmLegacyToTokens(
+      fcmKey,
+      tokens,
+      { title: placeTitle, body },
+      {
+        type: "place_post",
+        place_id: placeId,
+        post_id: postId,
+        place_title: placeTitle,
+        body_preview: body,
+      },
+    );
+
     return new Response(
-      JSON.stringify({
-        ok: true,
-        recipient_tokens: tokens.length,
-        hint: "Подключите отправку FCM по токенам",
-      }),
+      JSON.stringify({ ok: true, recipient_tokens: tokens.length, sent }),
       { headers: { ...cors, "Content-Type": "application/json" } },
     );
   } catch (e) {

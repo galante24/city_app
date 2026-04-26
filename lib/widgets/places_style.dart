@@ -9,11 +9,13 @@ class PlacesSectionHeader extends StatelessWidget {
     required this.title,
     this.description,
     this.subtitle,
+    this.subtitleWidget,
   });
 
   final String title;
   final String? description;
   final String? subtitle;
+  final Widget? subtitleWidget;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +62,10 @@ class PlacesSectionHeader extends StatelessWidget {
             ),
           ),
         ],
-        if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
+        if (subtitleWidget != null) ...<Widget>[
+          const SizedBox(height: 8),
+          subtitleWidget!,
+        ] else if (subtitle != null && subtitle!.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Text(
             subtitle!,

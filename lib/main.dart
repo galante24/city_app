@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 import 'app_navigator_key.dart';
+import 'firebase_messaging_background.dart';
 import 'services/app_theme_controller.dart';
 import 'theme/city_theme.dart' show CityTheme;
 import 'widgets/soft_tab_header.dart';
@@ -18,8 +21,11 @@ import 'main_tab_index.dart';
 import 'widgets/city_main_navigation_bar.dart';
 import 'screens/chats_list_screen.dart';
 import 'services/chat_unread_badge.dart';
+import 'services/city_data_service.dart';
 import 'services/message_notification_service.dart';
 import 'services/incoming_share_coordinator.dart';
+import 'services/permission_onboarding_service.dart';
+import 'services/push_notification_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/schedule_screen.dart';
@@ -30,8 +36,11 @@ import 'screens/tasks_list_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  timeago.setLocaleMessages('ru', timeago.RuMessages());
   await Supabase.initialize(url: kSupabaseUrl, anonKey: kSupabaseAnonKey);
   supabaseAppReady = true;
+  await PushNotificationService.instance.initialize();
   await MessageNotificationService.instance.init();
   await appThemeController.load();
   runApp(const CityApp());
@@ -122,6 +131,8 @@ class _MainScaffoldState extends State<MainScaffold> {
         unawaited(checkForAppUpdates(context));
         if (!kIsWeb) {
           IncomingShareCoordinator.tryFlushPendingShare();
+          unawaited(PermissionOnboardingService.requestIfNeeded(context));
+          unawaited(CityDataService.refreshNotificationsEnabledCache());
         }
       }
     });

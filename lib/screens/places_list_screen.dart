@@ -5,13 +5,14 @@ import 'package:flutter/material.dart';
 import '../app_constants.dart';
 import '../services/city_data_service.dart';
 import '../services/place_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/place_card.dart';
 import '../widgets/places_style.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'place_assign_moderator_screen.dart';
 import 'place_create_screen.dart';
 import 'place_detail_screen.dart';
+import 'place_edit_basic_screen.dart';
 
 class PlacesListScreen extends StatefulWidget {
   const PlacesListScreen({super.key});
@@ -69,6 +70,151 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
     }
   }
 
+  Future<void> _openEditBasic(String id, String title, String description) async {
+    final bool? ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (BuildContext c) => PlaceEditBasicScreen(
+          placeId: id,
+          initialTitle: title,
+          initialDescription: description,
+        ),
+      ),
+    );
+    if (ok == true && mounted) {
+      await _load();
+    }
+  }
+
+  Future<void> _openAssignModerator(String id, String title) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext c) => PlaceAssignModeratorScreen(
+          placeId: id,
+          placeTitle: title,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _load();
+    }
+  }
+
+  Future<void> _quickRenamePlace(String id, String currentTitle) async {
+    final TextEditingController c = TextEditingController(text: currentTitle);
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Text('Переименовать'),
+          content: TextField(
+            controller: c,
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Название',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Сохранить'),
+            ),
+          ],
+        );
+      },
+    );
+    final String next = c.text.trim();
+    c.dispose();
+    if (ok != true || !mounted || next.isEmpty) {
+      return;
+    }
+    try {
+      await PlaceService.updatePlace(id, <String, dynamic>{'title': next});
+      if (!mounted) {
+        return;
+      }
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Название обновлено')),
+      );
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeletePlace(String id, String title) async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Text('Удалить заведение?'),
+          content: Text(
+            '«$title» будет удалено без восстановления вместе с привязанными данными.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Удалить'),
+            ),
+          ],
+        );
+      },
+    );
+    if (ok != true || !mounted) {
+      return;
+    }
+    try {
+      await PlaceService.deletePlace(id);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заведение удалено')),
+      );
+      await _load();
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _onPlaceAdminMenu(
+    String value,
+    String id,
+    String title,
+    String description,
+  ) async {
+    if (value == 'edit') {
+      await _openEditBasic(id, title, description);
+    } else if (value == 'moderator') {
+      await _openAssignModerator(id, title);
+    } else if (value == 'rename') {
+      await _quickRenamePlace(id, title);
+    } else if (value == 'delete') {
+      await _confirmDeletePlace(id, title);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
@@ -99,7 +245,7 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                         const PlacesSectionHeader(
                           title: 'Городские заведения',
                           subtitle:
-                              'Подпишитесь на новости кафе и магазинов. Управление — для модераторов.',
+                              'Кафе, магазины и сервисы города. Подписка на ленту заведения.',
                         ),
                         if (_isAdmin) ...<Widget>[
                           FilledButton.icon(
@@ -186,55 +332,13 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: <Widget>[
-                                        ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          child: photo != null &&
+                                        PlaceListCoverImage(
+                                          imageUrl: photo != null &&
                                                   photo.isNotEmpty
-                                              ? Image.network(
-                                                  photo,
-                                                  width: 72,
-                                                  height: 72,
-                                                  fit: BoxFit.cover,
-                                                  cacheWidth:
-                                                      imageCacheExtentPx(
-                                                    context,
-                                                    72,
-                                                  ),
-                                                  cacheHeight:
-                                                      imageCacheExtentPx(
-                                                    context,
-                                                    72,
-                                                  ),
-                                                  errorBuilder:
-                                                      (
-                                                    BuildContext c,
-                                                    Object e,
-                                                    StackTrace? st,
-                                                  ) =>
-                                                          Container(
-                                                    width: 72,
-                                                    height: 72,
-                                                    color: kPrimaryBlue
-                                                        .withValues(
-                                                      alpha: 0.12,
-                                                    ),
-                                                    child: const Icon(
-                                                      Icons.store_rounded,
-                                                      color: kPrimaryBlue,
-                                                    ),
-                                                  ),
-                                                )
-                                              : Container(
-                                                  width: 72,
-                                                  height: 72,
-                                                  color: kPrimaryBlue
-                                                      .withValues(alpha: 0.12),
-                                                  child: const Icon(
-                                                    Icons.store_rounded,
-                                                    color: kPrimaryBlue,
-                                                  ),
-                                                ),
+                                              ? photo
+                                              : null,
+                                          width: 108,
+                                          borderRadius: 12,
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
@@ -242,15 +346,173 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: <Widget>[
-                                              Text(
-                                                title,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  fontSize: 17,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: cs.onSurface,
-                                                ),
+                                              Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: <Widget>[
+                                                  Expanded(
+                                                    child: Text(
+                                                      title,
+                                                      maxLines: 2,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        fontSize: 17,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                        color: cs.onSurface,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (_isAdmin &&
+                                                      id.isNotEmpty)
+                                                    PopupMenuButton<String>(
+                                                      tooltip: 'Управление',
+                                                      position:
+                                                          PopupMenuPosition
+                                                              .under,
+                                                      offset:
+                                                          const Offset(0, 4),
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                        minWidth: 40,
+                                                        minHeight: 40,
+                                                      ),
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(
+                                                          14,
+                                                        ),
+                                                      ),
+                                                      color: cs
+                                                          .surfaceContainerHighest,
+                                                      icon: Icon(
+                                                        Icons
+                                                            .settings_outlined,
+                                                        size: 22,
+                                                        color: cs.primary,
+                                                      ),
+                                                      onSelected:
+                                                          (String v) {
+                                                        unawaited(
+                                                          _onPlaceAdminMenu(
+                                                            v,
+                                                            id,
+                                                            title,
+                                                            desc,
+                                                          ),
+                                                        );
+                                                      },
+                                                      itemBuilder:
+                                                          (BuildContext ctx) {
+                                                        return <PopupMenuEntry<
+                                                            String>>[
+                                                          PopupMenuItem<
+                                                              String>(
+                                                            value: 'edit',
+                                                            child: Row(
+                                                              children:
+                                                                  <Widget>[
+                                                                Icon(
+                                                                  Icons
+                                                                      .edit_outlined,
+                                                                  size: 22,
+                                                                  color: cs
+                                                                      .onSurface,
+                                                                ),
+                                                                const SizedBox(
+                                                                  width: 12,
+                                                                ),
+                                                                const Text(
+                                                                  'Редактировать',
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          PopupMenuItem<
+                                                              String>(
+                                                            value: 'moderator',
+                                                            child: Row(
+                                                              children:
+                                                                  <Widget>[
+                                                                Icon(
+                                                                  Icons
+                                                                      .person_add_outlined,
+                                                                  size: 22,
+                                                                  color: cs
+                                                                      .onSurface,
+                                                                ),
+                                                                const SizedBox(
+                                                                  width: 12,
+                                                                ),
+                                                                const Text(
+                                                                  'Назначить модератора',
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          PopupMenuItem<
+                                                              String>(
+                                                            value: 'rename',
+                                                            child: Row(
+                                                              children:
+                                                                  <Widget>[
+                                                                Icon(
+                                                                  Icons
+                                                                      .drive_file_rename_outline,
+                                                                  size: 22,
+                                                                  color: cs
+                                                                      .onSurface,
+                                                                ),
+                                                                const SizedBox(
+                                                                  width: 12,
+                                                                ),
+                                                                const Text(
+                                                                  'Переименовать',
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const PopupMenuDivider(),
+                                                          PopupMenuItem<
+                                                              String>(
+                                                            value: 'delete',
+                                                            child: Row(
+                                                              children:
+                                                                  <Widget>[
+                                                                const Icon(
+                                                                  Icons
+                                                                      .delete_outline,
+                                                                  size: 22,
+                                                                  color: Color(
+                                                                    0xFFC62828,
+                                                                  ),
+                                                                ),
+                                                                const SizedBox(
+                                                                  width: 12,
+                                                                ),
+                                                                Text(
+                                                                  'Удалить заведение',
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color: Colors
+                                                                        .red
+                                                                        .shade800,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ];
+                                                      },
+                                                    ),
+                                                ],
                                               ),
                                               if (desc.isNotEmpty) ...<Widget>[
                                                 const SizedBox(height: 6),
@@ -269,6 +531,7 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                               const SizedBox(height: 10),
                                               _SubscribeChip(
                                                 subscribed: sub,
+                                                compact: _isAdmin,
                                                 onTap: id.isEmpty
                                                     ? null
                                                     : () => unawaited(
@@ -278,26 +541,6 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                             ],
                                           ),
                                         ),
-                                        if (_isAdmin && id.isNotEmpty)
-                                          IconButton(
-                                            tooltip: 'Назначить модератора',
-                                            onPressed: () async {
-                                              await Navigator.of(context)
-                                                  .push<void>(
-                                                MaterialPageRoute<void>(
-                                                  builder: (BuildContext c) =>
-                                                      PlaceAssignModeratorScreen(
-                                                    placeId: id,
-                                                    placeTitle: title,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                            icon: Icon(
-                                              Icons.person_add_rounded,
-                                              color: cs.primary,
-                                            ),
-                                          ),
                                         Icon(
                                           Icons.chevron_right_rounded,
                                           color: cs.onSurfaceVariant,
@@ -320,10 +563,15 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
 }
 
 class _SubscribeChip extends StatefulWidget {
-  const _SubscribeChip({required this.subscribed, this.onTap});
+  const _SubscribeChip({
+    required this.subscribed,
+    this.onTap,
+    this.compact = false,
+  });
 
   final bool subscribed;
   final VoidCallback? onTap;
+  final bool compact;
 
   @override
   State<_SubscribeChip> createState() => _SubscribeChipState();
@@ -363,7 +611,10 @@ class _SubscribeChipState extends State<_SubscribeChip>
                   widget.onTap!();
                 },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.compact ? 10 : 14,
+              vertical: widget.compact ? 6 : 8,
+            ),
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 280),
               transitionBuilder: (Widget child, Animation<double> a) {
@@ -380,15 +631,15 @@ class _SubscribeChipState extends State<_SubscribeChip>
                     widget.subscribed
                         ? Icons.notifications_active_rounded
                         : Icons.notifications_none_rounded,
-                    size: 18,
+                    size: widget.compact ? 16 : 18,
                     color: widget.subscribed ? kPrimaryBlue : Colors.white,
                   ),
-                  const SizedBox(width: 6),
+                  SizedBox(width: widget.compact ? 5 : 6),
                   Text(
                     widget.subscribed ? 'Вы подписаны' : 'Подписаться',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                      fontSize: widget.compact ? 12 : 13,
                       color: widget.subscribed ? kPrimaryBlue : Colors.white,
                     ),
                   ),

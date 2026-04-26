@@ -165,7 +165,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return Scaffold(
           backgroundColor: theme.brightness == Brightness.dark
               ? theme.scaffoldBackgroundColor
-              : const Color(0xFFF8F9FA),
+              : const Color(0xFFF5F5F5),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -300,178 +300,162 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.grey.withValues(alpha: 0.1),
-                    width: 1,
-                  ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
+              Text(
+                'Данные',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 17,
+                  color: cs.onSurface,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Видны вам; ник — всем в чатах',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: cs.onSurface.withValues(alpha: 0.65),
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _ProfileDataCard(
+                colorScheme: cs,
+                label: 'Email',
+                child: Text(
+                  email,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _ProfileDataCard(
+                colorScheme: cs,
+                label: 'Имя и фамилия',
+                child: Text(
+                  fullName == '—'
+                      ? 'Укажите в профиле или при регистрации'
+                      : fullName,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: fullName == '—' ? FontWeight.w500 : FontWeight.w700,
+                    color: fullName == '—'
+                        ? cs.onSurface.withValues(alpha: 0.65)
+                        : cs.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _ProfileDataCard(
+                colorScheme: cs,
+                label: 'Дата рождения',
+                child: Text(
+                  _birthDisplayText(row?['birth_date']?.toString()),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _ProfileDataCard(
+                colorScheme: cs,
+                label: 'Ник в чате',
+                footer: Text(
+                  'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withValues(alpha: 0.58),
+                    height: 1.2,
+                  ),
+                ),
+                child: Row(
                   children: <Widget>[
-                    Text(
-                      'Данные',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 17,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Видны вам; ник — всем в чатах',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: cs.onSurface.withValues(alpha: 0.65),
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    _LabeledField(
-                      label: 'Email',
+                    Expanded(
                       child: Text(
-                        email,
+                        nickLine,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w700,
                           color: cs.onSurface,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    _LabeledField(
-                      label: 'Имя и фамилия',
+                    if (nickForDisplay.isNotEmpty)
+                      IconButton(
+                        tooltip: 'Скопировать',
+                        onPressed: () =>
+                            _copyToClipboard('Ник', '@$nickForDisplay'),
+                        icon: const Icon(
+                          Icons.copy_outlined,
+                          size: 22,
+                          color: kPrimaryBlue,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _ProfileDataCard(
+                colorScheme: cs,
+                label: 'Телефон',
+                footer: Text(
+                  'Виден только вам. В списке чатов и у других не показывается.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withValues(alpha: 0.58),
+                    height: 1.2,
+                  ),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
                       child: Text(
-                        fullName == '—'
-                            ? 'Укажите в профиле или при регистрации'
-                            : fullName,
+                        phoneDisplay.isEmpty ? 'не указан' : phoneDisplay,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: fullName == '—'
+                          fontWeight: phoneDisplay.isEmpty
+                              ? FontWeight.w500
+                              : FontWeight.w700,
+                          color: phoneDisplay.isEmpty
                               ? cs.onSurface.withValues(alpha: 0.65)
                               : cs.onSurface,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    _LabeledField(
-                      label: 'Дата рождения',
-                      child: Text(
-                        _birthDisplayText(row?['birth_date']?.toString()),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: cs.onSurface,
+                    if (phoneDisplay.isNotEmpty)
+                      IconButton(
+                        tooltip: 'Скопировать',
+                        onPressed: () =>
+                            _copyToClipboard('Номер', phoneDisplay),
+                        icon: const Icon(
+                          Icons.copy_outlined,
+                          size: 22,
+                          color: kPrimaryBlue,
                         ),
+                        visualDensity: VisualDensity.compact,
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    _LabeledField(
-                      label: 'Ник в чате',
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              nickLine,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: cs.onSurface,
-                              ),
-                            ),
-                          ),
-                          if (nickForDisplay.isNotEmpty)
-                            IconButton(
-                              tooltip: 'Скопировать',
-                              onPressed: () =>
-                                  _copyToClipboard('Ник', '@$nickForDisplay'),
-                              icon: const Icon(
-                                Icons.copy_outlined,
-                                size: 22,
-                                color: kPrimaryBlue,
-                              ),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurface.withValues(alpha: 0.58),
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    _LabeledField(
-                      label: 'Телефон',
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              phoneDisplay.isEmpty ? 'не указан' : phoneDisplay,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: phoneDisplay.isEmpty
-                                    ? cs.onSurface.withValues(alpha: 0.65)
-                                    : cs.onSurface,
-                              ),
-                            ),
-                          ),
-                          if (phoneDisplay.isNotEmpty)
-                            IconButton(
-                              tooltip: 'Скопировать',
-                              onPressed: () =>
-                                  _copyToClipboard('Номер', phoneDisplay),
-                              icon: const Icon(
-                                Icons.copy_outlined,
-                                size: 22,
-                                color: kPrimaryBlue,
-                              ),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Виден только вам. В списке чатов и у других не показывается.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurface.withValues(alpha: 0.58),
-                        height: 1.2,
-                      ),
-                    ),
-                    if (isEmailAdmin) ...<Widget>[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Админы: ${kAdministratorEmails.join(', ')}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF2E7D32),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
+              if (isEmailAdmin) ...<Widget>[
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    'Админы: ${kAdministratorEmails.join(', ')}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF2E7D32),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: _signOut,
@@ -494,31 +478,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-class _LabeledField extends StatelessWidget {
-  const _LabeledField({required this.label, required this.child});
+class _ProfileDataCard extends StatelessWidget {
+  const _ProfileDataCard({
+    required this.colorScheme,
+    required this.label,
+    required this.child,
+    this.footer,
+  });
 
+  final ColorScheme colorScheme;
   final String label;
   final Widget child;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface.withValues(
-                  alpha: 0.5,
-                ),
-            letterSpacing: 0.2,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-        ),
-        const SizedBox(height: 10),
-        child,
-      ],
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface.withValues(alpha: 0.55),
+              letterSpacing: 0.15,
+            ),
+          ),
+          const SizedBox(height: 8),
+          child,
+          if (footer != null) ...<Widget>[
+            const SizedBox(height: 10),
+            footer!,
+          ],
+        ],
+      ),
     );
   }
 }

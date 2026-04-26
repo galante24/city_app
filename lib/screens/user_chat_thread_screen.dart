@@ -17,19 +17,35 @@ import '../services/open_chat_tracker.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
 import '../services/city_data_service.dart';
+import '../services/place_service.dart';
 import 'chat_full_image_viewer_screen.dart';
 import 'direct_peer_profile_screen.dart';
 import 'forward_conversation_picker_screen.dart';
 import 'group_chat_info_screen.dart';
+import 'place_detail_screen.dart';
 
-/// Декодирование не шире/выше логических пределов пузырька (см. _bubbleImageBlock).
-(int, int) _bubbleImageCachePx(BuildContext context) {
-  final Size sz = MediaQuery.sizeOf(context);
-  const double maxH = 250;
-  final double maxW = sz.width * 0.7;
+/// Декодирование для превью фото в пузырьке (см. [_ChatMessageListView._bubbleImageBlock]).
+(int, int) _bubbleImageCachePx(
+  BuildContext context,
+  double layoutW,
+  double layoutH,
+) {
   return (
-    imageCacheExtentPx(context, maxW),
-    imageCacheExtentPx(context, maxH),
+    imageCacheExtentPx(context, layoutW),
+    imageCacheExtentPx(context, layoutH),
+  );
+}
+
+Widget _chatBubbleImagePlaceholder() {
+  return const ColoredBox(
+    color: Color(0xFFE8EAED),
+    child: Center(
+      child: Icon(
+        Icons.image_outlined,
+        size: 40,
+        color: Color(0xFF9AA0A6),
+      ),
+    ),
   );
 }
 
@@ -391,6 +407,11 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     }
     if (fileMeta != null) {
       return fileMeta.isImage ? '[Фото]' : fileMeta.name;
+    }
+    final ChatPlaceShareParsed? ps = ChatService.parsePlaceShareBody(bodyRaw);
+    if (ps != null) {
+      final String h = ps.headline.trim();
+      return h.isEmpty ? '📍 Заведение' : h;
     }
     final String t = bodyRaw.trim();
     if (t.length > 160) {
@@ -1146,6 +1167,11 @@ class _MessagesListState extends State<_MessagesList> {
     if (fileMeta != null) {
       return fileMeta.isImage ? '[Фото]' : fileMeta.name;
     }
+    final ChatPlaceShareParsed? ps = ChatService.parsePlaceShareBody(bodyRaw);
+    if (ps != null) {
+      final String h = ps.headline.trim();
+      return h.isEmpty ? '📍 Заведение' : h;
+    }
     final String t = bodyRaw.trim();
     if (t.length > 160) {
       return '${t.substring(0, 157)}…';
@@ -1434,21 +1460,9 @@ class _MessagesListState extends State<_MessagesList> {
   }) {
     final Size mq = MediaQuery.sizeOf(context);
     final double maxW = mq.width * 0.7;
-    const double maxH = 250;
-    final BorderRadius clipR = outgoing
-        ? const BorderRadius.only(
-            topLeft: Radius.circular(12),
-            topRight: Radius.circular(12),
-            bottomLeft: Radius.circular(12),
-            bottomRight: Radius.circular(4),
-          )
-        : const BorderRadius.only(
-            topLeft: Radius.circular(12),
-            topRight: Radius.circular(12),
-            bottomLeft: Radius.circular(4),
-            bottomRight: Radius.circular(12),
-          );
-    final (int iw, int ih) = _bubbleImageCachePx(context);
+    const double maxH = 300;
+    const double aspect = 16 / 9;
+    final BorderRadius clipR = BorderRadius.circular(16);
     return GestureDetector(
       onTap: () => _openChatImage(context, m, me, displayImageUrl),
       child: ClipRRect(
@@ -1459,39 +1473,60 @@ class _MessagesListState extends State<_MessagesList> {
             maxWidth: maxW,
             maxHeight: maxH,
           ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: outgoing ? Alignment.centerRight : Alignment.centerLeft,
-            child: Image.network(
-              displayImageUrl,
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-              filterQuality: FilterQuality.medium,
-              cacheWidth: iw,
-              cacheHeight: ih,
-              loadingBuilder: (
-                BuildContext _,
-                Widget child,
-                ImageChunkEvent? loadingProgress,
-              ) {
-                if (loadingProgress == null) {
-                  return child;
-                }
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                );
-              },
-              errorBuilder: (
-                BuildContext context,
-                Object error,
-                StackTrace? st,
-              ) =>
-                  const Padding(
-                padding: EdgeInsets.all(8),
-                child: Text('не удалось загрузить фото'),
-              ),
-            ),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints c) {
+              final double availW = c.maxWidth;
+              final double availH = c.maxHeight;
+              double w = availW;
+              double h = w / aspect;
+              if (h > availH) {
+                h = availH;
+                w = h * aspect;
+              }
+              final (int iw, int ih) = _bubbleImageCachePx(context, w, h);
+              return SizedBox(
+                width: w,
+                height: h,
+                child: Image.network(
+                  displayImageUrl,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  width: w,
+                  height: h,
+                  filterQuality: FilterQuality.medium,
+                  cacheWidth: iw,
+                  cacheHeight: ih,
+                  loadingBuilder: (
+                    BuildContext _,
+                    Widget child,
+                    ImageChunkEvent? loadingProgress,
+                  ) {
+                    if (loadingProgress == null) {
+                      return child;
+                    }
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        _chatBubbleImagePlaceholder(),
+                        const Center(
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                  errorBuilder: (
+                    BuildContext context,
+                    Object error,
+                    StackTrace? st,
+                  ) =>
+                      _chatBubbleImagePlaceholder(),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -1566,13 +1601,18 @@ class _MessagesListState extends State<_MessagesList> {
                 (fileMeta != null && fileMeta.isImage ? fileMeta.url : null);
             final ChatFileMeta? attachmentMeta =
                 fileMeta != null && !fileMeta.isImage ? fileMeta : null;
+            final ChatPlaceShareParsed? placeShare = !isDeleted
+                ? ChatService.parsePlaceShareBody(bodyRaw)
+                : null;
             final String text = isDeleted
                 ? 'Сообщение удалено'
                 : displayImageUrl != null
                     ? ''
                     : attachmentMeta != null
                         ? attachmentMeta.name
-                        : bodyRaw;
+                        : placeShare != null
+                            ? ''
+                            : bodyRaw;
             final DateTime? createdAt = _tryParse(m['created_at'] as String?);
             final bool incomingUnread =
                 !mine &&
@@ -1786,6 +1826,13 @@ class _MessagesListState extends State<_MessagesList> {
                                       cs: cs,
                                       outgoing: false,
                                     )
+                                  else if (placeShare != null && !isDeleted)
+                                    _ChatPlaceShareBubble(
+                                      share: placeShare,
+                                      outgoing: false,
+                                      cs: cs,
+                                      incomingUnread: incomingUnread,
+                                    )
                                   else if (attachmentMeta != null &&
                                       !isDeleted)
                                     Row(
@@ -1989,6 +2036,13 @@ class _MessagesListState extends State<_MessagesList> {
                                 displayImageUrl: displayImageUrl,
                                 cs: cs,
                                 outgoing: mine,
+                              )
+                            else if (placeShare != null && !isDeleted)
+                              _ChatPlaceShareBubble(
+                                share: placeShare,
+                                outgoing: mine,
+                                cs: cs,
+                                incomingUnread: incomingUnread,
                               )
                             else if (attachmentMeta != null && !isDeleted)
                               Row(
@@ -2300,6 +2354,216 @@ class _ForwardedTinyAvatar extends StatelessWidget {
                   ),
                 )
               : null,
+        );
+      },
+    );
+  }
+}
+
+class _ResolvedPlaceShare {
+  const _ResolvedPlaceShare({
+    required this.placeId,
+    required this.title,
+    this.photoUrl,
+  });
+
+  final String placeId;
+  final String title;
+  final String? photoUrl;
+}
+
+Future<_ResolvedPlaceShare?> _resolvePlaceShare(
+  ChatPlaceShareParsed p,
+) async {
+  if (p.directPlaceId != null && p.directPlaceId!.isNotEmpty) {
+    final Map<String, dynamic>? row =
+        await PlaceService.fetchPlace(p.directPlaceId!);
+    final String? t = (row?['title'] as String?)?.trim();
+    final String title = t != null && t.isNotEmpty ? t : p.headline;
+    String? photo = p.thumbUrl?.trim();
+    if (photo == null || photo.isEmpty) {
+      photo = (row?['photo_url'] as String?)?.trim();
+    }
+    if (photo == null || photo.isEmpty) {
+      photo = (row?['cover_url'] as String?)?.trim();
+    }
+    return _ResolvedPlaceShare(
+      placeId: p.directPlaceId!,
+      title: title,
+      photoUrl: photo,
+    );
+  }
+  final String? pid = p.legacyPostId;
+  if (pid == null || pid.isEmpty) {
+    return null;
+  }
+  final Map<String, dynamic>? post = await PlaceService.fetchPlacePostById(pid);
+  if (post == null) {
+    return null;
+  }
+  final String? plId = post['place_id']?.toString();
+  if (plId == null || plId.isEmpty) {
+    return null;
+  }
+  final Map<String, dynamic>? pl = await PlaceService.fetchPlace(plId);
+  final String? pt = (pl?['title'] as String?)?.trim();
+  final String title = pt != null && pt.isNotEmpty ? pt : p.headline;
+  String? photo = (post['image_url'] as String?)?.trim();
+  if (photo == null || photo.isEmpty) {
+    photo = (pl?['photo_url'] as String?)?.trim();
+  }
+  if (photo == null || photo.isEmpty) {
+    photo = (pl?['cover_url'] as String?)?.trim();
+  }
+  if (photo == null || photo.isEmpty) {
+    photo = p.thumbUrl?.trim();
+  }
+  return _ResolvedPlaceShare(
+    placeId: plId,
+    title: title,
+    photoUrl: photo,
+  );
+}
+
+/// Превью заведения в пузырьке (шаринг из ленты мест).
+class _ChatPlaceShareBubble extends StatelessWidget {
+  const _ChatPlaceShareBubble({
+    required this.share,
+    required this.outgoing,
+    required this.cs,
+    required this.incomingUnread,
+  });
+
+  final ChatPlaceShareParsed share;
+  final bool outgoing;
+  final ColorScheme cs;
+  final bool incomingUnread;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_ResolvedPlaceShare?>(
+      future: _resolvePlaceShare(share),
+      builder:
+          (BuildContext context, AsyncSnapshot<_ResolvedPlaceShare?> snap) {
+        final _ResolvedPlaceShare? res = snap.data;
+        final String title = (res?.title ?? share.headline).trim();
+        final String? photo = res?.photoUrl ?? share.thumbUrl;
+        final String openId = res?.placeId ?? share.directPlaceId ?? '';
+        final bool waitingLegacy = share.legacyPostId != null &&
+            share.legacyPostId!.isNotEmpty &&
+            snap.connectionState == ConnectionState.waiting;
+        final bool canOpen = openId.isNotEmpty;
+
+        final Color cardBg = outgoing
+            ? Colors.white.withValues(alpha: 0.97)
+            : const Color(0xFFE2F2E3);
+        final Color borderCol =
+            kPrimaryBlue.withValues(alpha: outgoing ? 0.38 : 0.42);
+        final Color titleCol =
+            outgoing ? kPrimaryBlue : const Color(0xFF2E7D32);
+        final Color actionCol =
+            outgoing ? kPrimaryBlue.withValues(alpha: 0.9) : kPrimaryBlue;
+
+        return Material(
+          color: cardBg,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: borderCol),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: canOpen
+                ? () {
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (BuildContext c) =>
+                            PlaceDetailScreen(placeId: openId),
+                      ),
+                    );
+                  }
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: photo != null && photo.isNotEmpty
+                          ? Image.network(
+                              photo,
+                              fit: BoxFit.cover,
+                              cacheWidth: imageCacheExtentPx(context, 48),
+                              cacheHeight: imageCacheExtentPx(context, 48),
+                              errorBuilder:
+                                  (BuildContext c, Object e, StackTrace? st) =>
+                                      ColoredBox(
+                                color: kPrimaryBlue.withValues(alpha: 0.12),
+                                child: const Icon(
+                                  Icons.store_rounded,
+                                  color: kPrimaryBlue,
+                                  size: 26,
+                                ),
+                              ),
+                            )
+                          : ColoredBox(
+                              color: kPrimaryBlue.withValues(alpha: 0.12),
+                              child: const Icon(
+                                Icons.store_rounded,
+                                color: kPrimaryBlue,
+                                size: 26,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          title.isEmpty ? 'Заведение' : title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: incomingUnread
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            color: titleCol,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        if (waitingLegacy && !canOpen)
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: titleCol,
+                            ),
+                          )
+                        else
+                          Text(
+                            canOpen ? 'Перейти' : 'Недоступно',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: canOpen ? actionCol : cs.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         );
       },
     );

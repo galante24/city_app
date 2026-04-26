@@ -414,6 +414,17 @@ class ChatService {
     if (fileMetaFromMessageBody(t) != null) {
       return 'Файл';
     }
+    final ChatPlaceShareParsed? ps = parsePlaceShareBody(t);
+    if (ps != null) {
+      final String h = ps.headline.trim();
+      if (h.isEmpty) {
+        return '📍 Заведение';
+      }
+      if (h.length > 72) {
+        return '📍 ${h.substring(0, 69)}…';
+      }
+      return '📍 $h';
+    }
     return t;
   }
 
@@ -596,6 +607,12 @@ class ChatService {
   /// Вложение: base64url(JSON {u, n, m}).
   static const String fileMessagePrefix = '!file:b64:';
 
+  /// Поделиться заведением: строка `!place:<uuid>`; опционально `!place_thumb:<url>`.
+  static const String placeSharePrefix = '!place:';
+
+  /// Миниатюра для превью в чате (необязательная строка в теле сообщения).
+  static const String placeShareThumbPrefix = '!place_thumb:';
+
   static String buildFileMessageBody({
     required String publicUrl,
     required String fileName,
@@ -774,6 +791,88 @@ class ChatService {
       return null;
     }
     return u;
+  }
+
+  static bool _looksLikePlaceUuid(String id) {
+    return RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(id.trim());
+  }
+
+  /// Текст для отправки в чат при «Поделиться» с экрана заведения.
+  static String buildPlaceShareBody({
+    required String placeTitle,
+    required String placeId,
+    String? thumbUrl,
+  }) {
+    final StringBuffer b = StringBuffer();
+    b.writeln('$placeTitle — Посмотри это место в приложении!');
+    b.write('$placeSharePrefix${placeId.trim()}');
+    final String? th = thumbUrl?.trim();
+    if (th != null && th.isNotEmpty) {
+      b.writeln();
+      b.write('$placeShareThumbPrefix$th');
+    }
+    return b.toString();
+  }
+
+  /// Разбор тела с [placeSharePrefix] или устаревшего `post:<uuid>` (запись ленты).
+  static ChatPlaceShareParsed? parsePlaceShareBody(String raw) {
+    final String body = raw.trim();
+    if (body.isEmpty) {
+      return null;
+    }
+    if (body.startsWith(imageMessagePrefix) ||
+        body.startsWith(fileMessagePrefix)) {
+      return null;
+    }
+    String? directPlaceId;
+    String? thumbUrl;
+    String? legacyPostId;
+    final List<String> lines = body
+        .split('\n')
+        .map((String e) => e.trim())
+        .where((String e) => e.isNotEmpty)
+        .toList();
+    for (final String line in lines) {
+      if (line.startsWith(placeSharePrefix)) {
+        final String id = line.substring(placeSharePrefix.length).trim();
+        if (_looksLikePlaceUuid(id)) {
+          directPlaceId = id;
+        }
+      } else if (line.startsWith(placeShareThumbPrefix)) {
+        thumbUrl = line.substring(placeShareThumbPrefix.length).trim();
+      } else if (RegExp(r'^post:[0-9a-fA-F-]{36}$').hasMatch(line)) {
+        legacyPostId = line.substring('post:'.length).trim();
+      }
+    }
+    if (directPlaceId == null) {
+      final RegExp postRe = RegExp(r'post:([0-9a-fA-F-]{36})');
+      final Iterable<RegExpMatch> matches = postRe.allMatches(body);
+      if (matches.isNotEmpty) {
+        legacyPostId ??= matches.last.group(1);
+      }
+    }
+    if (directPlaceId == null &&
+        (legacyPostId == null || legacyPostId.isEmpty)) {
+      return null;
+    }
+    String headline = 'Заведение';
+    for (final String line in lines) {
+      if (line.startsWith(placeSharePrefix) ||
+          line.startsWith(placeShareThumbPrefix)) {
+        continue;
+      }
+      if (RegExp(r'^post:[0-9a-fA-F-]{36}$').hasMatch(line)) {
+        continue;
+      }
+      headline = line;
+      break;
+    }
+    return ChatPlaceShareParsed(
+      directPlaceId: directPlaceId,
+      legacyPostId: legacyPostId,
+      headline: headline,
+      thumbUrl: thumbUrl,
+    );
   }
 
   static Future<void> setMyUsername(String? username) async {
@@ -1115,6 +1214,21 @@ class ChatService {
 }
 
 /// Мета вложения в теле сообщения [ChatService.fileMessagePrefix].
+/// Данные из сообщения «поделиться заведением» ([ChatService.parsePlaceShareBody]).
+class ChatPlaceShareParsed {
+  const ChatPlaceShareParsed({
+    this.directPlaceId,
+    this.legacyPostId,
+    required this.headline,
+    this.thumbUrl,
+  });
+
+  final String? directPlaceId;
+  final String? legacyPostId;
+  final String headline;
+  final String? thumbUrl;
+}
+
 class ChatFileMeta {
   const ChatFileMeta({
     required this.url,

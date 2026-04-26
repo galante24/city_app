@@ -7,7 +7,6 @@ import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../services/app_theme_controller.dart';
 import '../services/city_data_service.dart';
-import '../services/notification_prefs.dart';
 import '../services/place_service.dart';
 import '../widgets/profile_edit_fields.dart';
 import '../widgets/soft_tab_header.dart';
@@ -22,18 +21,10 @@ class AccountSettingsScreen extends StatefulWidget {
 
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   int _profileReload = 0;
-  bool? _notifOff;
 
   @override
   void initState() {
     super.initState();
-    unawaited(
-      NotificationPrefs.areGloballyDisabled().then((bool v) {
-        if (mounted) {
-          setState(() => _notifOff = v);
-        }
-      }),
-    );
   }
 
   Widget _settingsBody({
@@ -89,37 +80,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         const SizedBox(height: 4),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          value: _notifOff == true,
-          onChanged: _notifOff == null
-              ? null
-              : (bool v) async {
-                  final bool off = v;
-                  await NotificationPrefs.setGloballyDisabled(off);
-                  if (mounted) {
-                    setState(() {
-                      _notifOff = off;
-                    });
-                  }
-                },
-          title: Text(
-            'Отключить уведомления',
-            style: TextStyle(color: cs.onSurface),
-          ),
-          subtitle: Text(
-            'Не показывать в шторке уведомления о новых сообщениях (на этом устройстве)',
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          activeThumbColor: cs.primary,
-        ),
-        const SizedBox(height: 4),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
           value: row?['notifications_enabled'] != false,
           onChanged: snap.connectionState == ConnectionState.waiting
               ? null
               : (bool v) async {
                   try {
                     await PlaceService.updateMyNotificationsEnabled(v);
+                    await CityDataService.refreshNotificationsEnabledCache();
                     if (mounted) {
                       setState(() => _profileReload++);
                     }
@@ -132,11 +99,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   }
                 },
           title: Text(
-            'Уведомления заведений',
+            'Уведомления',
             style: TextStyle(color: cs.onSurface),
           ),
           subtitle: Text(
-            'Push о новостях заведений, на которые вы подписаны (нужен FCM-токен в профиле)',
+            'Push о сообщениях в чатах и записях заведений, на которые вы подписаны. '
+            'Токен устройства сохраняется в профиле при входе.',
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           activeThumbColor: cs.primary,

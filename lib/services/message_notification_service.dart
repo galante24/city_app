@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -7,10 +8,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_ready.dart';
 import 'chat_service.dart';
+import 'city_data_service.dart';
+import 'notification_delivery_policy.dart';
+import 'notification_navigation_handler.dart';
 import 'notification_prefs.dart';
 import 'open_chat_tracker.dart';
 
-/// Локальные уведомления о новых входящих сообщениях (Realtime + flutter_local_notifications).
+/// Локальные уведомления: Realtime (чат), FCM foreground, тап → навигация.
 class MessageNotificationService {
   MessageNotificationService._();
   static final MessageNotificationService instance =
@@ -34,11 +38,18 @@ class MessageNotificationService {
         importance: Importance.high,
         showBadge: true,
       );
+      const AndroidNotificationChannel placeChannel = AndroidNotificationChannel(
+        'place_posts',
+        'Заведения',
+        description: 'Новости и акции подписанных заведений',
+        importance: Importance.high,
+        showBadge: true,
+      );
       final AndroidFlutterLocalNotificationsPlugin? android = _plugin
           .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+              AndroidFlutterLocalNotificationsPlugin>();
       await android?.createNotificationChannel(channel);
+      await android?.createNotificationChannel(placeChannel);
     }
     const AndroidInitializationSettings android = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
@@ -50,18 +61,22 @@ class MessageNotificationService {
     );
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: ios),
+      onDidReceiveNotificationResponse: (
+        NotificationResponse response,
+      ) {
+        final String? p = response.payload;
+        unawaited(NotificationNavigationHandler.handlePayload(p));
+      },
     );
     if (Platform.isAndroid) {
       final AndroidFlutterLocalNotificationsPlugin? android = _plugin
           .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+              AndroidFlutterLocalNotificationsPlugin>();
       await android?.requestNotificationsPermission();
     } else if (Platform.isIOS) {
       final IOSFlutterLocalNotificationsPlugin? iosP = _plugin
           .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin
-          >();
+              IOSFlutterLocalNotificationsPlugin>();
       await iosP?.requestPermissions(alert: true, badge: true, sound: true);
     }
   }
@@ -74,14 +89,71 @@ class MessageNotificationService {
     return _idCounter;
   }
 
+  Future<void> showChatNotification({
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    if (kIsWeb) {
+      return;
+    }
+    try {
+      const AndroidNotificationDetails android = AndroidNotificationDetails(
+        'chat_messages',
+        'Сообщения',
+        channelDescription: 'Входящие сообщения',
+        importance: Importance.max,
+        priority: Priority.high,
+      );
+      const DarwinNotificationDetails ios = DarwinNotificationDetails();
+      const NotificationDetails details = NotificationDetails(
+        android: android,
+        iOS: ios,
+      );
+      await _plugin.show(_nextNotifyId(), title, body, details, payload: payload);
+    } on Object {
+      /* ignore */
+    }
+  }
+
+  Future<void> showPlacePostNotification({
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    if (kIsWeb) {
+      return;
+    }
+    try {
+      const AndroidNotificationDetails android = AndroidNotificationDetails(
+        'place_posts',
+        'Заведения',
+        channelDescription: 'Посты заведений',
+        importance: Importance.max,
+        priority: Priority.high,
+      );
+      const DarwinNotificationDetails ios = DarwinNotificationDetails();
+      const NotificationDetails details = NotificationDetails(
+        android: android,
+        iOS: ios,
+      );
+      await _plugin.show(_nextNotifyId(), title, body, details, payload: payload);
+    } on Object {
+      /* ignore */
+    }
+  }
+
   Future<void> _onMessageInsert(PostgresChangePayload payload) async {
     if (kIsWeb) {
+      return;
+    }
+    if (NotificationDeliveryPolicy.suppressRealtimeChatBanners) {
       return;
     }
     if (!supabaseAppReady) {
       return;
     }
-    if (await NotificationPrefs.areGloballyDisabled()) {
+    if (!await CityDataService.areNotificationsEnabledForCurrentUser()) {
       return;
     }
     final Map<String, dynamic> rec = Map<String, dynamic>.from(
@@ -109,6 +181,12 @@ class MessageNotificationService {
       body = '📷 Фото';
     } else if (body.startsWith(ChatService.fileMessagePrefix)) {
       body = '📎 Файл';
+    } else {
+      final ChatPlaceShareParsed? ps = ChatService.parsePlaceShareBody(body);
+      if (ps != null) {
+        final String h = ps.headline.trim();
+        body = h.isEmpty ? '📍 Заведение' : '📍 $h';
+      }
     }
     if (fwdFrom != null && fwdFrom.isNotEmpty) {
       body = '↪ $fwdFrom: ${body.isEmpty ? '…' : body}';
@@ -119,14 +197,19 @@ class MessageNotificationService {
     if (body.length > 180) {
       body = '${body.substring(0, 177)}…';
     }
-    unawaited(_showForConversation(convId, body));
+    unawaited(_showForConversation(convId, body, senderId));
   }
 
-  Future<void> _showForConversation(String conversationId, String body) async {
+  Future<void> _showForConversation(
+    String conversationId,
+    String body,
+    String senderId,
+  ) async {
     try {
-      final String title = await ChatService.titleForNotification(
-        conversationId,
-      );
+      final String chatTitle =
+          await ChatService.titleForNotification(conversationId);
+      final String senderLabel =
+          await ChatService.displayNameForUserId(senderId) ?? 'Сообщение';
       const AndroidNotificationDetails android = AndroidNotificationDetails(
         'chat_messages',
         'Сообщения',
@@ -139,9 +222,20 @@ class MessageNotificationService {
         android: android,
         iOS: ios,
       );
-      await _plugin.show(_nextNotifyId(), title, body, details);
+      final String payload = jsonEncode(<String, dynamic>{
+        'type': NotificationNavigationHandler.payloadTypeChat,
+        'conversation_id': conversationId,
+        'title': chatTitle,
+      });
+      await _plugin.show(
+        _nextNotifyId(),
+        senderLabel,
+        body,
+        details,
+        payload: payload,
+      );
     } on Object {
-      /* сеть/RLS: не падаем */
+      /* ignore */
     }
   }
 

@@ -34,6 +34,28 @@ class CityDataService {
     }
   }
 
+  /// Кэш [profiles.notifications_enabled] для пушей и Realtime-уведомлений.
+  static bool? _cachedNotificationsEnabled;
+
+  static Future<void> refreshNotificationsEnabledCache() async {
+    final String? uid = client?.auth.currentUser?.id;
+    if (uid == null) {
+      _cachedNotificationsEnabled = null;
+      return;
+    }
+    final Map<String, dynamic>? row = await fetchProfileRow(uid);
+    _cachedNotificationsEnabled = row?['notifications_enabled'] != false;
+  }
+
+  /// Разрешены ли push-уведомления (чаты и заведения) по профилю.
+  static Future<bool> areNotificationsEnabledForCurrentUser() async {
+    if (_cachedNotificationsEnabled != null) {
+      return _cachedNotificationsEnabled!;
+    }
+    await refreshNotificationsEnabledCache();
+    return _cachedNotificationsEnabled ?? true;
+  }
+
   /// Копирует в `profiles` имя, фамилию и дату рождения из [User.userMetadata],
   /// если в БД они ещё пустые (после регистрации Supabase пишет данные в metadata).
   static Future<bool> syncProfileFromAuthMetadata(User user) async {
@@ -399,6 +421,16 @@ class CityDataService {
   /// Один из [kAdministratorEmails] в `auth.users` / JWT.
   static bool isCurrentUserAdminSync() {
     return _isAdministratorEmail(client?.auth.currentUser?.email);
+  }
+
+  /// Только [profiles.is_admin] — совпадает с [public.is_profiles_admin()] в RLS.
+  static Future<bool> isProfilesAdminRls() async {
+    final String? uid = client?.auth.currentUser?.id;
+    if (uid == null) {
+      return false;
+    }
+    final Map<String, dynamic>? row = await fetchProfileRow(uid);
+    return row?['is_admin'] == true;
   }
 
   /// Админ приложения (email) или флаг [profiles.is_admin] (для RLS в БД).
