@@ -614,6 +614,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
           Expanded(
             child: _MessagesList(
               conversationId: widget.conversationId,
+              isGroup: isGroup,
               me: me,
               timeLabel: _timeLabel,
               canDeleteMessage: _canDeleteMessage,
@@ -776,9 +777,22 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   }
 }
 
+class _GroupSenderUi {
+  const _GroupSenderUi({
+    required this.profileTitle,
+    required this.bubbleLabel,
+    this.avatarUrl,
+  });
+
+  final String profileTitle;
+  final String bubbleLabel;
+  final String? avatarUrl;
+}
+
 class _MessagesList extends StatefulWidget {
   const _MessagesList({
     required this.conversationId,
+    required this.isGroup,
     required this.me,
     required this.timeLabel,
     required this.canDeleteMessage,
@@ -794,6 +808,7 @@ class _MessagesList extends StatefulWidget {
   });
 
   final String conversationId;
+  final bool isGroup;
   final String? me;
   final String Function(String? iso) timeLabel;
   final bool Function(Map<String, dynamic> m, String? me) canDeleteMessage;
@@ -814,6 +829,83 @@ class _MessagesList extends StatefulWidget {
 class _MessagesListState extends State<_MessagesList> {
   String? _dataSig;
   String? _rowsReportSig;
+  final Map<String, Future<_GroupSenderUi>> _groupSenderFutures =
+      <String, Future<_GroupSenderUi>>{};
+
+  Future<_GroupSenderUi> _groupSenderUi(String userId) {
+    return _groupSenderFutures.putIfAbsent(
+      userId,
+      () => _fetchGroupSenderUi(userId),
+    );
+  }
+
+  Future<_GroupSenderUi> _fetchGroupSenderUi(String userId) async {
+    final Map<String, dynamic>? row =
+        await CityDataService.fetchProfileRow(userId);
+    final String? uname = (row?['username'] as String?)?.trim();
+    final String fn = (row?['first_name'] as String?)?.trim() ?? '';
+    final String ln = (row?['last_name'] as String?)?.trim() ?? '';
+    final String full = ('$fn $ln').trim();
+    final String profileTitle = full.isNotEmpty
+        ? full
+        : (uname != null && uname.isNotEmpty ? '@$uname' : 'Участник');
+    final String bubbleLabel = (uname != null && uname.isNotEmpty)
+        ? '@$uname'
+        : (full.isNotEmpty ? full : 'Участник');
+    final String? av = (row?['avatar_url'] as String?)?.trim();
+    return _GroupSenderUi(
+      profileTitle: profileTitle,
+      bubbleLabel: bubbleLabel,
+      avatarUrl: (av != null && av.isNotEmpty) ? av : null,
+    );
+  }
+
+  void _onGroupMemberTap(
+    BuildContext context, {
+    required String messageId,
+    required String peerUserId,
+    required _GroupSenderUi sender,
+    required bool isDeleted,
+  }) {
+    if (widget.selectingMessages && !isDeleted) {
+      widget.onToggleMessageSelection(messageId);
+      return;
+    }
+    if (isDeleted) {
+      return;
+    }
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext c) => DirectPeerProfileScreen(
+          conversationId: widget.conversationId,
+          peerUserId: peerUserId,
+          title: sender.profileTitle,
+        ),
+      ),
+    );
+  }
+
+  static Color _groupNickColor(String userId) {
+    const List<Color> palette = <Color>[
+      Color(0xFF55A99C),
+      Color(0xFF5EA7DE),
+      Color(0xFFD4A574),
+      Color(0xFFBA8FDE),
+      Color(0xFF7CB893),
+      Color(0xFFE07B7B),
+      Color(0xFF7EB6D4),
+      Color(0xFFB5C76B),
+    ];
+    return palette[userId.hashCode.abs() % palette.length];
+  }
+
+  static String _initialForGroupAvatar(String label) {
+    final String s = label.replaceAll('@', '').trim();
+    if (s.isEmpty) {
+      return '?';
+    }
+    return s[0].toUpperCase();
+  }
 
   void _maybeReportRowsForForward(List<Map<String, dynamic>> rows) {
     final String sig = rows.isEmpty
@@ -994,6 +1086,279 @@ class _MessagesListState extends State<_MessagesList> {
             final bool selected = mid != null &&
                 widget.selectingMessages &&
                 widget.selectedMessageIds.contains(mid);
+
+            if (widget.isGroup && !mine && sid != null && mid != null) {
+              final String gMid = mid;
+              final String gSid = sid;
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: FutureBuilder<_GroupSenderUi>(
+                  future: _groupSenderUi(gSid),
+                  builder:
+                      (BuildContext ctx, AsyncSnapshot<_GroupSenderUi> snap) {
+                    final _GroupSenderUi sender = snap.hasData
+                        ? snap.data!
+                        : const _GroupSenderUi(
+                            profileTitle: 'Участник',
+                            bubbleLabel: '…',
+                          );
+                    return GestureDetector(
+                      onTap: widget.selectingMessages && !isDeleted
+                          ? () => widget.onToggleMessageSelection(gMid)
+                          : null,
+                      onLongPress: widget.selectingMessages || isDeleted
+                          ? null
+                          : () => _showMessageActions(
+                                ctx,
+                                m,
+                                me,
+                                displayImageUrl: displayImageUrl,
+                                fileMeta: fileMeta,
+                              ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Material(
+                            color: Colors.transparent,
+                            clipBehavior: Clip.antiAlias,
+                            borderRadius: BorderRadius.circular(22),
+                            child: InkWell(
+                              onTap: () => _onGroupMemberTap(
+                                ctx,
+                                messageId: gMid,
+                                peerUserId: gSid,
+                                sender: sender,
+                                isDeleted: isDeleted,
+                              ),
+                              child: CircleAvatar(
+                                radius: 18,
+                                backgroundColor:
+                                    kPrimaryBlue.withValues(alpha: 0.22),
+                                backgroundImage: sender.avatarUrl != null
+                                    ? NetworkImage(sender.avatarUrl!)
+                                    : null,
+                                child: sender.avatarUrl == null
+                                    ? Text(
+                                        _initialForGroupAvatar(
+                                          sender.bubbleLabel,
+                                        ),
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          color: kPrimaryBlue,
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.sizeOf(context).width * 0.82,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDeleted
+                                    ? deletedBubble
+                                    : (incomingUnread
+                                          ? incomingUnreadBubble
+                                          : incomingBubble),
+                                border: widget.selectingMessages && selected
+                                    ? Border.all(
+                                        color: kPrimaryBlue,
+                                        width: 2.5,
+                                      )
+                                    : incomingUnread
+                                        ? const Border(
+                                            left: BorderSide(
+                                              color: kPrimaryBlue,
+                                              width: 3,
+                                            ),
+                                          )
+                                        : null,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                  bottomLeft: Radius.circular(4),
+                                  bottomRight: Radius.circular(16),
+                                ),
+                                boxShadow: <BoxShadow>[
+                                  BoxShadow(
+                                    color: const Color(0xFF0A0A0A)
+                                        .withValues(alpha: 0.04),
+                                    blurRadius: 2,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  if (!isDeleted)
+                                    Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () => _onGroupMemberTap(
+                                          ctx,
+                                          messageId: gMid,
+                                          peerUserId: gSid,
+                                          sender: sender,
+                                          isDeleted: isDeleted,
+                                        ),
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 4,
+                                            ),
+                                            child: Text(
+                                              sender.bubbleLabel,
+                                              style: TextStyle(
+                                                color: _groupNickColor(gSid),
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (displayImageUrl != null && !isDeleted)
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxHeight: MediaQuery.sizeOf(
+                                                context,
+                                              ).height *
+                                              0.28,
+                                          maxWidth: MediaQuery.sizeOf(
+                                                context,
+                                              ).width *
+                                              0.7,
+                                        ),
+                                        child: Image.network(
+                                          displayImageUrl,
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (
+                                            BuildContext _,
+                                            Widget child,
+                                            ImageChunkEvent? loadingProgress,
+                                          ) {
+                                            if (loadingProgress == null) {
+                                              return child;
+                                            }
+                                            return const Padding(
+                                              padding: EdgeInsets.all(24),
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            );
+                                          },
+                                          errorBuilder: (
+                                            BuildContext context,
+                                            Object error,
+                                            StackTrace? st,
+                                          ) =>
+                                              const Padding(
+                                            padding: EdgeInsets.all(8),
+                                            child: Text(
+                                              'не удалось загрузить фото',
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  else if (attachmentMeta != null &&
+                                      !isDeleted)
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        Icon(
+                                          attachmentMeta.isVideo
+                                              ? Icons.play_circle_outline
+                                              : Icons
+                                                  .insert_drive_file_outlined,
+                                          color: cs.onSurface,
+                                          size: 28,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            attachmentMeta.name,
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: cs.onSurface,
+                                              fontSize: 15,
+                                              fontWeight: incomingUnread
+                                                  ? FontWeight.w600
+                                                  : null,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  else if (text.isNotEmpty)
+                                    Text(
+                                      text,
+                                      textAlign: TextAlign.left,
+                                      style: TextStyle(
+                                        color: isDeleted
+                                            ? cs.onSurfaceVariant
+                                            : cs.onSurface,
+                                        fontSize: 15,
+                                        fontWeight: incomingUnread
+                                            ? FontWeight.w600
+                                            : null,
+                                        fontStyle: isDeleted
+                                            ? FontStyle.italic
+                                            : null,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  if (displayImageUrl != null && !isDeleted)
+                                    const SizedBox(height: 4)
+                                  else
+                                    const SizedBox(height: 2),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: <Widget>[
+                                      Text(
+                                        widget.timeLabel(
+                                          m['created_at'] as String?,
+                                        ),
+                                        style: TextStyle(
+                                          color: cs.onSurfaceVariant,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              );
+            }
+
             return Align(
               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
               child: GestureDetector(
