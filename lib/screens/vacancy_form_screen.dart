@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../app_constants.dart';
 import '../services/job_vacancy_service.dart';
@@ -135,16 +136,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
         try {
           imageUrl = await JobVacancyService.uploadVacancyImage(_picked!);
         } on Object {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Фото не загрузилось (доступ к хранилищу). Публикуем без фото — '
-                  'при необходимости обновите приложение после согласования с администратором.',
-                ),
-              ),
-            );
-          }
+          // публикуем без фото, без всплывающих «ошибок» (любой авторизованный — без модерации)
         }
       }
       await JobVacancyService.insert(
@@ -161,6 +153,19 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
           const SnackBar(content: Text('Вакансия опубликована')),
         );
       }
+    } on PostgrestException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      final bool tableMissing = e.code == 'PGRST205' &&
+          (e.message.contains('job_vacancies') ||
+              e.message.contains('schema cache'));
+      final String text = tableMissing
+          ? 'Сервер: не создана таблица вакансий. В Supabase выполните миграции проекта (файл 014_job_vacancies.sql или команда: supabase db push).'
+          : e.message;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось опубликовать. $text')),
+      );
     } on Object catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
