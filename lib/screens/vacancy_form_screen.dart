@@ -13,6 +13,28 @@ import '../utils/capitalize_first_formatter.dart';
 const Color _kFormBg = Color(0xFFF0F2F5);
 const Color _kFieldFill = Color(0xFFFFFFFF);
 
+/// Одна строка для SnackBar: код, сообщение, details, hint (без дублирования).
+String _postgrestTechnicalLine(PostgrestException e) {
+  final StringBuffer b = StringBuffer();
+  b.write('code=${e.code}');
+  if (e.message.isNotEmpty) {
+    b.write(' · ${e.message}');
+  }
+  final String? d = e.details?.toString();
+  if (d != null && d.isNotEmpty && d != e.message) {
+    b.write(' · $d');
+  }
+  if (e.hint != null && e.hint!.isNotEmpty) {
+    b.write(' · hint: ${e.hint}');
+  }
+  String s = b.toString();
+  const int maxLen = 500;
+  if (s.length > maxLen) {
+    s = '${s.substring(0, maxLen)}…';
+  }
+  return s;
+}
+
 class VacancyFormScreen extends StatefulWidget {
   const VacancyFormScreen({super.key});
 
@@ -158,19 +180,43 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
       if (!mounted) {
         return;
       }
+      final String technical = _postgrestTechnicalLine(e);
+      if (kDebugMode) {
+        debugPrint(
+          '[VacancyForm] PostgrestException\n'
+          '  code: ${e.code}\n'
+          '  message: ${e.message}\n'
+          '  details: ${e.details}\n'
+          '  hint: ${e.hint}',
+        );
+      }
       final bool tableMissing = e.code == 'PGRST205' &&
           (e.message.contains('job_vacancies') ||
               e.message.contains('schema cache'));
       final String text = tableMissing
-          ? 'Сервер: не создана таблица вакансий. В Supabase выполните миграции проекта (файл 014_job_vacancies.sql или команда: supabase db push).'
-          : e.message;
+          ? 'Сервер: не найдена таблица job_vacancies. В Supabase: SQL → вставьте supabase/migrations/014_job_vacancies.sql и выполните, либо в терминале: supabase link && supabase db push.'
+          : technical;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось опубликовать. $text')),
+        SnackBar(
+          content: Text(
+            'Не удалось опубликовать. $text',
+            style: const TextStyle(fontSize: 14, height: 1.25),
+          ),
+          duration: const Duration(seconds: 10),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } on Object catch (e) {
       if (mounted) {
+        if (kDebugMode) {
+          debugPrint('[VacancyForm] $e');
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            duration: const Duration(seconds: 8),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {

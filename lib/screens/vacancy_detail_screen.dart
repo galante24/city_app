@@ -106,12 +106,26 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
 
   Future<void> _call(String phone) async {
     final Uri? uri = _telUri(phone);
-    if (uri != null && await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
+    if (uri == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось открыть звонок')),
+          const SnackBar(content: Text('Некорректный номер')),
+        );
+      }
+      return;
+    }
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось открыть звонок (нет приложения)')),
+          );
+        }
+      }
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Звонок: $e')),
         );
       }
     }
@@ -122,15 +136,13 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     if (d.isEmpty) {
       return null;
     }
-    final String e164;
     if (d.length == 11 && d.startsWith('7')) {
-      e164 = '+$d';
-    } else if (d.length == 10) {
-      e164 = '+7$d';
-    } else {
-      return Uri.tryParse('tel:${raw.trim()}');
+      return Uri.parse('tel:+$d');
     }
-    return Uri.parse('tel:$e164');
+    if (d.length == 10) {
+      return Uri.parse('tel:+7$d');
+    }
+    return Uri.parse('tel:${raw.trim()}');
   }
 
   Future<void> _delete() async {
@@ -189,9 +201,11 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     final String? imageUrl = widget.row['image_url'] as String?;
     final String? me = Supabase.instance.client.auth.currentUser?.id;
     final bool isOwner = me != null && me == _authorId;
+    const Color textPrimary = Color(0xFF1C1C1E);
+    const Color textSecondary = Color(0xFF6C6C70);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: const Color(0xFFF0F2F5),
       appBar: AppBar(
         backgroundColor: kPrimaryBlue,
         foregroundColor: Colors.white,
@@ -206,11 +220,13 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: <Widget>[
           if (imageUrl != null && imageUrl.isNotEmpty) ...<Widget>[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+            Material(
+              elevation: 0.5,
+              borderRadius: BorderRadius.circular(16),
+              clipBehavior: Clip.antiAlias,
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: Image.network(
@@ -228,78 +244,131 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF1C1C1E),
+              color: textPrimary,
+              height: 1.2,
             ),
           ),
           if (salary.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              'Зарплата: $salary',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: widget.accent,
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: widget.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(Icons.payments_outlined, color: widget.accent, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    'от $salary ₽',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: widget.accent,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
           if (addr.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 16),
+            _InfoCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Icon(Icons.place_outlined, size: 22, color: kPrimaryBlue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Text('Адрес', style: TextStyle(fontSize: 13, color: textSecondary)),
+                        const SizedBox(height: 4),
+                        Text(
+                          addr,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: textPrimary,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          _InfoCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Icon(Icons.place_outlined, size: 22, color: Color(0xFF6C6C70)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    addr,
-                    style: const TextStyle(fontSize: 16, color: Color(0xFF1C1C1E)),
+                const Text(
+                  'Описание',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  desc,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    height: 1.45,
+                    color: Color(0xFF3C3C43),
                   ),
                 ),
               ],
             ),
-          ],
-          const SizedBox(height: 16),
-          const Text(
-            'Описание',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-            ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            desc,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.35,
-              color: Color(0xFF3C3C3E),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Контакты',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 8),
-          InkWell(
-            onTap: () => _call(phone),
-            child: Row(
+          const SizedBox(height: 12),
+          _InfoCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                const Icon(Icons.phone, color: kPrimaryBlue, size: 22),
-                const SizedBox(width: 8),
-                Text(
-                  phone,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    color: kPrimaryBlue,
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.underline,
-                    decorationColor: kPrimaryBlue,
+                const Text(
+                  'Контакты',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Material(
+                  color: kPrimaryBlue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: () => _call(phone),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(Icons.call, color: kPrimaryBlue, size: 24),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              phone,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                color: kPrimaryBlue,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, color: textSecondary),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -311,7 +380,10 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
               onPressed: _busy ? null : _openChat,
               style: FilledButton.styleFrom(
                 backgroundColor: kPrimaryBlue,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -334,20 +406,42 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
                       padding: EdgeInsets.only(right: 8),
                       child: Icon(Icons.chat_bubble_outline, size: 22),
                     ),
-                  const Text('Связаться'),
+                  const Text('Связаться в чате', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
           ] else if (isOwner) ...<Widget>[
-            const Text(
-              'Это ваша вакансия',
-              style: TextStyle(
-                color: Color(0xFF6C6C70),
-                fontSize: 14,
+            const Center(
+              child: Text(
+                'Это ваша вакансия',
+                style: TextStyle(
+                  color: textSecondary,
+                  fontSize: 14,
+                ),
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 0.4,
+      shadowColor: Colors.black26,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: child,
       ),
     );
   }

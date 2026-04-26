@@ -32,7 +32,7 @@ class CityApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Город',
+      title: 'Лесосибирск',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

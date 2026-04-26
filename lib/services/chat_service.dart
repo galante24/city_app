@@ -495,6 +495,9 @@ class ChatService {
         .order('created_at', ascending: true);
   }
 
+  /// Префикс тела сообщения для вложенного изображения (публичный URL).
+  static const String imageMessagePrefix = '!img:';
+
   static Future<void> sendMessage(String conversationId, String body) async {
     final SupabaseClient? c = _c;
     if (c == null) {
@@ -513,6 +516,25 @@ class ChatService {
       'sender_id': uid,
       'body': t,
     });
+  }
+
+  static Future<void> sendImageMessage(String conversationId, String publicImageUrl) async {
+    final String u = publicImageUrl.trim();
+    if (u.isEmpty) {
+      return;
+    }
+    return sendMessage(conversationId, '$imageMessagePrefix$u');
+  }
+
+  static String? imageUrlFromMessageBody(String body) {
+    if (!body.startsWith(imageMessagePrefix)) {
+      return null;
+    }
+    final String u = body.substring(imageMessagePrefix.length).trim();
+    if (u.isEmpty) {
+      return null;
+    }
+    return u;
   }
 
   static Future<void> setMyUsername(String? username) async {

@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/admin_config.dart';
@@ -77,6 +81,96 @@ class CityDataService {
   }
 
   /// Сохранить дату рождения (столбец [birth_date] в [profiles]).
+  /// Загрузка аватара в `city_media/avatars/<uid>/...` и публичный URL.
+  static Future<String> uploadProfileAvatar(XFile file) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final String? uid = c.auth.currentUser?.id;
+    if (uid == null) {
+      throw StateError('Нет сессии');
+    }
+    final String name = file.name;
+    final int dot = name.lastIndexOf('.');
+    final String ext =
+        dot >= 0 && dot < name.length - 1 ? name.substring(dot + 1).toLowerCase() : 'jpg';
+    final String path = 'avatars/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    const Map<String, String> ct = <String, String>{
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+    };
+    final String contentType = ct[ext] ?? 'image/jpeg';
+    final bucket = c.storage.from(cityMediaBucket);
+    if (kIsWeb) {
+      final Uint8List bytes = await file.readAsBytes();
+      await bucket.uploadBinary(
+        path,
+        bytes,
+        fileOptions: FileOptions(upsert: true, contentType: contentType),
+      );
+    } else {
+      await bucket.upload(
+        path,
+        File(file.path),
+        fileOptions: FileOptions(upsert: true, contentType: contentType),
+      );
+    }
+    return bucket.getPublicUrl(path);
+  }
+
+  static Future<void> setMyAvatarUrl(String? publicUrl) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final String? uid = c.auth.currentUser?.id;
+    if (uid == null) {
+      throw StateError('Нет сессии');
+    }
+    await c.from('profiles').update(<String, dynamic>{'avatar_url': publicUrl}).eq('id', uid);
+  }
+
+  /// Вложение в чат: `city_media/chat_media/<uid>/...`
+  static Future<String> uploadChatImage(XFile file) async {
+    final c = client;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    final String? uid = c.auth.currentUser?.id;
+    if (uid == null) {
+      throw StateError('Нет сессии');
+    }
+    final String name = file.name;
+    final int dot = name.lastIndexOf('.');
+    final String ext =
+        dot >= 0 && dot < name.length - 1 ? name.substring(dot + 1).toLowerCase() : 'jpg';
+    final String path = 'chat_media/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    const Map<String, String> ct = <String, String>{
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+    };
+    final String contentType = ct[ext] ?? 'image/jpeg';
+    final bucket = c.storage.from(cityMediaBucket);
+    if (kIsWeb) {
+      final Uint8List bytes = await file.readAsBytes();
+      await bucket.uploadBinary(
+        path,
+        bytes,
+        fileOptions: FileOptions(upsert: true, contentType: contentType),
+      );
+    } else {
+      await bucket.upload(
+        path,
+        File(file.path),
+        fileOptions: FileOptions(upsert: true, contentType: contentType),
+      );
+    }
+    return bucket.getPublicUrl(path);
+  }
+
   static Future<void> setMyBirthDate(DateTime? date) async {
     final c = client;
     if (c == null) {

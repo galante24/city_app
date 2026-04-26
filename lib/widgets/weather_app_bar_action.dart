@@ -146,41 +146,62 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
                 ? '—'
                 : '…');
 
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: _openSheet,
-            borderRadius: BorderRadius.circular(10),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  if (loading)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+        return Tooltip(
+          message: 'Погода: $kWeatherCityNameRu (Open-Weather Map)',
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _openSheet,
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (loading)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    else
+                      Icon(
+                        c != null
+                            ? _weatherIconDataFromCode(c.iconCode)
+                            : Icons.cloud_outlined,
+                        size: 20,
                       ),
-                    )
-                  else
-                    Icon(
-                      c != null
-                          ? _weatherIconDataFromCode(c.iconCode)
-                          : Icons.cloud_outlined,
-                      size: 20,
+                    const SizedBox(width: 4),
+                    Text(
+                      tempText,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  const SizedBox(width: 4),
-                  Text(
-                    tempText,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(width: 4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 86),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          kWeatherCityNameRu,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: (IconTheme.of(context).color ??
+                                    Theme.of(context).colorScheme.onSurface)
+                                .withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

@@ -1,3 +1,6 @@
+// Запросы к Open-Weather. Ключ и координаты: `lib/config/weather_config.dart`
+// (ключ подставляется при сборке из `api_keys.json` / `--dart-define=OPENWEATHER_API_KEY`).
+
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';

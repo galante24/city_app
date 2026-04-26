@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_constants.dart';
@@ -8,6 +11,7 @@ import '../config/supabase_ready.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
+import '../services/city_data_service.dart';
 import 'group_chat_info_screen.dart';
 
 class UserChatThreadScreen extends StatefulWidget {
@@ -28,7 +32,10 @@ class UserChatThreadScreen extends StatefulWidget {
 
 class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   final TextEditingController _input = TextEditingController();
+  final FocusNode _inputFocus = FocusNode();
   bool _sending = false;
+  bool _sendingImage = false;
+  bool _showEmoji = false;
   String _headerTitle = '';
   bool? _isGroup;
   bool? _isOpen;
@@ -71,9 +78,57 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   @override
   void dispose() {
     _readDebounce?.cancel();
+    _inputFocus.dispose();
     _input.dispose();
     unawaited(ChatUnreadBadge.refresh());
     super.dispose();
+  }
+
+  double get _inputBarBottom {
+    final MediaQueryData mq = MediaQuery.of(context);
+    if (mq.viewInsets.bottom > 0) {
+      return 4 + mq.viewInsets.bottom;
+    }
+    return 4 + mq.viewPadding.bottom;
+  }
+
+  void _toggleEmoji() {
+    if (_showEmoji) {
+      setState(() => _showEmoji = false);
+    } else {
+      FocusManager.instance.primaryFocus?.unfocus();
+      setState(() => _showEmoji = true);
+    }
+  }
+
+  Future<void> _attachImage() async {
+    if (_sending || _sendingImage) {
+      return;
+    }
+    final ImagePicker p = ImagePicker();
+    final XFile? f = await p.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      imageQuality: 85,
+    );
+    if (f == null) {
+      return;
+    }
+    setState(() => _sendingImage = true);
+    try {
+      final String url = await CityDataService.uploadChatImage(f);
+      await ChatService.sendImageMessage(widget.conversationId, url);
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Фото: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sendingImage = false);
+      }
+    }
   }
 
   Future<void> _bootstrapReadState() async {
@@ -249,45 +304,105 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
               onStreamChanged: _scheduleReadSync,
             ),
           ),
-          Container(
-            color: Colors.white,
-            padding: EdgeInsets.fromLTRB(8, 4, 8, 4 + MediaQuery.viewPaddingOf(context).bottom),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: TextField(
-                    controller: _input,
-                    minLines: 1,
-                    maxLines: 4,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: isGroup ? 'Сообщение в группе…' : 'Сообщение…',
-                      filled: true,
-                      fillColor: const Color(0xFFF0F0F0),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                    ),
-                    onSubmitted: (_) => _send(),
+          if (_showEmoji)
+            SizedBox(
+              height: 256,
+              child: EmojiPicker(
+                textEditingController: _input,
+                config: Config(
+                  height: 256,
+                  checkPlatformCompatibility: !kIsWeb,
+                  locale: const Locale('en'),
+                  emojiViewConfig: const EmojiViewConfig(
+                    backgroundColor: Color(0xFF1E2733),
+                    emojiSizeMax: 28,
+                    buttonMode: ButtonMode.MATERIAL,
+                  ),
+                  categoryViewConfig: const CategoryViewConfig(
+                    backgroundColor: Color(0xFF1E2733),
+                    indicatorColor: kPrimaryBlue,
+                    iconColor: Colors.white70,
+                    iconColorSelected: kPrimaryBlue,
+                    backspaceColor: kPrimaryBlue,
+                  ),
+                  bottomActionBarConfig: const BottomActionBarConfig(
+                    backgroundColor: Color(0xFF1E2733),
+                    buttonIconColor: Colors.white70,
+                    buttonColor: Color(0xFF2A3441),
+                    showSearchViewButton: true,
                   ),
                 ),
-                const SizedBox(width: 4),
-                IconButton.filled(
-                  onPressed: _sending ? null : _send,
-                  icon: _sending
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send_rounded),
-                ),
-              ],
+              ),
+            ),
+          Material(
+            color: Colors.white,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(4, 4, 8, _inputBarBottom),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _toggleEmoji,
+                    icon: Icon(
+                      _showEmoji ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
+                      color: kPrimaryBlue,
+                    ),
+                    tooltip: _showEmoji ? 'Клавиатура' : 'Смайлики',
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _sendingImage ? null : _attachImage,
+                    icon: _sendingImage
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.attach_file, color: kPrimaryBlue),
+                    tooltip: 'Прикрепить фото',
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      focusNode: _inputFocus,
+                      minLines: 1,
+                      maxLines: 4,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: isGroup ? 'Сообщение в группе…' : 'Сообщение…',
+                        filled: true,
+                        fillColor: const Color(0xFFF0F0F0),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                      onTap: () {
+                        if (_showEmoji) {
+                          setState(() => _showEmoji = false);
+                        }
+                      },
+                      onSubmitted: (_) => _send(),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  IconButton.filled(
+                    onPressed: _sending ? null : _send,
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -370,9 +485,13 @@ class _MessagesListState extends State<_MessagesList> {
             final String? sid = m['sender_id']?.toString();
             final bool mine = sid == me;
             final bool isDeleted = m['deleted_at'] != null;
+            final String bodyRaw = (m['body'] as String?) ?? '';
+            final String? imageUrl = !isDeleted
+                ? ChatService.imageUrlFromMessageBody(bodyRaw)
+                : null;
             final String text = isDeleted
                 ? 'Сообщение удалено'
-                : (m['body'] as String?) ?? '';
+                : (imageUrl != null ? '' : bodyRaw);
             final DateTime? createdAt = _tryParse(m['created_at'] as String?);
             final bool incomingUnread = !mine &&
                 !isDeleted &&
@@ -447,19 +566,54 @@ class _MessagesListState extends State<_MessagesList> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      Text(
-                        text,
-                        style: TextStyle(
-                          color: isDeleted
-                              ? const Color(0xFF6B6B70)
-                              : (mine ? Colors.white : const Color(0xFF1A1C1C)),
-                          fontSize: 15,
-                          fontWeight: incomingUnread ? FontWeight.w600 : null,
-                          fontStyle: isDeleted ? FontStyle.italic : null,
-                          height: 1.35,
+                      if (imageUrl != null && !isDeleted)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: MediaQuery.sizeOf(context).height * 0.28,
+                              maxWidth: MediaQuery.sizeOf(context).width * 0.7,
+                            ),
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (
+                                BuildContext _,
+                                Widget child,
+                                ImageChunkEvent? loadingProgress,
+                              ) {
+                                if (loadingProgress == null) {
+                                  return child;
+                                }
+                                return const Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                );
+                              },
+                              errorBuilder: (BuildContext context, Object error, StackTrace? st) => const Padding(
+                                padding: EdgeInsets.all(8),
+                                child: Text('не удалось загрузить фото'),
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        Text(
+                          text,
+                          style: TextStyle(
+                            color: isDeleted
+                                ? const Color(0xFF6B6B70)
+                                : (mine ? Colors.white : const Color(0xFF1A1C1C)),
+                            fontSize: 15,
+                            fontWeight: incomingUnread ? FontWeight.w600 : null,
+                            fontStyle: isDeleted ? FontStyle.italic : null,
+                            height: 1.35,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
+                      if (imageUrl != null && !isDeleted)
+                        const SizedBox(height: 4)
+                      else
+                        const SizedBox(height: 2),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.end,

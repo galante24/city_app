@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,6 +22,50 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   int _profileReload = 0;
   bool _scheduledMetadataSync = false;
+  bool _uploadingAvatar = false;
+
+  static const Color _kDarkBg = Color(0xFF0E1621);
+  static const Color _kDarkCard = Color(0xFF1E2733);
+  static const Color _kDarkTextSecondary = Color(0xFF8E9EAE);
+  static const Color _kDarkAccent = Color(0xFF6AB7FF);
+
+  Future<void> _pickAndUploadAvatar() async {
+    if (!supabaseAppReady || _uploadingAvatar) {
+      return;
+    }
+    final ImagePicker p = ImagePicker();
+    final XFile? f = await p.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      imageQuality: 88,
+    );
+    if (f == null) {
+      return;
+    }
+    setState(() => _uploadingAvatar = true);
+    try {
+      final String url = await CityDataService.uploadProfileAvatar(f);
+      await CityDataService.setMyAvatarUrl(url);
+      if (mounted) {
+        setState(() {
+          _profileReload++;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Фото профиля обновлено')),
+        );
+      }
+    } on Object catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось загрузить: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingAvatar = false);
+      }
+    }
+  }
 
   Future<void> _signOut() async {
     if (!supabaseAppReady) {
@@ -88,17 +133,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? ''
             : (phoneRaw.startsWith('+') ? phoneRaw : '+$phoneRaw');
 
+        final String? avatarUrl = (row?['avatar_url'] as String?)?.trim();
         return Scaffold(
-          backgroundColor: const Color(0xFFF2F2F7),
+          backgroundColor: _kDarkBg,
           appBar: AppBar(
-            title: const Text('Профиль'),
-            backgroundColor: Colors.white,
+            title: const Text('Аккаунт'),
+            backgroundColor: const Color(0xFF17212B),
             surfaceTintColor: Colors.transparent,
             elevation: 0,
-            foregroundColor: const Color(0xFF1A1A1A),
+            foregroundColor: Colors.white,
             centerTitle: true,
             titleTextStyle: const TextStyle(
-              color: Color(0xFF1A1A1A),
+              color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.w600,
             ),
@@ -106,12 +152,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: <Widget>[
-              const SizedBox(height: 8),
-              const Center(
-                child: CircleAvatar(
-                  radius: 48,
-                  backgroundColor: kPrimaryBlue,
-                  child: Icon(Icons.person, size: 56, color: Colors.white),
+              const SizedBox(height: 4),
+              Center(
+                child: GestureDetector(
+                  onTap: _uploadingAvatar ? null : _pickAndUploadAvatar,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 52,
+                        backgroundColor: kPrimaryBlue,
+                        backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                            ? NetworkImage(avatarUrl)
+                            : null,
+                        child: avatarUrl == null || avatarUrl.isEmpty
+                            ? const Icon(Icons.person, size: 56, color: Colors.white)
+                            : null,
+                      ),
+                      if (_uploadingAvatar)
+                        const Positioned.fill(
+                          child: ColoredBox(
+                            color: Color(0x66000000),
+                            child: Center(
+                              child: SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Material(
+                          color: kPrimaryBlue,
+                          shape: const CircleBorder(),
+                          elevation: 2,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _uploadingAvatar ? null : _pickAndUploadAvatar,
+                            child: const Padding(
+                              padding: EdgeInsets.all(7),
+                              child: Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -122,7 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A1A),
+                    color: Colors.white,
                     letterSpacing: -0.3,
                   ),
                 ),
@@ -135,19 +227,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               const SizedBox(height: 20),
+              Text(
+                'Информация о вас',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: _kDarkAccent,
+                ),
+              ),
+              const SizedBox(height: 8),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: _kDarkCard,
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -157,45 +251,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 17,
-                        color: Color(0xFF1A1A1A),
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    const Text(
                       'Видны вам; ник — всем в чатах',
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[600],
+                        color: _kDarkTextSecondary,
                         height: 1.2,
                       ),
                     ),
                     const SizedBox(height: 18),
                     _LabeledField(
                       label: 'Email',
+                      labelColor: _kDarkTextSecondary,
                       child: Text(
                         email,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF1A1A1A),
+                          color: Colors.white,
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     _LabeledField(
                       label: 'Имя и фамилия',
+                      labelColor: _kDarkTextSecondary,
                       child: Text(
                         fullName == '—' ? 'Укажите в профиле или при регистрации' : fullName,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
-                          color: fullName == '—' ? const Color(0xFF8E8E93) : const Color(0xFF1A1A1A),
+                          color: fullName == '—' ? _kDarkTextSecondary : Colors.white,
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     _LabeledField(
                       label: 'Дата рождения',
+                      labelColor: _kDarkTextSecondary,
                       child: _ProfileBirthDate(
                         key: ValueKey<String>(
                           'bd_${row?['birth_date']?.toString() ?? ''}_$user.id$_profileReload',
@@ -218,8 +315,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ],
                     const SizedBox(height: 8),
-                    const Divider(height: 28),
+                    const Divider(height: 28, color: Color(0xFF3A4553)),
                     _NickBlock(
+                      dark: true,
                       username: nickForDisplay,
                       userId: user.id,
                       profileReload: _profileReload,
@@ -228,6 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 16),
                     _PhoneBlock(
+                      dark: true,
                       phoneDisplay: phoneDisplay,
                       userId: user.id,
                       profileReload: _profileReload,
@@ -287,6 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 class _NickBlock extends StatelessWidget {
   const _NickBlock({
+    this.dark = false,
     required this.username,
     required this.userId,
     required this.profileReload,
@@ -294,6 +394,7 @@ class _NickBlock extends StatelessWidget {
     required this.onSaved,
   });
 
+  final bool dark;
   final String username;
   final String userId;
   final int profileReload;
@@ -319,6 +420,8 @@ class _NickBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String at = username.isEmpty ? '—' : '@$username';
+    final Color sub = dark ? const Color(0xFF8E9EAE) : const Color(0xFF6C6C70);
+    final Color val = dark ? Colors.white : const Color(0xFF1A1A1A);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -351,22 +454,22 @@ class _NickBlock extends StatelessWidget {
             final Widget nik = SelectableText(
               at,
               maxLines: 1,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF1A1A1A),
+                color: val,
               ),
             );
             if (narrow) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  const Text(
+                  Text(
                     'Ник в чате',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF6C6C70),
+                      color: sub,
                       letterSpacing: 0.2,
                     ),
                   ),
@@ -375,7 +478,7 @@ class _NickBlock extends StatelessWidget {
                     'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
+                      color: sub,
                       height: 1.2,
                     ),
                   ),
@@ -398,12 +501,12 @@ class _NickBlock extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const Text(
+                      Text(
                         'Ник в чате',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF6C6C70),
+                          color: sub,
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -412,7 +515,7 @@ class _NickBlock extends StatelessWidget {
                         'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: sub,
                           height: 1.2,
                         ),
                       ),
@@ -456,7 +559,7 @@ class _NickBlock extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Colors.grey[600],
+            color: sub,
           ),
         ),
         const SizedBox(height: 6),
@@ -474,6 +577,7 @@ class _NickBlock extends StatelessWidget {
 
 class _PhoneBlock extends StatelessWidget {
   const _PhoneBlock({
+    this.dark = false,
     required this.phoneDisplay,
     required this.userId,
     required this.profileReload,
@@ -481,6 +585,7 @@ class _PhoneBlock extends StatelessWidget {
     required this.onSaved,
   });
 
+  final bool dark;
   final String phoneDisplay;
   final String userId;
   final int profileReload;
@@ -502,6 +607,7 @@ class _PhoneBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String display = phoneDisplay.isEmpty ? 'не указан' : phoneDisplay;
+    final Color sub = dark ? const Color(0xFF8E9EAE) : const Color(0xFF6C6C70);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -511,7 +617,9 @@ class _PhoneBlock extends StatelessWidget {
             final TextStyle valueStyle = TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: phoneDisplay.isEmpty ? const Color(0xFF8E8E93) : const Color(0xFF1A1A1A),
+              color: phoneDisplay.isEmpty
+                  ? (dark ? const Color(0xFF8E9EAE) : const Color(0xFF8E8E93))
+                  : (dark ? Colors.white : const Color(0xFF1A1A1A)),
             );
             final Widget phone = SelectableText(
               display,
@@ -522,12 +630,12 @@ class _PhoneBlock extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  const Text(
+                  Text(
                     'Телефон',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF6C6C70),
+                      color: sub,
                       letterSpacing: 0.2,
                     ),
                   ),
@@ -536,7 +644,7 @@ class _PhoneBlock extends StatelessWidget {
                     'Виден только вам. В списке чатов и у других не показывается.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
+                      color: sub,
                       height: 1.2,
                     ),
                   ),
@@ -565,12 +673,12 @@ class _PhoneBlock extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const Text(
+                      Text(
                         'Телефон',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF6C6C70),
+                          color: sub,
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -579,7 +687,7 @@ class _PhoneBlock extends StatelessWidget {
                         'Виден только вам. В списке чатов и у других не показывается.',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: sub,
                           height: 1.2,
                         ),
                       ),
@@ -619,7 +727,7 @@ class _PhoneBlock extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Colors.grey[600],
+            color: sub,
           ),
         ),
         const SizedBox(height: 6),
@@ -629,6 +737,7 @@ class _PhoneBlock extends StatelessWidget {
           ),
           initial: initialForEdit,
           onSaved: onSaved,
+          dark: dark,
         ),
       ],
     );
@@ -639,10 +748,12 @@ class _LabeledField extends StatelessWidget {
   const _LabeledField({
     required this.label,
     required this.child,
+    this.labelColor = const Color(0xFF6C6C70),
   });
 
   final String label;
   final Widget child;
+  final Color labelColor;
 
   @override
   Widget build(BuildContext context) {
@@ -651,10 +762,10 @@ class _LabeledField extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF6C6C70),
+            color: labelColor,
             letterSpacing: 0.2,
           ),
         ),
@@ -851,10 +962,11 @@ class _ProfileUsernameState extends State<_ProfileUsername> {
 }
 
 class _ProfilePhoneE164 extends StatefulWidget {
-  const _ProfilePhoneE164({super.key, this.initial, required this.onSaved});
+  const _ProfilePhoneE164({super.key, this.initial, required this.onSaved, this.dark = false});
 
   final String? initial;
   final VoidCallback onSaved;
+  final bool dark;
 
   @override
   State<_ProfilePhoneE164> createState() => _ProfilePhoneE164State();
@@ -936,7 +1048,10 @@ class _ProfilePhoneE164State extends State<_ProfilePhoneE164> {
     return InputDecoration(
       hintText: '+79991234567',
       filled: true,
-      fillColor: const Color(0xFFF2F2F7),
+      fillColor: widget.dark ? const Color(0xFF131B24) : const Color(0xFFF2F2F7),
+      hintStyle: TextStyle(
+        color: widget.dark ? const Color(0xFF8E9EAE) : null,
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -944,7 +1059,10 @@ class _ProfilePhoneE164State extends State<_ProfilePhoneE164> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE5E5EA), width: 1),
+        borderSide: BorderSide(
+          color: widget.dark ? const Color(0xFF3A4553) : const Color(0xFFE5E5EA),
+          width: 1,
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -962,7 +1080,11 @@ class _ProfilePhoneE164State extends State<_ProfilePhoneE164> {
           child: TextField(
             controller: _c,
             keyboardType: TextInputType.phone,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: widget.dark ? Colors.white : const Color(0xFF1A1A1A),
+            ),
             decoration: _deco(),
             onSubmitted: (_) => _save(),
           ),
