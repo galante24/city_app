@@ -7,7 +7,6 @@ import 'app_constants.dart';
 import 'app_update_check.dart';
 import 'config/supabase_config.dart';
 import 'config/supabase_ready.dart';
-import 'services/city_data_service.dart';
 import 'screens/auth_screen.dart';
 import 'main_tab_index.dart';
 import 'screens/chats_list_screen.dart';
@@ -189,9 +188,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 // ---------------------------------------------------------------------------
 
 const Color _kBentoScaffoldBg = Color(0xFFF5F5F7);
-const Color _kServiceFerryCardBg = Color(0xFFFFFFFF);
-const Color _kServiceFerryTextSecondary = Color(0xFF6C6C70);
-const Color _kServiceFerryTextPrimary = Color(0xFF1C1C1E);
 
 class _ServiceCategory {
   const _ServiceCategory({
@@ -209,16 +205,8 @@ class _ServiceCategory {
   final Color iconAndTitleColor;
 }
 
-class ServicesGridScreen extends StatefulWidget {
+class ServicesGridScreen extends StatelessWidget {
   const ServicesGridScreen({super.key});
-
-  @override
-  State<ServicesGridScreen> createState() => _ServicesGridScreenState();
-}
-
-class _ServicesGridScreenState extends State<ServicesGridScreen> {
-  FerryStatusRow? _ferry;
-  bool _loadingFerry = true;
 
   static const List<_ServiceCategory> _categories = <_ServiceCategory>[
     _ServiceCategory(
@@ -265,22 +253,6 @@ class _ServicesGridScreenState extends State<ServicesGridScreen> {
     ),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_loadFerry());
-  }
-
-  Future<void> _loadFerry() async {
-    final FerryStatusRow? f = await CityDataService.fetchFerryStatus();
-    if (mounted) {
-      setState(() {
-        _ferry = f;
-        _loadingFerry = false;
-      });
-    }
-  }
-
   void _onCategoryTap(BuildContext context, _ServiceCategory c) {
     if (c.id == 'food') {
       Navigator.of(context).push<void>(
@@ -297,111 +269,27 @@ class _ServicesGridScreenState extends State<ServicesGridScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String ferryText = _ferry == null
-        ? (_loadingFerry
-            ? 'Загрузка расписания...'
-            : 'Нет данных в таблице schedules')
-        : _ferry!.statusText;
-    final String? ferryTime = _ferry?.timeText;
-    final bool ferryRun = _ferry == null || _ferry!.isRunning;
-
     return Scaffold(
       backgroundColor: _kBentoScaffoldBg,
       appBar: AppBar(
         title: const Text('Сервисы'),
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Material(
-            color: _kServiceFerryCardBg,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Row(
-                children: <Widget>[
-                  Icon(
-                    ferryRun
-                        ? Icons.directions_boat_filled
-                        : Icons.portable_wifi_off,
-                    color: ferryRun ? const Color(0xFF2ECC71) : Colors.orange[800]!,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        const Text(
-                          'Паром (из schedules)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _kServiceFerryTextSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          ferryText,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: _kServiceFerryTextPrimary,
-                          ),
-                        ),
-                        if (ferryTime != null && ferryTime.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 2),
-                          Text(
-                            ferryTime,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[700],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (_loadingFerry)
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    IconButton(
-                      onPressed: () {
-                        unawaited(_loadFerry());
-                      },
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Обновить',
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const Divider(height: 1, thickness: 1),
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 0.95,
-              ),
-              itemCount: _categories.length,
-              itemBuilder: (BuildContext context, int index) {
-                final _ServiceCategory c = _categories[index];
-                return _BentoServiceCard(
-                  category: c,
-                  onTap: () => _onCategoryTap(context, c),
-                );
-              },
-            ),
-          ),
-        ],
+      body: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 0.95,
+        ),
+        itemCount: _categories.length,
+        itemBuilder: (BuildContext context, int index) {
+          final _ServiceCategory c = _categories[index];
+          return _BentoServiceCard(
+            category: c,
+            onTap: () => _onCategoryTap(context, c),
+          );
+        },
       ),
     );
   }
