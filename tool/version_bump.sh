@@ -53,6 +53,7 @@ for line in lines:
     if newv is None:
         print("version_bump: ожидается a.b.c+N, получено:", val, file=sys.stderr)
         sys.exit(1)
+    print(f"version: {val.strip()} → {newv}", file=sys.stderr)
     suf = m.group(3) or ""
     out.append(f"{m.group(1)}{newv}{suf}")
     print(newv)

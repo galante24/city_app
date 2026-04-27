@@ -1,20 +1,18 @@
-# Git hooks, локальный pre-commit pipeline, CI/Secrets
+# Git hooks, pre-commit, CI, push (city_app)
 
 ## Цель
 
-Один раз настроив `core.hooksPath=.githooks`, на каждый **`git commit`** (по умолчанию) запускается **лёгкий** pipeline: **security → `dart format` (staged) → `flutter analyze` → (opt.) `flutter test` → (opt.) bump `+build` → (opt.) debug APK**.
+После `git config core.hooksPath .githooks` каждый **`git commit`** (без `-m` — см. `prepare-commit-msg`) гоняет **production** pipeline: **security → `dart format` (staged) → блок `print`/`debugPrint`/`TODO` в новых строках → `flutter analyze` → (opt.) `flutter test` → (не блокирует) `performance_warn` → bump `+build` → `flutter build apk --debug` в `builds/local_apk/`.**
 
-Тяжёлые вещи **по умолчанию отключены**: `flutter test` и локальная debug APK — в CI на `main` (см. ниже). Включение: `PRE_COMMIT_FLUTTER_TEST=1`, `PRE_COMMIT_DEBUG_APK=1`.
+**`post-commit` не делает `git push` по умолчанию.** Push только: **`AUTO_PUSH=1 git commit`** (и настроенный upstream, не `GIT_HOOK_NO_PUSH=1`).
 
-После успешного коммита **`post-commit`** пытается **`git push`** (если есть `upstream`).
+`push` в `main` (после ручного/авто `git push` на origin) → **[`android-ota-deploy.yml`](../.github/workflows/android-ota-deploy.yml)** — (опц.) `supabase db push` при **`MIGRATION_APPROVED=1`**, `flutter analyze`, release APK, OTA на VPS. Клиент: OTA + `VpsOtaService`, без смены API.
 
-`push` → GitHub: **[`.github/workflows/android-ota-deploy.yml`](../.github/workflows/android-ota-deploy.yml)** — (опц.) `supabase db push` **только** при repository variable **`MIGRATION_APPROVED=1`**, затем analyze, **release** APK, деплой на VPS и `version.json` (OTA). Приложение: `VpsOtaService`, `lib/config/app_secrets.dart`.
-
-**Отдельный** workflow [`.github/workflows/release.yml`](../.github/workflows/release.yml) — **GitHub Release + Supabase `app_config`**: запускается **вручную** (`workflow_dispatch`) или **при push тега** `v*` (нет дублирования с каждым push в `main`).
+**`release.yml`** — GitHub Release: теги `v*` или `workflow_dispatch` (второй путь, не дублирует каждый commit на `main`).
 
 ---
 
-## 1) Первичная настройка (один раз)
+## 1) Первичная настройка
 
 Из **корня** репозитория `city_app/`:
 
@@ -40,40 +38,35 @@ brew install gitleaks ripgrep
 
 ---
 
-## 2) Поведение `pre-commit` (порядок)
+## 2) Порядок `pre-commit` ([`pre_commit_run.sh`](../tool/audit/pre_commit_run.sh))
 
-| Шаг | Скрипт / команда | Блокировка |
-|-----|------------------|------------|
-| 1 | [`tool/audit/security_scan.sh`](../tool/audit/security_scan.sh) | да |
-| 2 (opt) | [`tool/audit/performance_warn.sh`](../tool/audit/performance_warn.sh) | нет, только при `PRE_COMMIT_PERFORMANCE_WARN=1` |
-| 3 | [`tool/audit/quality_dart.sh`](../tool/audit/quality_dart.sh) (`dart format` на staged `*.dart`) | да (если format упал) |
+| # | Действие | Блокирует? |
+|---|----------|------------|
+| 1 | [`security_scan.sh`](../tool/audit/security_scan.sh) (gitleaks if present, токены в staged, `service_role` в staged, app_secrets) | да |
+| 2 | `quality_dart.sh` — `dart format` на staged `*.dart` | да |
+| 3 | [`bad_dart_staged.sh`](../tool/audit/bad_dart_staged.sh) — в **добавленных** строках diff нет `print(`, `debugPrint(`, `TODO` | да |
 | 4 | `flutter pub get` + `flutter analyze` | да |
-| 5 (opt) | `flutter test` | только при `PRE_COMMIT_FLUTTER_TEST=1` |
-| 6 | [`tool/version_bump.sh`](../tool/version_bump.sh) (только `+build`) + `git add pubspec.yaml` | — (см. исключения) |
-| 7 (opt) | [`tool/local_apk_debug_build.sh`](../tool/local_apk_debug_build.sh) | только при `PRE_COMMIT_DEBUG_APK=1` |
+| 5 | `flutter test` | только при `PRE_COMMIT_FLUTTER_TEST=1` и `test/*_test.dart` |
+| 6 | `performance_warn.sh` | **нет** (по умолчанию включён; `SKIP_PERFORMANCE_WARN=1` — откл.) |
+| 7 | `version_bump.sh` — `version: a.b.c+N → …` в stderr | если не только pubspec / не `SKIP` |
+| 8 | `local_apk_debug_build.sh` — `builds/local_apk/app_v*.apk` | да (`SKIP_LOCAL_DEBUG_APK=1` — аварийно) |
 
-- **Debug APK** по умолчанию **не** собирается. Release — в **CI** (`android-ota-deploy`).
-
-- **Тесты** в pre-commit **по умолчанию** не гоняются; основной прогон — CI или `PRE_COMMIT_FLUTTER_TEST=1` локально.
-
-- В индексе **только** `pubspec.yaml` (ручной бамп) — **автоматический** bump **не** выполняется; остальные шаги — да (если не отключены).
-
-### Переменные отключения (только по необходимости)
+### Переменные окружения
 
 | Переменная | Эффект |
 |------------|--------|
-| `SKIP_PRE_COMMIT_FULL=1` | Только `tool/audit/bump_only.sh` (как раньше: bump + add pubspec) |
-| `SKIP_SECURITY_SCAN=1` | Не запускать security |
-| `SKIP_FLUTTER_ANALYZE=1` | Пропустить `flutter analyze` (нежелательно) |
-| `PRE_COMMIT_FLUTTER_TEST=1` | Запустить `flutter test` (если есть `*_test.dart`) |
-| `SKIP_FLUTTER_TEST=1` | Не гонять тесты, даже при `PRE_COMMIT_FLUTTER_TEST=1` |
-| `SKIP_VERSION_BUMP=1` | Не бампить `version` |
-| `PRE_COMMIT_DEBUG_APK=1` | Собрать debug APK (иначе **не** собирать) |
-| `SKIP_LOCAL_DEBUG_APK=1` | Не собирать debug APK даже при `PRE_COMMIT_DEBUG_APK=1` |
-| `PRE_COMMIT_PERFORMANCE_WARN=1` | Включить `performance_warn.sh` |
-| `GIT_HOOK_AUTO_ADD=1` | Перед проверками выполнить `git add -A` (осторожно: смотрите staging) |
-| `GIT_HOOK_NO_PUSH=1` | `post-commit` не делает `git push` |
-| `PRE_PUSH_DO_RELEASE_APK=1` | `pre-push` вызывает `tool/local_apk_build_and_save.sh` (release в `builds/`) — по умолчанию pre-push **лёгкий** (см. ниже) |
+| `SKIP_PRE_COMMIT_FULL=1` | Только `bump_only.sh` |
+| `SKIP_SECURITY_SCAN=1` | Пропустить security |
+| `SKIP_STAGED_DART_LINT=1` | Пропустить `bad_dart_staged` (только в крайнем случае) |
+| `SKIP_FLUTTER_ANALYZE=1` | Пропустить analyze |
+| `PRE_COMMIT_FLUTTER_TEST=1` | Включить `flutter test` |
+| `SKIP_FLUTTER_TEST=1` | Не тесты при `PRE_COMMIT_FLUTTER_TEST=1` |
+| `SKIP_VERSION_BUMP=1` | Без bump |
+| `SKIP_LOCAL_DEBUG_APK=1` | Без debug APK (редко) |
+| `SKIP_PERFORMANCE_WARN=1` | Не вызывать `performance_warn` |
+| `GIT_HOOK_AUTO_ADD=1` | `git add -A` до проверок |
+| `AUTO_PUSH=1` | Вместе с commit — после `post-commit` сделать `git push` (нужен upstream) |
+| `GIT_HOOK_NO_PUSH=1` | Никогда не пушить из hook, даже при `AUTO_PUSH=1` |
 
 ### `pre-push`
 
@@ -82,7 +75,9 @@ brew install gitleaks ripgrep
 
 ### `prepare-commit-msg`
 
-Пустой текст коммита → от первого файла: `auto: safe update <file> (+N files)`.
+Пустой текст (без `git commit -m`) → **`auto: safe update <первый_файл> (+N files)`** и короткий stat.
+
+### `post-commit` и `AUTO_PUSH=1`
 
 ### Логи
 

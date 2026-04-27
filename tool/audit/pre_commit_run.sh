@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Pre-commit (production-lean): security → (opt. perf) → format → analyze →
-# (opt.) test → (opt.) bump → (opt.) debug APK.
-# См. docs/git-hooks.md. Отключающие env: SKIP_*; включение тяжёлого: PRE_COMMIT_*=1
+# production pre-commit: security → format → block bad (staged +) → analyze →
+# (opt) test → perf warn (не блокирует) → version bump → debug APK
+# См. docs/git-hooks.md. SKIP_* / AUTO_PUSH см. post-commit
 set -euo pipefail
 
 if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
@@ -16,13 +16,11 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 export REPO_ROOT
 cd "$REPO_ROOT" || exit 0
 
-# Опционально: автоматически проиндексировать всё (осторожно: проверяйте staging)
 if [ "${GIT_HOOK_AUTO_ADD:-0}" = "1" ] || [ "${GIT_HOOK_AUTO_ADD:-}" = "true" ]; then
   echo "pre_commit_run: GIT_HOOK_AUTO_ADD=1 — git add -A" >&2
   git add -A
 fi
 
-# Слияния / rebase: только лёгкие проверки
 if [ -f "$(git rev-parse --git-path MERGE_HEAD 2>/dev/null)" ] 2>/dev/null; then
   echo "pre_commit_run: merge in progress — полный pipeline пропущен" >&2
   exit 0
@@ -41,13 +39,11 @@ if [ "${SKIP_PRE_COMMIT_FULL:-0}" = "1" ]; then
   exec bash "$REPO_ROOT/tool/audit/bump_only.sh"
 fi
 
-# Нет staged — нечего валидировать
 if ! git diff --cached --name-only 2>/dev/null | grep -q .; then
   echo "pre_commit_run: нет staged файлов" >&2
   exit 0
 fi
 
-# Только pubspec в индексе — ручной релиз версии, не дублировать bump
 NO_BUMP=0
 CNT=0
 ONLY_PUBSPEC=1
@@ -64,15 +60,17 @@ if [ "$CNT" -eq 1 ] && [ "$ONLY_PUBSPEC" = "1" ]; then
 fi
 
 AUDIT_DIR="$REPO_ROOT/tool/audit"
+
+# 1) Security (blocking)
 bash "$AUDIT_DIR/security_scan.sh" || exit 1
 
-if [ "${PRE_COMMIT_PERFORMANCE_WARN:-0}" = "1" ] || [ "${PRE_COMMIT_PERFORMANCE_WARN:-}" = "true" ]; then
-  bash "$AUDIT_DIR/performance_warn.sh" || true
-fi
-
+# 2) Code quality: format staged .dart
 bash "$AUDIT_DIR/quality_dart.sh" || exit 1
 
-# --- Статика
+# 2b) Block bad patterns in *added* lines (staged diff)
+bash "$AUDIT_DIR/bad_dart_staged.sh" || exit 1
+
+# 2c) Статика
 if [ "${SKIP_FLUTTER_ANALYZE:-0}" != "1" ]; then
   echo "pre_commit_run: flutter pub get…" >&2
   flutter pub get
@@ -82,18 +80,24 @@ else
   echo "pre_commit_run: SKIP_FLUTTER_ANALYZE" >&2
 fi
 
-# Тесты: только по opt-in (CI — основной прогон)
+# 3) Tests: opt-in (PRE_COMMIT_FLUTTER_TEST=1) и есть *_test.dart
 if [ "${PRE_COMMIT_FLUTTER_TEST:-0}" = "1" ] || [ "${PRE_COMMIT_FLUTTER_TEST:-}" = "true" ]; then
   if [ "${SKIP_FLUTTER_TEST:-0}" = "1" ]; then
-    echo "pre_commit_run: SKIP_FLUTTER_TEST — пропуск" >&2
+    echo "pre_commit_run: SKIP_FLUTTER_TEST" >&2
   elif [ -d test ] && [ -n "$(find test -name '*_test.dart' -print -quit 2>/dev/null || true)" ]; then
     echo "pre_commit_run: PRE_COMMIT_FLUTTER_TEST=1 — flutter test…" >&2
     flutter test || exit 1
   fi
 else
-  echo "pre_commit_run: flutter test пропущен (лёгкий pre-commit; opt-in: PRE_COMMIT_FLUTTER_TEST=1)" >&2
+  echo "pre_commit_run: flutter test пропущен (включение: PRE_COMMIT_FLUTTER_TEST=1)" >&2
 fi
 
+# 5) Performance (не блокирует)
+if [ "${SKIP_PERFORMANCE_WARN:-0}" != "1" ]; then
+  bash "$AUDIT_DIR/performance_warn.sh" || true
+fi
+
+# 6) Version bump (только если всё ок выше)
 if [ "${SKIP_VERSION_BUMP:-0}" = "1" ] || [ "$NO_BUMP" = "1" ]; then
   if [ "$NO_BUMP" = "0" ]; then
     echo "pre_commit_run: без version bump" >&2
@@ -109,7 +113,7 @@ else
   done
   if [ "$ONLY_PUB" = "0" ] && [ -f pubspec.yaml ]; then
     if command -v bash >/dev/null 2>&1; then
-      bash "$REPO_ROOT/tool/version_bump.sh" pubspec.yaml
+      bash "$REPO_ROOT/tool/version_bump.sh" pubspec.yaml >&2
       git add pubspec.yaml
     fi
   else
@@ -117,15 +121,11 @@ else
   fi
 fi
 
-# Debug APK: только по opt-in; release — в CI
-if [ "${PRE_COMMIT_DEBUG_APK:-0}" = "1" ] || [ "${PRE_COMMIT_DEBUG_APK:-}" = "true" ]; then
-  if [ "${SKIP_LOCAL_DEBUG_APK:-0}" = "1" ]; then
-    echo "pre_commit_run: SKIP_LOCAL_DEBUG_APK — debug APK пропущен" >&2
-  else
-    bash "$REPO_ROOT/tool/local_apk_debug_build.sh" || exit 1
-  fi
+# 7) Локальный debug APK (обязателен; обход: SKIP_LOCAL_DEBUG_APK=1)
+if [ "${SKIP_LOCAL_DEBUG_APK:-0}" = "1" ]; then
+  echo "pre_commit_run: SKIP_LOCAL_DEBUG_APK=1 — debug APK пропущен" >&2
 else
-  echo "pre_commit_run: debug APK пропущен (opt-in: PRE_COMMIT_DEBUG_APK=1; release в CI)" >&2
+  bash "$REPO_ROOT/tool/local_apk_debug_build.sh" || exit 1
 fi
 
 LOG="$REPO_ROOT/builds/.githook_precommit.log"

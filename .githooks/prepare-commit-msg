@@ -1,6 +1,6 @@
 #!/bin/sh
-# prepare-commit-msg: если сообщение пустое — сгенерировать краткое по git diff (кэш).
-# $1 = путь к файлу сообщения, $2 = источник (message|template|merge|squash|commit)
+# Пустой текст коммита (без -m): auto: safe update <file> (+N files)
+# $1 = файл сообщения, $2 = источник
 set -eu
 
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
@@ -12,7 +12,6 @@ cd "$REPO_ROOT" || exit 0
 MSG_FILE="${1:-}"
 COMMIT_USE="${2:-}"
 
-# merge / squash / amend: не затираем
 case "$COMMIT_USE" in
   merge|squash|commit) exit 0 ;;
 esac
@@ -21,40 +20,31 @@ if [ -z "$MSG_FILE" ] || [ ! -f "$MSG_FILE" ]; then
   exit 0
 fi
 
-# Пользователь явно дал -m: не перетираем
 if [ "$COMMIT_USE" = "message" ]; then
   exit 0
 fi
 
-# Первый непустой не-комментарий
 if [ -n "$(awk '!/^#/ && $0!="" {print; exit}' "$MSG_FILE" 2>/dev/null || true)" ]; then
   exit 0
 fi
 
-# Статистика по staged (в pre-commit мы уже подмешали pubspec)
-if ! command -v git >/dev/null 2>&1; then
-  exit 0
+NAMES_LIST="$(git diff --cached --name-only 2>/dev/null | head -n 50 || true)"
+# shellcheck disable=SC2002,SC2016
+NFILES=0
+if [ -n "$NAMES_LIST" ]; then
+  NFILES=$(printf '%s\n' "$NAMES_LIST" | sed '/^$/d' | grep -c . || true)
 fi
-
-STAT="$(git diff --cached --stat 2>/dev/null | head -n 20 || true)"
-NAMES="$(git diff --cached --name-only 2>/dev/null | head -n 8 | tr '\n' ',' | sed 's/,$//' || true)"
-TOP="$(git diff --cached --name-only 2>/dev/null | head -n 1 | sed 's|.*/||' || true)"
-
-# Короткое инфо о типе
-PREF="chore"
-if echo "$NAMES" | grep -E '\.(dart)$' >/dev/null 2>&1; then
-  PREF="chore"
+if [ -z "$NFILES" ] || [ "$NFILES" -lt 0 ] 2>/dev/null; then
+  NFILES=0
 fi
-# если только конфиг/скрипты
-if [ -n "$TOP" ] && [ -n "$NAMES" ]; then
-  NFILES="$(printf '%s\n' "$NAMES" | tr ',' '\n' | grep -c . 2>/dev/null || echo 0)"
-  FIRST_LINE="auto: safe update ${TOP} (+${NFILES} files)"
-  # shellcheck disable=SC2002
+TOP="$(printf '%s' "$NAMES_LIST" | head -n 1 | sed 's|.*/||')"
+
+if [ -n "$TOP" ] && [ "$NFILES" -gt 0 ] 2>/dev/null; then
   {
-    echo "$FIRST_LINE"
+    echo "auto: safe update $TOP (+${NFILES} files)"
     echo ""
     echo "Staged (stat):"
-    echo "$STAT"
+    git diff --cached --stat 2>/dev/null | head -n 25
   } > "${MSG_FILE}.new" && mv "${MSG_FILE}.new" "$MSG_FILE"
 else
   echo "chore: update" > "${MSG_FILE}.new" && mv "${MSG_FILE}.new" "$MSG_FILE"

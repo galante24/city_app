@@ -1,5 +1,6 @@
 #!/bin/sh
-# post-commit: push; лог в builds/.githook_postcommit.log. Откл: GIT_HOOK_NO_PUSH=1
+# post-commit: git push ТОЛЬКО при AUTO_PUSH=1. Лог: builds/.githook_postcommit.log
+# Пропуск push: не задано AUTO_PUSH | GIT_HOOK_NO_PUSH=1 | нет upstream
 set -eu
 
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
@@ -15,6 +16,12 @@ if [ "${GIT_HOOK_NO_PUSH:-0}" = "1" ] || [ "${GIT_HOOK_NO_PUSH:-}" = "true" ]; t
   exit 0
 fi
 
+# По умолчанию НЕ пушим (безопасно). Явно: AUTO_PUSH=1 git commit
+if [ "${AUTO_PUSH:-0}" != "1" ] && [ "${AUTO_PUSH:-}" != "true" ]; then
+  echo "post-commit: push пропущен (только с AUTO_PUSH=1 и настроенным upstream)" >&2
+  exit 0
+fi
+
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT" || exit 0
 
@@ -24,22 +31,20 @@ if [ "$BRANCH" = "HEAD" ]; then
   exit 0
 fi
 
-# Нет настроенного remote
 if ! git remote get-url origin >/dev/null 2>&1; then
   echo "post-commit: нет remote origin, push пропущен" >&2
   exit 0
 fi
 
-# Проверка tracking (опционально пушим и без, но -u вредно автоматом)
 LOGF="$REPO_ROOT/builds/.githook_postcommit.log"
 mkdir -p "$REPO_ROOT/builds" 2>/dev/null || true
 {
-  echo "=== post-commit $BRANCH $(date 2>/dev/null || true) ==="
+  echo "=== post-commit AUTO_PUSH=1 $BRANCH $(date 2>/dev/null || true) ==="
 } >>"$LOGF" 2>/dev/null || true
 
 if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
   if git push >>"$LOGF" 2>&1; then
-    echo "post-commit: git push выполнен"
+    echo "post-commit: git push выполнен" >&2
   else
     echo "post-commit: git push не удался (см. $LOGF)" >&2
     exit 0

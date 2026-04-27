@@ -35,26 +35,7 @@ else
   echo "security_scan: gitleaks не в PATH — эвристики only (установите gitleaks для жёсткого режима)" >&2
 fi
 
-if [ -d lib ] && command -v rg >/dev/null 2>&1; then
-  HIT=$(rg -l 'service_role' lib -g'*.dart' 2>/dev/null | { grep -vE '/test/|_test\.dart$' || true; } | head -1)
-  if [ -n "${HIT:-}" ]; then
-    fail "service_role в $HIT — запрещено на клиенте (анон+RLS на сервере)"
-  fi
-elif [ -d lib ]; then
-  F=""
-  while IFS= read -r f; do
-    [ -f "$f" ] || continue
-    if grep -qF 'service_role' "$f" 2>/dev/null; then
-      F=$f
-      break
-    fi
-  done <<EOF
-$(find lib -name '*.dart' ! -path '*/test/*' 2>/dev/null)
-EOF
-  if [ -n "$F" ]; then
-    fail "service_role в $F — запрещено на клиенте"
-  fi
-fi
+# (service_role: блокировка в staged, см. ниже)
 
 # HTTP в app_secrets
 if [ -f lib/config/app_secrets.dart ] && command -v rg >/dev/null 2>&1; then
@@ -74,6 +55,24 @@ while IFS= read -r f; do
   esac
   if grep -E 'ghp_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}' "$f" 2>/dev/null; then
     fail "в $f похож токен (pattern)"
+  fi
+done <<EOF
+$STAGED
+EOF
+
+# Staged: service_role (клиент не должен коммитить)
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  case "$f" in
+    *.dart) ;;
+    *) continue ;;
+  esac
+  if command -v rg >/dev/null 2>&1; then
+    if rg 'service_role' "$f" 2>/dev/null | head -1 | grep -q .; then
+      fail "service_role в staged $f"
+    fi
+  elif grep -qF 'service_role' "$f" 2>/dev/null; then
+    fail "service_role в staged $f"
   fi
 done <<EOF
 $STAGED
