@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Блок: в добавленных строках staged-диффа нет print(, debugPrint(, литерала TODO
+# Блок: в добавленных строках staged-диффа нет print(, debugPrint(, литералов TODO / FIXME
 # (только +строки; правки в существующем коде не требуют чистить весь файл).
 # Аварийный обход: SKIP_STAGED_DART_LINT=1
 set -euo pipefail
@@ -21,11 +21,11 @@ fi
 HIT="$(
   git diff --cached -U0 -- '*.dart' 2>/dev/null \
     | awk '/^\+/ && $0 !~ /^\+{3} / { sub(/^\+/, ""); print }' \
-    | grep -E '\bprint\s*\(|\bdebugPrint\s*\(|\bTODO\b' || true
+    | grep -E '\bprint\s*\(|\bdebugPrint\s*\(|\bTODO\b|\bFIXME\b' || true
 )"
 
 if [ -n "$HIT" ]; then
-  echo "bad_dart_staged FAIL: в новых/изменённых строках не допускаются print(, debugPrint(, TODO" >&2
+  echo "bad_dart_staged FAIL: в новых строках не допускаются print(, debugPrint(, TODO, FIXME" >&2
   echo "Фрагменты:" >&2
   echo "$HIT" | head -n 20 >&2
   echo "… (см. git diff --cached) — исправьте или SKIP_STAGED_DART_LINT=1 (только в крайнем случае)" >&2

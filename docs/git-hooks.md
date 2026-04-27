@@ -2,7 +2,7 @@
 
 ## Цель
 
-После `git config core.hooksPath .githooks` каждый **`git commit`** (без `-m` — см. `prepare-commit-msg`) гоняет **production** pipeline: **security → `dart format` (staged) → блок `print`/`debugPrint`/`TODO` в новых строках → `flutter analyze` → (opt.) `flutter test` → (не блокирует) `performance_warn` → bump `+build` → `flutter build apk --debug` в `builds/local_apk/`.**
+После `git config core.hooksPath .githooks` каждый **`git commit`** (без `-m` — см. `prepare-commit-msg`) гоняет **production** pipeline: **security → `dart format` (staged) → опцион. `PRE_COMMIT_DART_FIX=1` / `DART_FIX_APPLY=1` → `dart fix --apply` — блок `print`/`debugPrint`/`TODO`/`FIXME` в новых строках → `flutter analyze` → (opt.) `flutter test` → (не блокирует) `performance_warn` → bump `+build` → `flutter build apk --debug` в `builds/local_apk/`.** В конце — сводка в лог (✔ checks, version, путь к APK) и `builds/.githook_precommit.log`.**
 
 **`post-commit` не делает `git push` по умолчанию.** Push только: **`AUTO_PUSH=1 git commit`** (и настроенный upstream, не `GIT_HOOK_NO_PUSH=1`).
 
@@ -43,8 +43,8 @@ brew install gitleaks ripgrep
 | # | Действие | Блокирует? |
 |---|----------|------------|
 | 1 | [`security_scan.sh`](../tool/audit/security_scan.sh) (gitleaks if present, токены в staged, `service_role` в staged, app_secrets) | да |
-| 2 | `quality_dart.sh` — `dart format` на staged `*.dart` | да |
-| 3 | [`bad_dart_staged.sh`](../tool/audit/bad_dart_staged.sh) — в **добавленных** строках diff нет `print(`, `debugPrint(`, `TODO` | да |
+| 2 | `quality_dart.sh` — `dart format` на staged `*.dart`; при `PRE_COMMIT_DART_FIX=1` или `DART_FIX_APPLY=1` — `dart fix --apply` + `git add -u lib` | да |
+| 3 | [`bad_dart_staged.sh`](../tool/audit/bad_dart_staged.sh) — в **добавленных** строках diff нет `print(`, `debugPrint(`, `TODO`, `FIXME` | да |
 | 4 | `flutter pub get` + `flutter analyze` | да |
 | 5 | `flutter test` | только при `PRE_COMMIT_FLUTTER_TEST=1` и `test/*_test.dart` |
 | 6 | `performance_warn.sh` | **нет** (по умолчанию включён; `SKIP_PERFORMANCE_WARN=1` — откл.) |
@@ -60,6 +60,7 @@ brew install gitleaks ripgrep
 | `SKIP_STAGED_DART_LINT=1` | Пропустить `bad_dart_staged` (только в крайнем случае) |
 | `SKIP_FLUTTER_ANALYZE=1` | Пропустить analyze |
 | `PRE_COMMIT_FLUTTER_TEST=1` | Включить `flutter test` |
+| `PRE_COMMIT_DART_FIX=1` | После `dart format`: `dart fix --apply` (как `DART_FIX_APPLY=1` в `quality_dart.sh`) |
 | `SKIP_FLUTTER_TEST=1` | Не тесты при `PRE_COMMIT_FLUTTER_TEST=1` |
 | `SKIP_VERSION_BUMP=1` | Без bump |
 | `SKIP_LOCAL_DEBUG_APK=1` | Без debug APK (редко) |
@@ -79,6 +80,8 @@ brew install gitleaks ripgrep
 
 ### `post-commit` и `AUTO_PUSH=1`
 
+По умолчанию **push не выполняется**; в лог: `Run git push to deploy` (и подсказка `AUTO_PUSH=1 git commit` для авто push).
+
 ### Логи
 
 - `builds/.githook_precommit.log` — успешные прогоны pre-commit pipeline.  
@@ -91,7 +94,7 @@ brew install gitleaks ripgrep
 Триггер: **`push` в `main`**, `workflow_dispatch`.
 
 1. **Supabase** — `supabase db push` **только** если **repository variable** `MIGRATION_APPROVED` = `1` (и заданы `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` и т.д.). Иначе шаг пропущен, сборка **продолжается**.  
-2. `flutter pub get` → `flutter analyze`  
+2. `flutter pub get` → `flutter analyze` → **`flutter test`** (если есть `test/*_test.dart`, иначе notice и пропуск)  
 3. `flutter build apk --release`  
 4. SHA-256; при OTA SSH — **бэкап** прежних `city_app.apk` и `version.json` в `*.prev` на сервере, затем `scp` APK и запись `version.json`.
 

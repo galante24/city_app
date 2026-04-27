@@ -1,6 +1,6 @@
 #!/bin/sh
-# post-commit: git push ТОЛЬКО при AUTO_PUSH=1. Лог: builds/.githook_postcommit.log
-# Пропуск push: не задано AUTO_PUSH | GIT_HOOK_NO_PUSH=1 | нет upstream
+# post-commit: git push ТОЛЬКО при AUTO_PUSH=1. Иначе — подсказка про deploy.
+# Лог: builds/.githook_postcommit.log
 set -eu
 
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
@@ -13,12 +13,13 @@ fi
 
 if [ "${GIT_HOOK_NO_PUSH:-0}" = "1" ] || [ "${GIT_HOOK_NO_PUSH:-}" = "true" ]; then
   echo "post-commit: GIT_HOOK_NO_PUSH, push пропущен" >&2
+  echo "post-commit: Run git push to deploy" >&2
   exit 0
 fi
 
-# По умолчанию НЕ пушим (безопасно). Явно: AUTO_PUSH=1 git commit
 if [ "${AUTO_PUSH:-0}" != "1" ] && [ "${AUTO_PUSH:-}" != "true" ]; then
-  echo "post-commit: push пропущен (только с AUTO_PUSH=1 и настроенным upstream)" >&2
+  echo "post-commit: push не выполнялся (по умолчанию). Run git push to deploy" >&2
+  echo "post-commit: или: AUTO_PUSH=1 git commit — для авто push после коммита" >&2
   exit 0
 fi
 
@@ -28,11 +29,13 @@ cd "$REPO_ROOT" || exit 0
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 if [ "$BRANCH" = "HEAD" ]; then
   echo "post-commit: detached HEAD, push пропущен" >&2
+  echo "post-commit: Run git push to deploy" >&2
   exit 0
 fi
 
 if ! git remote get-url origin >/dev/null 2>&1; then
-  echo "post-commit: нет remote origin, push пропущен" >&2
+  echo "post-commit: нет remote origin" >&2
+  echo "post-commit: Run git push to deploy" >&2
   exit 0
 fi
 
@@ -51,6 +54,7 @@ if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
   fi
 else
   echo "post-commit: ветка $BRANCH без upstream, выполните: git push -u origin $BRANCH" | tee -a "$LOGF" >&2
+  echo "post-commit: Run git push to deploy" >&2
   exit 0
 fi
 

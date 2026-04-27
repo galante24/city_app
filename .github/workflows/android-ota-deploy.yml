@@ -77,6 +77,17 @@ jobs:
       - name: Flutter analyze
         run: flutter analyze
 
+      - name: Flutter test
+        run: |
+          set -euo pipefail
+          if [ -d test ] && [ -n "$(find test -name '*_test.dart' -print -quit 2>/dev/null || true)" ]; then
+            echo "::group::flutter test"
+            flutter test
+            echo "::endgroup::"
+          else
+            echo "::notice:: Нет test/*_test.dart — пропуск flutter test"
+          fi
+
       - name: Read version
         id: ver
         run: |

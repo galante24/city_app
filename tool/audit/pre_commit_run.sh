@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# production pre-commit: security → format → block bad (staged +) → analyze →
-# (opt) test → perf warn (не блокирует) → version bump → debug APK
-# См. docs/git-hooks.md. SKIP_* / AUTO_PUSH см. post-commit
+# Production pre-commit (главная точка входа через .githooks/pre-commit)
+# 1 SECURITY 2 AUTO-FIX (format + opt dart fix) 3 bad code 4 analyze 5 tests (opt)
+# 6 perf warn 7 version bump 8 debug APK 9 summary log
+# См. docs/git-hooks.md — AUTO_PUSH, SKIP_*, PRE_COMMIT_DART_FIX, PRE_COMMIT_FLUTTER_TEST
 set -euo pipefail
 
 if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
@@ -40,7 +41,7 @@ if [ "${SKIP_PRE_COMMIT_FULL:-0}" = "1" ]; then
 fi
 
 if ! git diff --cached --name-only 2>/dev/null | grep -q .; then
-  echo "pre_commit_run: нет staged файлов" >&2
+  echo "pre_commit_run: нет staged файлов — коммит отмените или добавьте файлы (git add)" >&2
   exit 0
 fi
 
@@ -61,16 +62,19 @@ fi
 
 AUDIT_DIR="$REPO_ROOT/tool/audit"
 
-# 1) Security (blocking)
+# --- 1) SECURITY (blocking)
 bash "$AUDIT_DIR/security_scan.sh" || exit 1
 
-# 2) Code quality: format staged .dart
+# --- 2) AUTO FIX: format staged; опционально dart fix --apply (PRE_COMMIT_DART_FIX=1 / DART_FIX_APPLY=1)
+if [ "${PRE_COMMIT_DART_FIX:-0}" = "1" ] || [ "${PRE_COMMIT_DART_FIX:-}" = "true" ]; then
+  export DART_FIX_APPLY=1
+fi
 bash "$AUDIT_DIR/quality_dart.sh" || exit 1
 
-# 2b) Block bad patterns in *added* lines (staged diff)
+# --- 3) Block print / debugPrint / TODO / FIXME in added lines
 bash "$AUDIT_DIR/bad_dart_staged.sh" || exit 1
 
-# 2c) Статика
+# --- 4) ANALYZE (blocking)
 if [ "${SKIP_FLUTTER_ANALYZE:-0}" != "1" ]; then
   echo "pre_commit_run: flutter pub get…" >&2
   flutter pub get
@@ -80,24 +84,27 @@ else
   echo "pre_commit_run: SKIP_FLUTTER_ANALYZE" >&2
 fi
 
-# 3) Tests: opt-in (PRE_COMMIT_FLUTTER_TEST=1) и есть *_test.dart
+# --- 5) TEST (optional)
 if [ "${PRE_COMMIT_FLUTTER_TEST:-0}" = "1" ] || [ "${PRE_COMMIT_FLUTTER_TEST:-}" = "true" ]; then
   if [ "${SKIP_FLUTTER_TEST:-0}" = "1" ]; then
     echo "pre_commit_run: SKIP_FLUTTER_TEST" >&2
   elif [ -d test ] && [ -n "$(find test -name '*_test.dart' -print -quit 2>/dev/null || true)" ]; then
     echo "pre_commit_run: PRE_COMMIT_FLUTTER_TEST=1 — flutter test…" >&2
     flutter test || exit 1
+  else
+    echo "pre_commit_run: нет test/*_test.dart — flutter test пропущен" >&2
   fi
 else
-  echo "pre_commit_run: flutter test пропущен (включение: PRE_COMMIT_FLUTTER_TEST=1)" >&2
+  echo "pre_commit_run: flutter test пропущен (PRE_COMMIT_FLUTTER_TEST=1 для включения)" >&2
 fi
 
-# 5) Performance (не блокирует)
+# --- 6) Performance (не блокирует)
 if [ "${SKIP_PERFORMANCE_WARN:-0}" != "1" ]; then
   bash "$AUDIT_DIR/performance_warn.sh" || true
 fi
 
-# 6) Version bump (только если всё ок выше)
+# --- 7) VERSION BUMP
+BUMPED_VER=""
 if [ "${SKIP_VERSION_BUMP:-0}" = "1" ] || [ "$NO_BUMP" = "1" ]; then
   if [ "$NO_BUMP" = "0" ]; then
     echo "pre_commit_run: без version bump" >&2
@@ -112,27 +119,54 @@ else
     fi
   done
   if [ "$ONLY_PUB" = "0" ] && [ -f pubspec.yaml ]; then
-    if command -v bash >/dev/null 2>&1; then
-      bash "$REPO_ROOT/tool/version_bump.sh" pubspec.yaml >&2
-      git add pubspec.yaml
-    fi
+    BUMPED_VER="$(bash "$REPO_ROOT/tool/version_bump.sh" pubspec.yaml 2>&1 | tail -n 1 || true)"
+    git add pubspec.yaml
   else
     echo "pre_commit_run: bump пропущен" >&2
   fi
 fi
 
-# 7) Локальный debug APK (обязателен; обход: SKIP_LOCAL_DEBUG_APK=1)
+# --- 8) Local debug APK (обязателен)
+APK_PATH=""
 if [ "${SKIP_LOCAL_DEBUG_APK:-0}" = "1" ]; then
   echo "pre_commit_run: SKIP_LOCAL_DEBUG_APK=1 — debug APK пропущен" >&2
 else
   bash "$REPO_ROOT/tool/local_apk_debug_build.sh" || exit 1
+  VER_LINE="$(grep -E '^version:' pubspec.yaml | head -1 | sed 's/^version:[[:space:]]*//;s/[[:space:]]#.*$//;s/[[:space:]]*$//;s/\r$//')"
+  CODE="${VER_LINE#*+}"
+  if [ -n "$CODE" ] && [ "$CODE" != "$VER_LINE" ]; then
+    APK_PATH="builds/local_apk/app_v${CODE}.apk"
+  fi
 fi
 
+# --- 9) LOG file + human summary
 LOG="$REPO_ROOT/builds/.githook_precommit.log"
 mkdir -p "$REPO_ROOT/builds" 2>/dev/null || true
+TS="$(date -Iseconds 2>/dev/null || date)"
 {
-  echo "=== pre_commit_run OK $(date -Iseconds 2>/dev/null || date) ==="
-} >> "$LOG" 2>/dev/null || true
+  echo "=== pre_commit_run OK $TS ==="
+  echo "staged: $(git diff --cached --name-only 2>/dev/null | tr '\n' ' ')"
+  if [ -n "$BUMPED_VER" ]; then
+    echo "version bump output: $BUMPED_VER"
+  fi
+  if [ -n "$APK_PATH" ] && [ -f "$REPO_ROOT/$APK_PATH" ]; then
+    echo "apk: $APK_PATH"
+  fi
+} >>"$LOG" 2>/dev/null || true
 
-echo "pre_commit_run: OK" >&2
+VER_DISPLAY="$(grep -E '^version:' pubspec.yaml 2>/dev/null | head -1 | sed 's/^version:[[:space:]]*//;s/[[:space:]]#.*$//;s/\r$//' || echo '?')"
+{
+  echo "" >&2
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+  echo "✔ checks passed" >&2
+  echo "✔ version (pubspec): $VER_DISPLAY" >&2
+  if [ -n "$APK_PATH" ] && [ -f "$REPO_ROOT/$APK_PATH" ]; then
+    echo "✔ APK: $APK_PATH" >&2
+  elif [ "${SKIP_LOCAL_DEBUG_APK:-0}" != "1" ]; then
+    echo "✔ APK: собран (см. builds/local_apk/)" >&2
+  fi
+  echo "→ CI/OTA: после git push (main) — android-ota-deploy. Локальный push: опционально AUTO_PUSH=1" >&2
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+} 2>&1
+
 exit 0
