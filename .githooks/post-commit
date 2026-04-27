@@ -1,0 +1,52 @@
+#!/bin/sh
+# post-commit: push; лог в builds/.githook_postcommit.log. Откл: GIT_HOOK_NO_PUSH=1
+set -eu
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  exit 0
+fi
+
+if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+  exit 0
+fi
+
+if [ "${GIT_HOOK_NO_PUSH:-0}" = "1" ] || [ "${GIT_HOOK_NO_PUSH:-}" = "true" ]; then
+  echo "post-commit: GIT_HOOK_NO_PUSH, push пропущен" >&2
+  exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" || exit 0
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [ "$BRANCH" = "HEAD" ]; then
+  echo "post-commit: detached HEAD, push пропущен" >&2
+  exit 0
+fi
+
+# Нет настроенного remote
+if ! git remote get-url origin >/dev/null 2>&1; then
+  echo "post-commit: нет remote origin, push пропущен" >&2
+  exit 0
+fi
+
+# Проверка tracking (опционально пушим и без, но -u вредно автоматом)
+LOGF="$REPO_ROOT/builds/.githook_postcommit.log"
+mkdir -p "$REPO_ROOT/builds" 2>/dev/null || true
+{
+  echo "=== post-commit $BRANCH $(date 2>/dev/null || true) ==="
+} >>"$LOGF" 2>/dev/null || true
+
+if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+  if git push >>"$LOGF" 2>&1; then
+    echo "post-commit: git push выполнен"
+  else
+    echo "post-commit: git push не удался (см. $LOGF)" >&2
+    exit 0
+  fi
+else
+  echo "post-commit: ветка $BRANCH без upstream, выполните: git push -u origin $BRANCH" | tee -a "$LOGF" >&2
+  exit 0
+fi
+
+exit 0

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../app_constants.dart';
 import '../config/weather_config.dart';
 import '../services/weather_service.dart';
+import 'city_network_image.dart';
 
 IconData _weatherIconDataFromCode(String? icon) {
   final String i = icon ?? '';
@@ -396,25 +397,17 @@ class _WeatherForecastSheetState extends State<_WeatherForecastSheet> {
                                           ),
                                       leading: ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
-                                        child: Image.network(
-                                          openWeatherIconUrl(d.iconCode),
+                                        child: SizedBox(
                                           width: 48,
                                           height: 48,
-                                          fit: BoxFit.contain,
-                                          errorBuilder:
-                                              (
-                                                _,
-                                                Object error,
-                                                StackTrace? stackTrace,
-                                              ) {
-                                                return Icon(
-                                                  _weatherIconDataFromCode(
-                                                    d.iconCode,
-                                                  ),
-                                                  size: 40,
-                                                  color: kPrimaryBlue,
-                                                );
-                                              },
+                                          child: CityNetworkImage.fillParent(
+                                            imageUrl:
+                                                openWeatherIconUrl(d.iconCode),
+                                            boxFit: BoxFit.contain,
+                                            errorIcon: _weatherIconDataFromCode(
+                                              d.iconCode,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                       title: Text(

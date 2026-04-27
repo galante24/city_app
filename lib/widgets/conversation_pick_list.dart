@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
+import 'city_network_image.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 
@@ -76,11 +77,6 @@ class ConversationPickList extends StatelessWidget {
                     children: <Widget>[
                       CircleAvatar(
                         backgroundColor: kPrimaryBlue.withValues(alpha: 0.2),
-                        backgroundImage: !item.isGroup &&
-                                item.otherAvatarUrl != null &&
-                                item.otherAvatarUrl!.isNotEmpty
-                            ? NetworkImage(item.otherAvatarUrl!)
-                            : null,
                         child: item.isGroup
                             ? const Icon(
                                 Icons.group,
@@ -89,7 +85,11 @@ class ConversationPickList extends StatelessWidget {
                               )
                             : (item.otherAvatarUrl != null &&
                                       item.otherAvatarUrl!.isNotEmpty
-                                  ? null
+                                  ? CityNetworkImage.avatar(
+                                      context: c,
+                                      imageUrl: item.otherAvatarUrl,
+                                      diameter: 40,
+                                    )
                                   : Text(
                                       item.title.isNotEmpty
                                           ? item.title[0].toUpperCase()

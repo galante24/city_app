@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../utils/image_cache_extent.dart';
+import 'city_network_image.dart';
 
 /// Квадратное превью заведения в списке (обложка / логотип).
 class PlaceListSquareThumb extends StatelessWidget {
@@ -32,48 +32,19 @@ class PlaceListSquareThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final String? url = imageUrl?.trim();
     final bool hasUrl = url != null && url.isNotEmpty;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: hasUrl
-            ? Image.network(
-                url,
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                width: size,
-                height: size,
-                cacheWidth: imageCacheExtentPx(context, size),
-                cacheHeight: imageCacheExtentPx(context, size),
-                loadingBuilder: (
-                  BuildContext context,
-                  Widget child,
-                  ImageChunkEvent? progress,
-                ) {
-                  if (progress == null) {
-                    return child;
-                  }
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      _grayPlaceholder(),
-                      const Center(
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-                errorBuilder:
-                    (BuildContext context, Object error, StackTrace? st) =>
-                        _grayPlaceholder(),
-              )
-            : _grayPlaceholder(),
-      ),
-    );
+    return hasUrl
+        ? CityNetworkImage.square(
+            imageUrl: url,
+            size: size,
+            borderRadius: borderRadius,
+          )
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(borderRadius),
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: _grayPlaceholder(),
+            ),
+          );
   }
 }

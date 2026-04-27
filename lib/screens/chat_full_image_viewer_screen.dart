@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/chat_download_share.dart';
+import '../widgets/city_network_image.dart';
 
 /// Полноэкранный просмотр фото из чата (масштаб, шапка, меню как в референсе).
 class ChatFullImageViewerScreen extends StatelessWidget {
@@ -152,32 +153,9 @@ class ChatFullImageViewerScreen extends StatelessWidget {
         child: InteractiveViewer(
           minScale: 0.6,
           maxScale: 4,
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.contain,
-            loadingBuilder: (
-              BuildContext _,
-              Widget child,
-              ImageChunkEvent? loadingProgress,
-            ) {
-              if (loadingProgress == null) {
-                return child;
-              }
-              return const Padding(
-                padding: EdgeInsets.all(48),
-                child: CircularProgressIndicator(color: Colors.white54),
-              );
-            },
-            errorBuilder: (BuildContext _, Object error, StackTrace? st) {
-              return const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Не удалось загрузить изображение',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70),
-                ),
-              );
-            },
+          child: CityNetworkImage.viewer(
+            imageUrl: imageUrl,
+            placeholderColor: const Color(0x33000000),
           ),
         ),
       ),

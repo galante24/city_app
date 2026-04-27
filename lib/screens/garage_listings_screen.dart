@@ -8,7 +8,7 @@ import '../app_constants.dart'
     show kPrimaryBlue, listingFloorAreaWithSuffix;
 import '../main_shell_navigation.dart';
 import '../services/garage_listing_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/city_main_navigation_bar.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
@@ -370,43 +370,16 @@ class _GarageListTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: imageUrl != null && imageUrl!.isNotEmpty
-                ? Image.network(
-                    imageUrl!,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    cacheWidth: imageCacheExtentPx(context, 64),
-                    cacheHeight: imageCacheExtentPx(context, 64),
-                    loadingBuilder: (
-                      BuildContext context,
-                      Widget child,
-                      ImageChunkEvent? progress,
-                    ) {
-                      if (progress == null) {
-                        return child;
-                      }
-                      return ColoredBox(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        child: const Center(
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      );
-                    },
-                    errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                        _garageImagePlaceholder(accent, 64),
-                  )
-                : _garageImagePlaceholder(accent, 64),
-          ),
+          imageUrl != null && imageUrl!.isNotEmpty
+              ? CityNetworkImage.square(
+                  imageUrl: imageUrl,
+                  size: 64,
+                  borderRadius: 10,
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: _garageImagePlaceholder(accent, 64),
+                ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

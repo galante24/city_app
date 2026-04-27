@@ -1,0 +1,154 @@
+# Push в main: 1) опц. миграции (MIGRATION_APPROVED=1) 2) analyze 3) release APK 4) VPS + version.json (OTA)
+#
+# Секреты: см. docs/git-hooks.md
+#
+# Миграции: только при repository variable MIGRATION_APPROVED=1 (см. docs/git-hooks.md).
+# Перед scp: бэкап city_app.apk и version.json → *.prev (откат на VPS).
+# Порядок: при включённых миграциях — ошибка `supabase db push` блокирует job.
+
+name: Android OTA deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ota-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Supabase CLI
+        if: ${{ vars.MIGRATION_APPROVED == '1' }}
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Supabase db push (только при MIGRATION_APPROVED=1)
+        if: ${{ vars.MIGRATION_APPROVED == '1' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ] || [ -z "${PROJECT_REF:-}" ]; then
+            echo "::warning:: MIGRATION_APPROVED=1, но SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_REF не заданы — шаг пропущен."
+            exit 0
+          fi
+          if [ ! -d supabase/migrations ] || [ ! -f supabase/config.toml ]; then
+            echo "::error:: Ожидается supabase/migrations и supabase/config.toml"
+            exit 1
+          fi
+          supabase link --project-ref "$PROJECT_REF" ${SUPABASE_DB_PASSWORD:+--password "$SUPABASE_DB_PASSWORD"}
+          supabase db push
+          echo "Supabase: migrations applied OK"
+
+      - name: Migrations skipped (not approved)
+        if: ${{ vars.MIGRATION_APPROVED != '1' }}
+        run: |
+          echo "::notice:: MIGRATION_APPROVED != 1 — supabase db push не выполняется. Для применения миграций: Settings → Variables → MIGRATION_APPROVED=1"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Flutter analyze
+        run: flutter analyze
+
+      - name: Read version
+        id: ver
+        run: |
+          set -e
+          LINE=$(grep '^version:' pubspec.yaml | head -1)
+          FULL=${LINE#version:}
+          FULL=$(echo "$FULL" | tr -d ' \r')
+          NAME=${FULL%+*}
+          BUILD=${FULL#*+}
+          if [ -z "$BUILD" ] || [ "$BUILD" = "$FULL" ]; then BUILD=0; fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Version $NAME+$BUILD"
+
+      - name: Keystore (optional, из Secrets)
+        env:
+          B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "${B64:-}" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 пуст — сборка с локальной конфигурацией/дефолтным подписыванием AGP (проверьте android/)"
+            exit 0
+          fi
+          echo "$B64" | base64 -d > android/app/ci-release.jks
+          chmod 600 android/app/ci-release.jks
+          {
+            echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}"
+            echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
+            echo "keyAlias=${{ secrets.KEY_ALIAS }}"
+            echo "storeFile=ci-release.jks"
+          } > android/key.properties
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: SHA-256
+        id: hash
+        run: |
+          H=$(sha256sum "build/app/outputs/flutter-apk/app-release.apk" | awk '{print $1}')
+          echo "sha256=$H" >> "$GITHUB_OUTPUT"
+          echo "sha256=$H"
+
+      - name: Upload APK + version.json to VPS
+        env:
+          KEY: ${{ secrets.OTA_SSH_PRIVATE_KEY }}
+          OTA_SSH_HOST: ${{ secrets.OTA_SSH_HOST }}
+          OTA_SSH_USER: ${{ secrets.OTA_SSH_USER }}
+          OTA_DEPLOY_DIR: ${{ secrets.OTA_DEPLOY_DIR }}
+          OTA_PUBLIC_APK_URL: ${{ secrets.OTA_PUBLIC_APK_URL }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "${OTA_SSH_HOST:-}" ] || [ -z "${OTA_SSH_USER:-}" ]; then
+            echo "::notice:: OTA_SSH_* не заданы — артефакт APK только в Actions"
+            exit 0
+          fi
+          install -d -m 700 ~/.ssh
+          echo "$KEY" > ~/.ssh/ota
+          chmod 600 ~/.ssh/ota
+          ssh-keyscan -H "$OTA_SSH_HOST" >> ~/.ssh/known_hosts
+          D="${OTA_DEPLOY_DIR:-/var/www/ota}"
+          # Предыдущий деплой для отката: city_app.apk.prev, version.json.prev
+          ssh -i ~/.ssh/ota -o StrictHostKeyChecking=yes \
+            "${OTA_SSH_USER}@${OTA_SSH_HOST}" \
+            "D=\"${D}\"; for f in city_app.apk version.json; do if [ -f \"\$D/\$f\" ]; then cp \"\$D/\$f\" \"\$D/\${f}.prev\" || true; fi; done"
+          scp -i ~/.ssh/ota -o StrictHostKeyChecking=yes \
+            "build/app/outputs/flutter-apk/app-release.apk" \
+            "${OTA_SSH_USER}@${OTA_SSH_HOST}:${D}/city_app.apk"
+          PAYLOAD=$(jq -n \
+            --arg v "${{ steps.ver.outputs.name }}" \
+            --arg c "${{ steps.ver.outputs.code }}" \
+            --arg u "${OTA_PUBLIC_APK_URL}" \
+            --arg s "${{ steps.hash.outputs.sha256 }}" \
+            '{version:$v, version_code:($c|tonumber), url:$u, sha256:$s, force:false}')
+          echo "$PAYLOAD" | ssh -i ~/.ssh/ota -o StrictHostKeyChecking=yes \
+            "${OTA_SSH_USER}@${OTA_SSH_HOST}" \
+            "cat > ${D}/version.json"
+          echo "OTA: version.json + APK на VPS"

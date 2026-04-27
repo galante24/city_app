@@ -3,7 +3,12 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_ready.dart';
+import '../features/chat/data/chat_messages_factory.dart';
+import '../features/chat/domain/chat_message.dart';
+import '../features/chat/domain/chat_messages_repository.dart';
+import '../features/chat/domain/chat_exceptions.dart';
 import '../models/conversation_list_item.dart';
+import '../utils/chat_input_sanitizer.dart';
 
 /// Личные чаты + сообщения (Supabase: conversations, chat_messages, …).
 class ChatService {
@@ -73,26 +78,6 @@ class ChatService {
       }
     }
     return null;
-  }
-
-  static Future<String?> findUserIdByEmail(String email) async {
-    final SupabaseClient? c = _c;
-    if (c == null) {
-      return null;
-    }
-    try {
-      final dynamic r = await c.rpc(
-        'find_user_id_by_email',
-        params: <String, dynamic>{'lookup': email.trim()},
-      );
-      final Object? p = _rpcPayload(r);
-      if (p == null) {
-        return null;
-      }
-      return p.toString();
-    } on Exception {
-      return null;
-    }
   }
 
   static Future<String> getOrCreateDirectConversation(
@@ -587,6 +572,8 @@ class ChatService {
     return out;
   }
 
+  /// Устарело: для треда используйте [ChatThreadMessagesNotifier] (пагинация + narrow Realtime).
+  @Deprecated('Используйте ChatThreadMessagesNotifier / ChatMessagesFactory')
   static Stream<List<Map<String, dynamic>>>? watchMessages(
     String conversationId,
   ) {
@@ -654,8 +641,12 @@ class ChatService {
 
   static Future<void> sendFileMessage(
     String conversationId,
-    ChatFileMeta meta,
-  ) async {
+    ChatFileMeta meta, {
+    String? replyToMessageId,
+    String? replySnippet,
+    String? replyAuthorId,
+    String? replyAuthorLabel,
+  }) async {
     return sendMessage(
       conversationId,
       buildFileMessageBody(
@@ -663,6 +654,10 @@ class ChatService {
         fileName: meta.name,
         mimeType: meta.mime,
       ),
+      replyToMessageId: replyToMessageId,
+      replySnippet: replySnippet,
+      replyAuthorId: replyAuthorId,
+      replyAuthorLabel: replyAuthorLabel,
     );
   }
 
@@ -671,18 +666,16 @@ class ChatService {
     String conversationId, {
     int limit = 400,
   }) async {
-    final SupabaseClient? c = _c;
-    if (c == null) {
+    final ChatMessagesRepository? repo = ChatMessagesFactory.tryRepository();
+    if (repo == null) {
       return <Map<String, dynamic>>[];
     }
     try {
-      final List<dynamic> rows = await c
-          .from('chat_messages')
-          .select()
-          .eq('conversation_id', conversationId)
-          .order('created_at', ascending: false)
-          .limit(limit);
-      return rows.cast<Map<String, dynamic>>();
+      final List<ChatMessage> list = await repo.fetchMessagesPage(
+        conversationId: conversationId,
+        limit: limit,
+      );
+      return list.map((ChatMessage m) => m.toMap()).toList();
     } on Object {
       return <Map<String, dynamic>>[];
     }
@@ -727,34 +720,64 @@ class ChatService {
     String body, {
     String? forwardedFromUserId,
     String? forwardedFromLabel,
+    String? replyToMessageId,
+    String? replySnippet,
+    String? replyAuthorId,
+    String? replyAuthorLabel,
   }) async {
-    final SupabaseClient? c = _c;
-    if (c == null) {
-      throw StateError('Supabase не готов');
+    final ChatMessagesRepository? repo = ChatMessagesFactory.tryRepository();
+    if (repo == null) {
+      throw StateError('Слой чата недоступен (Supabase/REST не сконфигурированы)');
     }
-    final String? uid = c.auth.currentUser?.id;
-    if (uid == null) {
-      throw StateError('Нет сессии');
-    }
-    final String t = body.trim();
-    if (t.isEmpty) {
+    final String safe = ChatInputSanitizer.sanitizeOutgoingText(body);
+    if (safe.isEmpty) {
       return;
     }
-    final Map<String, dynamic> row = <String, dynamic>{
-      'conversation_id': conversationId,
-      'sender_id': uid,
-      'body': t,
-    };
-    final String? fwdId = forwardedFromUserId?.trim();
-    final String? fwdLabel = forwardedFromLabel?.trim();
-    if (fwdId != null &&
-        fwdId.isNotEmpty &&
-        fwdLabel != null &&
-        fwdLabel.isNotEmpty) {
-      row['forwarded_from_user_id'] = fwdId;
-      row['forwarded_from_label'] = fwdLabel;
+    try {
+      await repo.sendTextMessage(
+        conversationId: conversationId,
+        body: safe,
+        forwardedFromUserId: forwardedFromUserId,
+        forwardedFromLabel: forwardedFromLabel,
+        replyToMessageId: replyToMessageId,
+        replySnippet: replySnippet,
+        replyAuthorId: replyAuthorId,
+        replyAuthorLabel: replyAuthorLabel,
+      );
+    } on ChatFloodException {
+      rethrow;
     }
-    await c.from('chat_messages').insert(row);
+  }
+
+  /// Режим REST: [filePath] — локальный m4a/aac от [Record].
+  static Future<void> sendVoiceMessage(
+    String conversationId,
+    String filePath, {
+    required int durationMs,
+    String? replyToMessageId,
+    String? replySnippet,
+    String? replyAuthorId,
+    String? replyAuthorLabel,
+  }) async {
+    final ChatMessagesRepository? repo = ChatMessagesFactory.tryRepository();
+    if (repo == null) {
+      throw StateError('Слой чата недоступен (Supabase/REST не сконфигурированы)');
+    }
+    try {
+      await repo.sendVoiceMessage(
+        conversationId: conversationId,
+        filePath: filePath,
+        durationMs: durationMs,
+        replyToMessageId: replyToMessageId,
+        replySnippet: replySnippet,
+        replyAuthorId: replyAuthorId,
+        replyAuthorLabel: replyAuthorLabel,
+      );
+    } on ChatFloodException {
+      rethrow;
+    } on UnsupportedError {
+      rethrow;
+    }
   }
 
   /// Копирует сообщения без метки «переслано от» (устаревший сценарий).
@@ -773,13 +796,24 @@ class ChatService {
 
   static Future<void> sendImageMessage(
     String conversationId,
-    String publicImageUrl,
-  ) async {
+    String publicImageUrl, {
+    String? replyToMessageId,
+    String? replySnippet,
+    String? replyAuthorId,
+    String? replyAuthorLabel,
+  }) async {
     final String u = publicImageUrl.trim();
     if (u.isEmpty) {
       return;
     }
-    return sendMessage(conversationId, '$imageMessagePrefix$u');
+    return sendMessage(
+      conversationId,
+      '$imageMessagePrefix$u',
+      replyToMessageId: replyToMessageId,
+      replySnippet: replySnippet,
+      replyAuthorId: replyAuthorId,
+      replyAuthorLabel: replyAuthorLabel,
+    );
   }
 
   static String? imageUrlFromMessageBody(String body) {
@@ -991,14 +1025,11 @@ class ChatService {
   }
 
   static Future<void> softDeleteMessage(String messageId) async {
-    final SupabaseClient? c = _c;
-    if (c == null) {
-      throw StateError('Supabase не готов');
+    final ChatMessagesRepository? repo = ChatMessagesFactory.tryRepository();
+    if (repo == null) {
+      throw StateError('Слой чата недоступен (Supabase/REST не сконфигурированы)');
     }
-    await c.rpc(
-      'soft_delete_group_message',
-      params: <String, dynamic>{'p_message_id': messageId},
-    );
+    await repo.softDeleteMessage(messageId);
   }
 
   static Future<List<Map<String, dynamic>>> searchProfilesForChat(

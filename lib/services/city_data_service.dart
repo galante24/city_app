@@ -21,14 +21,27 @@ class CityDataService {
     return Supabase.instance.client;
   }
 
-  /// Строка [profiles] по id пользователя (читать [first_name] и т.д.).
+  /// Безопасный набор колонок для чужого профиля (без fcm_token, phone_e164 и т.д.).
+  static const String kProfileSelectPublic =
+      'id, first_name, last_name, username, avatar_url, about, birth_date, updated_at';
+
+  /// Строка [profiles] по id: для своей учётной записи — все поля; для чужого — [kProfileSelectPublic].
   static Future<Map<String, dynamic>?> fetchProfileRow(String userId) async {
     final c = client;
     if (c == null) {
       return null;
     }
+    final String? me = c.auth.currentUser?.id;
+    final bool isSelf = me != null && me == userId;
     try {
-      return await c.from('profiles').select().eq('id', userId).maybeSingle();
+      if (isSelf) {
+        return await c.from('profiles').select().eq('id', userId).maybeSingle();
+      }
+      return await c
+          .from('profiles')
+          .select(kProfileSelectPublic)
+          .eq('id', userId)
+          .maybeSingle();
     } on Exception {
       return null;
     }
@@ -556,7 +569,7 @@ class CityDataService {
     }
     await c.from('news').insert(<String, dynamic>{
       'category': category,
-      'author': author ?? kAdministratorEmail,
+      'author': author ?? 'admin',
       'title': title,
       'body': body,
       'media_url': mediaUrl,

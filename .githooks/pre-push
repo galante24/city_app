@@ -1,0 +1,23 @@
+#!/bin/sh
+# pre-push: по умолчанию пропуск (release = CI; debug APK в pre-commit).
+# Release-верификация локально: PRE_PUSH_DO_RELEASE_APK=1
+set -eu
+
+if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+  exit 0
+fi
+
+if [ "${PRE_PUSH_DO_RELEASE_APK:-0}" = "1" ] || [ "${PRE_PUSH_DO_RELEASE_APK:-}" = "true" ]; then
+  if [ "${SKIP_LOCAL_APK_BUILD:-0}" = "1" ] || [ "${SKIP_LOCAL_APK_BUILD:-}" = "true" ]; then
+    echo "pre-push: SKIP_LOCAL_APK_BUILD" >&2
+    exit 0
+  fi
+  REPO_ROOT="$(git rev-parse --show-toplevel)"
+  if command -v bash >/dev/null 2>&1; then
+    exec bash "$REPO_ROOT/tool/local_apk_build_and_save.sh"
+  fi
+  exit 0
+fi
+
+echo "pre-push: пропуск (дубликат: debug в pre-commit; release в CI. PRE_PUSH_DO_RELEASE_APK=1 + tool/local_apk_build_and_save.sh)" >&2
+exit 0

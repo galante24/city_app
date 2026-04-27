@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../app_constants.dart';
 import '../services/place_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'place_menu_manage_screen.dart';
@@ -319,55 +319,9 @@ class _MenuShowcaseCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: <Widget>[
                   if (photo != null && photo.isNotEmpty)
-                    LayoutBuilder(
-                      builder: (BuildContext context, BoxConstraints bc) {
-                        final double side = bc.maxWidth;
-                        return Image.network(
-                          photo,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                          width: side,
-                          height: side,
-                          cacheWidth: imageCacheExtentPx(context, side),
-                          cacheHeight: imageCacheExtentPx(context, side),
-                          loadingBuilder: (
-                            BuildContext context,
-                            Widget child,
-                            ImageChunkEvent? progress,
-                          ) {
-                            if (progress == null) {
-                              return child;
-                            }
-                            return ColoredBox(
-                              color: colorScheme.surfaceContainerHighest,
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 28,
-                                  height: 28,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (
-                            BuildContext context,
-                            Object err,
-                            StackTrace? st,
-                          ) =>
-                              ColoredBox(
-                            color: kPrimaryBlue.withValues(alpha: 0.1),
-                            child: const Center(
-                              child: Icon(
-                                Icons.fastfood_outlined,
-                                color: kPrimaryBlue,
-                                size: 40,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                    CityNetworkImage.fillParent(
+                      imageUrl: photo,
+                      boxFit: BoxFit.cover,
                     )
                   else
                     ColoredBox(

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../utils/image_cache_extent.dart';
+import 'city_network_image.dart';
 
 /// Превью обложки; карточка строки списка — виджет `CloudInkCard` в `app_card_styles.dart`.
 
 /// Ширина : высота превью вакансии (единый стиль списка и детального экрана).
 const double kVacancyCoverAspectRatio = 16 / 9;
-
-double _coverHeightForWidth(double w) => w / kVacancyCoverAspectRatio;
 
 /// Превью фото вакансии: фиксированное соотношение сторон, [BoxFit.cover], скругление.
 ///
@@ -46,47 +44,15 @@ class VacancyCoverImage extends StatelessWidget {
   Widget _imageLayer(BuildContext context, double layoutW) {
     final String? url = imageUrl?.trim();
     final bool hasUrl = url != null && url.isNotEmpty;
-    final int cw = imageCacheExtentPx(context, layoutW);
-    final int ch = imageCacheExtentPx(context, _coverHeightForWidth(layoutW));
     final bool compact = width != null;
 
     if (!hasUrl) {
       return _grayPlaceholder(compact: compact);
     }
 
-    final Widget net = Image.network(
-      url,
-      fit: fit,
-      alignment: Alignment.center,
-      width: double.infinity,
-      height: double.infinity,
-      cacheWidth: cw,
-      cacheHeight: ch,
-      loadingBuilder: (
-        BuildContext context,
-        Widget child,
-        ImageChunkEvent? progress,
-      ) {
-        if (progress == null) {
-          return child;
-        }
-        return Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            _grayPlaceholder(compact: compact),
-            const Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          ],
-        );
-      },
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) =>
-              _grayPlaceholder(compact: compact),
+    final Widget net = CityNetworkImage.fillParent(
+      imageUrl: url,
+      boxFit: fit,
     );
     if (fit == BoxFit.contain) {
       return ColoredBox(

@@ -1,3 +1,13 @@
 {
-  "OPENWEATHER_API_KEY": ""
+  "OPENWEATHER_API_KEY": "",
+  "SUPABASE_URL": "",
+  "SUPABASE_ANON_KEY": "",
+  "BACKEND_MODE": "supabase",
+  "API_BASE_URL": "",
+  "CHAT_API_BEARER": "",
+  "ADMIN_EMAILS": "",
+  "UPDATE_MANIFEST_URL": "https://your-domain.com/ota/version.json",
+  "UPDATE_TRUSTED_APK_HOSTS": "",
+  "UPDATE_REQUIRE_SHA256": "true",
+  "SENTRY_DSN": ""
 }

@@ -1,0 +1,23 @@
+#!/bin/sh
+# pre-commit: полный pipeline (аудит, analyze, test, bump, debug APK) — tool/audit/pre_commit_run.sh
+# Быстрый только-bump: SKIP_PRE_COMMIT_FULL=1
+set -e
+
+if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+  exit 0
+fi
+
+if ! command -v git >/dev/null 2>&1; then
+  exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+export REPO_ROOT
+cd "$REPO_ROOT" || exit 0
+
+if command -v bash >/dev/null 2>&1; then
+  exec bash "$REPO_ROOT/tool/audit/pre_commit_run.sh"
+fi
+
+echo "pre-commit: нужен bash (Git Bash) для full pipeline" >&2
+exit 1

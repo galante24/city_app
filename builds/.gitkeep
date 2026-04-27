@@ -1,0 +1,1 @@
+# Сюда pre-push копирует app_v{version}.apk; сами .apk в .gitignore

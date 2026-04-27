@@ -10,7 +10,7 @@ import '../models/real_estate_listing_kind.dart';
 import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../services/real_estate_listing_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'user_chat_thread_screen.dart';
@@ -224,8 +224,6 @@ class _RealEstateCategoryDetailScreenState
     final Color textPrimary = cs.onSurface;
     final Color textSecondary = cs.onSurfaceVariant;
     final Color bodyTextColor = cs.onSurface.withValues(alpha: 0.92);
-    final double detailImgW = MediaQuery.sizeOf(context).width - 32;
-    final double detailImgH = detailImgW * 9 / 16;
     final RealEstateListingKind k = widget.kind;
 
     return Scaffold(
@@ -262,39 +260,10 @@ class _RealEstateCategoryDetailScreenState
                     color: cs.surfaceContainerHighest,
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
-                      child: Image.network(
-                        imageUrl,
-                        fit: BoxFit.contain,
-                        alignment: Alignment.center,
-                        width: double.infinity,
-                        height: double.infinity,
-                        cacheWidth: imageCacheExtentPx(context, detailImgW),
-                        cacheHeight: imageCacheExtentPx(context, detailImgH),
-                        loadingBuilder: (
-                          BuildContext context,
-                          Widget child,
-                          ImageChunkEvent? progress,
-                        ) {
-                          if (progress == null) {
-                            return child;
-                          }
-                          return const Center(
-                            child: SizedBox(
-                              width: 28,
-                              height: 28,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          );
-                        },
-                        errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                            Container(
-                          color: widget.accent.withValues(alpha: 0.12),
-                          child: Icon(
-                            k.headerIcon,
-                            color: widget.accent,
-                            size: 48,
-                          ),
-                        ),
+                      child: CityNetworkImage.fillParent(
+                        imageUrl: imageUrl,
+                        boxFit: BoxFit.contain,
+                        errorIcon: k.headerIcon,
                       ),
                     ),
                   ),

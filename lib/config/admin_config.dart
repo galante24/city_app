@@ -1,8 +1,15 @@
-/// Email-аккаунты с правами администратора в приложении (по email в JWT Supabase).
-const Set<String> kAdministratorEmails = <String>{
-  'sranometrr@gmail.com',
-  'kill.pro15@mail.ru',
-};
+import 'app_secrets.dart';
 
-/// Строка по умолчанию для подсказок UI (экран входа админа и т.п.).
-const String kAdministratorEmail = 'sranometrr@gmail.com';
+/// Email-ы админов **только** для UI (кнопки, подсказки). Реальные права — в RLS/политиках Supabase.
+Set<String> get kAdministratorEmails {
+  if (kAdminEmailsEnv.isEmpty) {
+    return <String>{};
+  }
+  return kAdminEmailsEnv
+      .split(',')
+      .map((String e) => e.trim().toLowerCase())
+      .where((String e) => e.isNotEmpty)
+      .toSet();
+}
+
+const String kAdministratorEmailHint = 'admin@example.com';

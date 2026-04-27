@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../app_constants.dart';
 import '../services/place_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 
@@ -354,42 +354,9 @@ class _PlaceMenuItemEditScreenState extends State<PlaceMenuItemEditScreen> {
     }
     final String? url = _existingPhotoUrl;
     if (url != null && url.isNotEmpty) {
-      return LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints bc) {
-          final double side = bc.maxWidth;
-          return Image.network(
-            url,
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            width: double.infinity,
-            height: double.infinity,
-            cacheWidth: imageCacheExtentPx(context, side),
-            cacheHeight: imageCacheExtentPx(context, side),
-            loadingBuilder: (
-              BuildContext context,
-              Widget child,
-              ImageChunkEvent? progress,
-            ) {
-              if (progress == null) {
-                return child;
-              }
-              return ColoredBox(
-                color: cs.surfaceContainerHighest,
-                child: const Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              );
-            },
-            errorBuilder: (BuildContext c, Object e, StackTrace? st) => Center(
-              child:
-                  Icon(Icons.broken_image_outlined, color: cs.onSurfaceVariant),
-            ),
-          );
-        },
+      return CityNetworkImage.fillParent(
+        imageUrl: url,
+        boxFit: BoxFit.cover,
       );
     }
     return Center(

@@ -11,7 +11,7 @@ import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../services/city_data_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 
@@ -607,7 +607,9 @@ class _HomeScreenState extends State<HomeScreen>
             const Expanded(
               child: Center(
                 child: Text(
-                  'Подключите Supabase (см. lib/config/supabase_config.dart)',
+                  'Укажите SUPABASE_URL и SUPABASE_ANON_KEY '
+                  '(api_keys.example.json → api_keys.json, '
+                  'flutter run --dart-define-from-file=api_keys.json)',
                 ),
               ),
             ),
@@ -844,46 +846,9 @@ class SocialNewsCard extends StatelessWidget {
                       return SizedBox(
                         width: w,
                         height: h,
-                        child: Image.network(
-                          post.mediaUrl!,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                          width: w,
-                          height: h,
-                          cacheWidth: imageCacheExtentPx(context, w),
-                          cacheHeight: imageCacheExtentPx(context, h),
-                          errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                              ColoredBox(
-                            color: cs.surfaceContainerHighest,
-                            child: Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                size: 48,
-                                color: cs.onSurface.withValues(alpha: 0.45),
-                              ),
-                            ),
-                          ),
-                          loadingBuilder: (
-                            BuildContext context,
-                            Widget child,
-                            ImageChunkEvent? progress,
-                          ) {
-                            if (progress == null) {
-                              return child;
-                            }
-                            return ColoredBox(
-                              color: cs.surfaceContainerHighest,
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  value: progress.expectedTotalBytes != null
-                                      ? progress.cumulativeBytesLoaded /
-                                            progress.expectedTotalBytes!
-                                      : null,
-                                  color: kPrimaryBlue,
-                                ),
-                              ),
-                            );
-                          },
+                        child: CityNetworkImage.fillParent(
+                          imageUrl: post.mediaUrl!,
+                          boxFit: BoxFit.cover,
                         ),
                       );
                     },

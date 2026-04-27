@@ -9,8 +9,8 @@ import '../app_constants.dart'
 import '../main_shell_navigation.dart';
 import '../models/real_estate_listing_kind.dart';
 import '../services/real_estate_listing_service.dart';
-import '../utils/image_cache_extent.dart';
 import '../widgets/city_main_navigation_bar.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'real_estate_category_detail_screen.dart';
@@ -393,47 +393,16 @@ class _EstateListingTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: imageUrl != null && imageUrl!.isNotEmpty
-                ? Image.network(
-                    imageUrl!,
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    cacheWidth: imageCacheExtentPx(context, 64),
-                    cacheHeight: imageCacheExtentPx(context, 64),
-                    loadingBuilder: (
-                      BuildContext context,
-                      Widget child,
-                      ImageChunkEvent? progress,
-                    ) {
-                      if (progress == null) {
-                        return child;
-                      }
-                      return ColoredBox(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        child: const Center(
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      );
-                    },
-                    errorBuilder: (BuildContext c, Object e, StackTrace? st) =>
-                        _listingImagePlaceholder(
-                      accent,
-                      64,
-                      placeholderIcon,
-                    ),
-                  )
-                : _listingImagePlaceholder(accent, 64, placeholderIcon),
-          ),
+          imageUrl != null && imageUrl!.isNotEmpty
+              ? CityNetworkImage.square(
+                  imageUrl: imageUrl,
+                  size: 64,
+                  borderRadius: 10,
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: _listingImagePlaceholder(accent, 64, placeholderIcon),
+                ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

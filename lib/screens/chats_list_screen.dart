@@ -13,6 +13,7 @@ import '../config/supabase_ready.dart';
 import '../main_tab_index.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
+import '../widgets/city_network_image.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
@@ -21,7 +22,7 @@ import 'contact_picker_page.dart';
 import 'create_group_screen.dart';
 import 'user_chat_thread_screen.dart';
 
-/// Список чатов, поиск, кнопка «новый чат» (контакты на телефоне или email).
+/// Список чатов, поиск, кнопка «новый чат» (контакты на телефоне или ник).
 class ChatsListScreen extends StatefulWidget {
   const ChatsListScreen({super.key});
 
@@ -434,20 +435,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                   icon: const Icon(Icons.alternate_email_outlined),
                   label: const Text('Найти по нику (@)'),
                 ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.of(c).pop();
-                    _openAddByEmail();
-                  },
-                  icon: const Icon(Icons.mail_outline),
-                  label: const Text('Найти по email'),
-                ),
                 if (!_isMobile)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'С телефона: контакты или ник. В веб-версии — по нику или email.',
+                      'С телефона: контакты или ник. В веб-версии — по нику.',
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(c).colorScheme.onSurfaceVariant,
@@ -523,103 +515,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Это ваш ник — выберите другого')),
-        );
-      }
-      return;
-    }
-    try {
-      final String conv = await ChatService.getOrCreateDirectConversation(
-        other,
-      );
-      final String name =
-          (await ChatService.displayNameForUserId(other)) ?? 'Чат';
-      if (!mounted) {
-        return;
-      }
-      await _load();
-      if (!mounted) {
-        return;
-      }
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext c) => UserChatThreadScreen(
-            conversationId: conv,
-            title: name,
-            listItem: null,
-            directPeerUserId: other,
-          ),
-        ),
-      );
-      if (mounted) {
-        await _load();
-        await ChatUnreadBadge.refresh();
-      }
-    } on Object {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Не удалось открыть чат')));
-      }
-    }
-  }
-
-  Future<void> _openAddByEmail() async {
-    final TextEditingController email = TextEditingController();
-    final bool? ok = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext c) => AlertDialog(
-        title: const Text('Email в приложении'),
-        content: TextField(
-          controller: email,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            labelText: 'Почта пользователя',
-            hintText: 'friend@mail.ru',
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(c).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(c).pop(true),
-            child: const Text('Найти'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) {
-      return;
-    }
-    final String em = email.text.trim();
-    if (em.isEmpty || !em.contains('@')) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Введите корректный email')),
-        );
-      }
-      return;
-    }
-    final String? me = Supabase.instance.client.auth.currentUser?.id;
-    if (me == null) {
-      return;
-    }
-    final String? other = await ChatService.findUserIdByEmail(em);
-    if (other == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Пользователь с таким email не найден в приложении'),
-          ),
-        );
-      }
-      return;
-    }
-    if (other == me) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Это ваш адрес — выберите другого')),
         );
       }
       return;
@@ -876,16 +771,15 @@ class _ChatListTile extends StatelessWidget {
         children: <Widget>[
               CircleAvatar(
                 backgroundColor: kPrimaryBlue.withValues(alpha: 0.2),
-                backgroundImage: !item.isGroup &&
-                        item.otherAvatarUrl != null &&
-                        item.otherAvatarUrl!.isNotEmpty
-                    ? NetworkImage(item.otherAvatarUrl!)
-                    : null,
                 child: item.isGroup
                     ? const Icon(Icons.group, color: kPrimaryBlue, size: 22)
                     : (item.otherAvatarUrl != null &&
                             item.otherAvatarUrl!.isNotEmpty
-                        ? null
+                        ? CityNetworkImage.avatar(
+                            context: context,
+                            imageUrl: item.otherAvatarUrl,
+                            diameter: 40,
+                          )
                         : Text(
                             item.title.isNotEmpty
                                 ? item.title[0].toUpperCase()

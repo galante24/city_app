@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
@@ -13,8 +14,12 @@ import 'theme/city_theme.dart' show CityTheme;
 import 'widgets/soft_tab_header.dart';
 import 'widgets/weather_app_bar_action.dart';
 import 'app_update_check.dart';
-import 'config/supabase_config.dart';
+import 'config/app_secrets.dart';
 import 'config/supabase_ready.dart';
+import 'core/auth/app_auth.dart';
+import 'core/auth/supabase_auth_port.dart';
+import 'services/supabase_secure_storage.dart';
+import 'services/supabase_session_migration.dart';
 import 'screens/auth_screen.dart';
 import 'main_shell_navigation.dart';
 import 'main_tab_index.dart';
@@ -35,15 +40,78 @@ import 'screens/places_list_screen.dart';
 import 'screens/tasks_list_screen.dart';
 
 Future<void> main() async {
+  if (kSentryDsn.isNotEmpty) {
+    await SentryFlutter.init(
+      (SentryFlutterOptions options) {
+        options.dsn = kSentryDsn;
+        options.tracesSampleRate = kDebugMode ? 1.0 : 0.12;
+        options.environment = kDebugMode ? 'debug' : 'release';
+      },
+      appRunner: _runApp,
+    );
+  } else {
+    await _runApp();
+  }
+}
+
+Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   timeago.setLocaleMessages('ru', timeago.RuMessages());
-  await Supabase.initialize(url: kSupabaseUrl, anonKey: kSupabaseAnonKey);
+  if (!kAreSupabaseSecretsConfigured) {
+    // ignore: avoid_print
+    // Не печатать сами значения: только факт и способ настройки.
+    debugPrint(
+      'Заполните SUPABASE_URL и SUPABASE_ANON_KEY '
+      '(--dart-define-from-file или --dart-define=...). См. api_keys.example.json',
+    );
+    runApp(const _AppWithoutSupabase());
+    return;
+  }
+  final String sessionKey = authSessionStorageKeyForUrl(kSupabaseUrl);
+  await migrateLegacySupabaseSessionToSecure(sessionKey);
+  await Supabase.initialize(
+    url: kSupabaseUrl,
+    anonKey: kSupabaseAnonKey,
+    authOptions: FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+      autoRefreshToken: true,
+      localStorage: createAuthLocalStorage(sessionKey),
+      pkceAsyncStorage: createPkceAsyncStorage(),
+    ),
+    debug: kDebugMode,
+  );
   supabaseAppReady = true;
+  AppAuth.register(SupabaseAuthPort(Supabase.instance.client));
   await PushNotificationService.instance.initialize();
   await MessageNotificationService.instance.init();
   await appThemeController.load();
   runApp(const CityApp());
+}
+
+/// Минимальный экран, если в сборке нет define’ов (секреты не в репозитории).
+class _AppWithoutSupabase extends StatelessWidget {
+  const _AppWithoutSupabase();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Лесосибирск',
+      theme: ThemeData(useMaterial3: true),
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Конфигурация')),
+        body: const Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'В этой сборке не заданы SUPABASE_URL и SUPABASE_ANON_KEY.\n\n'
+            'Для разработки скопируйте api_keys.example.json → api_keys.json '
+            'и укажите URL и anon key из панели Supabase, '
+            'затем: flutter run --dart-define-from-file=api_keys.json',
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class CityApp extends StatelessWidget {

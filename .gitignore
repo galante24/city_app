@@ -1,5 +1,10 @@
-# Локальные ключи API (скопируйте из api_keys.example.json)
+# Локальные ключи / секреты (копия api_keys.example.json)
 api_keys.json
+.env
+.env.local
+.env.production
+*.pem
+ secrets/
 
 # Miscellaneous
 *.class
@@ -41,6 +46,16 @@ app.*.symbols
 
 # Obfuscation related
 app.*.map.json
+
+# Android release signing (не коммитить ключи)
+android/key.properties
+*.jks
+*.keystore
+
+# Локальные APK (pre-push → builds/)
+/builds/local_apk/
+/builds/.githook_*.log
+/builds/.githook_precommit.log
 
 # Android Studio will place build artifacts here
 /android/app/debug

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/admin_config.dart';
 import '../config/supabase_ready.dart';
+import '../core/user_facing_error.dart';
 
 /// Вход по email + OTP (код из письма). Нужен для `kAdministratorEmail`, чтобы в JWT был email.
 class AdminEmailAuthScreen extends StatefulWidget {
@@ -13,7 +14,7 @@ class AdminEmailAuthScreen extends StatefulWidget {
 }
 
 class _AdminEmailAuthScreenState extends State<AdminEmailAuthScreen> {
-  final _emailController = TextEditingController(text: kAdministratorEmail);
+  final _emailController = TextEditingController(text: kAdministratorEmailHint);
   final _codeController = TextEditingController();
   bool _sending = false;
   bool _verifying = false;
@@ -59,7 +60,7 @@ class _AdminEmailAuthScreenState extends State<AdminEmailAuthScreen> {
       }
     } on Exception catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString());
+        setState(() => _error = messageForUser(e, fallback: 'Не удалось отправить код.'));
       }
     } finally {
       if (mounted) {

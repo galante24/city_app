@@ -257,4 +257,12 @@ class MessageNotificationService {
         )
         .subscribe();
   }
+
+  /// После [signOut]: отписка от Realtime, чтобы не получать вставки без сессии.
+  void resetOnLogout() {
+    // ignore: unawaited_futures
+    _channel?.unsubscribe();
+    _channel = null;
+    _started = false;
+  }
 }

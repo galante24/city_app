@@ -10,8 +10,8 @@ import '../models/conversation_list_item.dart';
 import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../services/place_service.dart';
-import '../utils/image_cache_extent.dart';
 import '../utils/author_embed.dart';
+import '../widgets/city_network_image.dart';
 import '../utils/place_phone.dart';
 import '../utils/social_time_format.dart';
 import '../widgets/conversation_pick_list.dart';
@@ -308,43 +308,9 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                       children: <Widget>[
                         if ((pl['cover_url'] as String?) != null &&
                             (pl['cover_url'] as String).toString().isNotEmpty)
-                          Image.network(
-                            pl['cover_url'] as String,
-                            fit: BoxFit.cover,
-                            cacheWidth: imageCacheExtentPx(context, 800),
-                            loadingBuilder: (
-                              BuildContext context,
-                              Widget child,
-                              ImageChunkEvent? progress,
-                            ) {
-                              if (progress == null) {
-                                return child;
-                              }
-                              return ColoredBox(
-                                color: cs.surfaceContainerHighest,
-                                child: const Center(
-                                  child: SizedBox(
-                                    width: 32,
-                                    height: 32,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                            errorBuilder:
-                                (BuildContext context, Object error, StackTrace? st) =>
-                                Container(
-                              color: kPrimaryBlue.withValues(alpha: 0.15),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.image_not_supported_outlined,
-                                  color: Colors.white70,
-                                  size: 40,
-                                ),
-                              ),
-                            ),
+                          CityNetworkImage.fillParent(
+                            imageUrl: pl['cover_url'] as String,
+                            boxFit: BoxFit.cover,
                           )
                         else
                           Container(
@@ -370,8 +336,10 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                                       .isNotEmpty)
                                 CircleAvatar(
                                   radius: 36,
-                                  backgroundImage: NetworkImage(
-                                    pl['photo_url'] as String,
+                                  child: CityNetworkImage.avatar(
+                                    context: context,
+                                    imageUrl: pl['photo_url'] as String,
+                                    diameter: 72,
                                   ),
                                 )
                               else
@@ -946,15 +914,17 @@ class _PlacePostCardState extends State<_PlacePostCard> {
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: kPrimaryBlue.withValues(alpha: 0.14),
-                    backgroundImage:
-                        photo != null ? NetworkImage(photo) : null,
-                    child: photo == null
-                        ? Icon(
+                    child: photo != null
+                        ? CityNetworkImage.avatar(
+                            context: context,
+                            imageUrl: photo,
+                            diameter: 44,
+                          )
+                        : Icon(
                             Icons.storefront_outlined,
                             color: kPrimaryBlue,
                             size: 24,
-                          )
-                        : null,
+                          ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1024,48 +994,9 @@ class _PlacePostCardState extends State<_PlacePostCard> {
                     return SizedBox(
                       width: w,
                       height: h,
-                      child: Image.network(
-                        img,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                        width: w,
-                        height: h,
-                        cacheWidth: imageCacheExtentPx(context, w),
-                        cacheHeight: imageCacheExtentPx(context, h),
-                        loadingBuilder: (
-                          BuildContext context,
-                          Widget child,
-                          ImageChunkEvent? progress,
-                        ) {
-                          if (progress == null) {
-                            return child;
-                          }
-                          return ColoredBox(
-                            color: cs.surfaceContainerHighest,
-                            child: const Center(
-                              child: SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            ),
-                          );
-                        },
-                        errorBuilder: (
-                          BuildContext context,
-                          Object error,
-                          StackTrace? st,
-                        ) =>
-                            ColoredBox(
-                          color: kPrimaryBlue.withValues(alpha: 0.12),
-                          child: const Center(
-                            child: Icon(
-                              Icons.image_outlined,
-                              color: kPrimaryBlue,
-                              size: 40,
-                            ),
-                          ),
-                        ),
+                      child: CityNetworkImage.fillParent(
+                        imageUrl: img,
+                        boxFit: BoxFit.cover,
                       ),
                     );
                   },

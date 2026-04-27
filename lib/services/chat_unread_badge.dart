@@ -58,4 +58,13 @@ class ChatUnreadBadge {
         )
         .subscribe();
   }
+
+  static void resetOnLogout() {
+    // ignore: unawaited_futures
+    _channel?.unsubscribe();
+    _channel = null;
+    _started = false;
+    _refreshDebounce?.cancel();
+    hasUnread.value = false;
+  }
 }

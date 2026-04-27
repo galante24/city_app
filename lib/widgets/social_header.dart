@@ -4,7 +4,7 @@ import '../app_constants.dart';
 import '../navigation/open_user_profile.dart';
 import '../services/city_data_service.dart';
 import '../utils/author_embed.dart';
-import '../utils/image_cache_extent.dart';
+import 'city_network_image.dart';
 import '../utils/social_time_format.dart';
 
 /// Единый блок «аватар + имя + время»; тап по аватару или имени → профиль.
@@ -46,15 +46,10 @@ class SocialHeader extends StatelessWidget {
         return CircleAvatar(
           radius: avatarR,
           backgroundColor: kPrimaryBlue.withValues(alpha: 0.14),
-          child: ClipOval(
-            child: Image.network(
-              url,
-              width: d,
-              height: d,
-              fit: BoxFit.cover,
-              cacheWidth: imageCacheExtentPx(context, d),
-              cacheHeight: imageCacheExtentPx(context, d),
-            ),
+          child: CityNetworkImage.avatar(
+            context: context,
+            imageUrl: url,
+            diameter: d,
           ),
         );
       }

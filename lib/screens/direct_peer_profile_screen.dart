@@ -9,8 +9,8 @@ import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../services/notification_prefs.dart';
 import '../utils/chat_links.dart';
-import '../utils/image_cache_extent.dart';
 import '../utils/phone_normalize.dart';
+import '../widgets/city_network_image.dart';
 /// Профиль собеседника в личном чате (шапка-галерея, действия, вкладки медиа/файлы/ссылки).
 class DirectPeerProfileScreen extends StatefulWidget {
   const DirectPeerProfileScreen({
@@ -175,39 +175,13 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
                                 final double bannerW =
                                     MediaQuery.sizeOf(ctx).width;
                                 final double bannerH = bannerW * 0.55;
-                                return Image.network(
-                                  photos[i],
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment.center,
-                                  cacheWidth: imageCacheExtentPx(ctx, bannerW),
-                                  cacheHeight: imageCacheExtentPx(ctx, bannerH),
-                                  loadingBuilder: (
-                                    BuildContext context,
-                                    Widget child,
-                                    ImageChunkEvent? progress,
-                                  ) {
-                                    if (progress == null) {
-                                      return child;
-                                    }
-                                    return ColoredBox(
-                                      color: cs.surfaceContainerHighest,
-                                      child: const Center(
-                                        child: SizedBox(
-                                          width: 32,
-                                          height: 32,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  errorBuilder:
-                                      (BuildContext _, Object _, StackTrace? _) {
-                                    return ColoredBox(
-                                      color: cs.surfaceContainerHigh,
-                                    );
-                                  },
+                                return SizedBox(
+                                  width: bannerW,
+                                  height: bannerH,
+                                  child: CityNetworkImage.fillParent(
+                                    imageUrl: photos[i],
+                                    boxFit: BoxFit.cover,
+                                  ),
                                 );
                               },
                             ),
@@ -582,39 +556,10 @@ class _MediaTab extends StatelessWidget {
                     ),
                   )
                 else
-                  Image.network(
-                    it.url,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    cacheWidth: imageCacheExtentPx(c, thumb),
-                    cacheHeight: imageCacheExtentPx(c, thumb),
-                    loadingBuilder: (
-                      BuildContext context,
-                      Widget child,
-                      ImageChunkEvent? progress,
-                    ) {
-                      if (progress == null) {
-                        return child;
-                      }
-                      return ColoredBox(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        child: const Center(
-                          child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      );
-                    },
-                    errorBuilder: (BuildContext _, Object _, StackTrace? _) =>
-                        ColoredBox(
-                      color:
-                          Theme.of(context).colorScheme.surfaceContainerHigh,
-                      child: const Icon(Icons.broken_image_outlined),
-                    ),
+                  CityNetworkImage.square(
+                    imageUrl: it.url,
+                    size: thumb,
+                    borderRadius: 0,
                   ),
                 if (it.isVideo)
                   const Align(

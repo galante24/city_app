@@ -64,6 +64,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Нужен доступ к микрофону, чтобы записывать голосовые сообщения в чате.</string>
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>Уведомления о новых сообщениях и записях заведений, на которые вы подписаны.</string>
 	<key>NSContactsUsageDescription</key>

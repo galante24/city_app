@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../app_constants.dart';
 import '../services/place_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 
@@ -95,7 +95,6 @@ class _PlaceEditHeaderScreenState extends State<PlaceEditHeaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
@@ -142,53 +141,9 @@ class _PlaceEditHeaderScreenState extends State<PlaceEditHeaderScreen> {
                     borderRadius: BorderRadius.circular(16),
                     child: AspectRatio(
                       aspectRatio: 16 / 9,
-                      child: LayoutBuilder(
-                        builder: (BuildContext context, BoxConstraints bc) {
-                          final double w = bc.maxWidth;
-                          final double h = w * 9 / 16;
-                          return Image.network(
-                            widget.initialCoverUrl!,
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            width: w,
-                            height: h,
-                            cacheWidth: imageCacheExtentPx(context, w),
-                            cacheHeight: imageCacheExtentPx(context, h),
-                            loadingBuilder: (
-                              BuildContext context,
-                              Widget child,
-                              ImageChunkEvent? progress,
-                            ) {
-                              if (progress == null) {
-                                return child;
-                              }
-                              return ColoredBox(
-                                color: cs.surfaceContainerHighest,
-                                child: const Center(
-                                  child: SizedBox(
-                                    width: 28,
-                                    height: 28,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                            errorBuilder:
-                                (BuildContext c, Object e, StackTrace? st) =>
-                                    ColoredBox(
-                              color: kPrimaryBlue.withValues(alpha: 0.12),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.image_not_supported_outlined,
-                                  color: kPrimaryBlue,
-                                  size: 40,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+                      child: CityNetworkImage.fillParent(
+                        imageUrl: widget.initialCoverUrl!,
+                        boxFit: BoxFit.cover,
                       ),
                     ),
                   ),
@@ -213,54 +168,10 @@ class _PlaceEditHeaderScreenState extends State<PlaceEditHeaderScreen> {
                 else if (widget.initialPhotoUrl != null &&
                     widget.initialPhotoUrl!.isNotEmpty &&
                     _photo == null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: SizedBox(
-                      width: 100,
-                      height: 100,
-                      child: Image.network(
-                        widget.initialPhotoUrl!,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                        width: 100,
-                        height: 100,
-                        cacheWidth: imageCacheExtentPx(context, 100),
-                        cacheHeight: imageCacheExtentPx(context, 100),
-                        loadingBuilder: (
-                          BuildContext context,
-                          Widget child,
-                          ImageChunkEvent? progress,
-                        ) {
-                          if (progress == null) {
-                            return child;
-                          }
-                          return ColoredBox(
-                            color: cs.surfaceContainerHighest,
-                            child: const Center(
-                              child: SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                        errorBuilder:
-                            (BuildContext c, Object e, StackTrace? st) =>
-                                ColoredBox(
-                          color: kPrimaryBlue.withValues(alpha: 0.12),
-                          child: const Center(
-                            child: Icon(
-                              Icons.store_rounded,
-                              color: kPrimaryBlue,
-                              size: 40,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                  CityNetworkImage.square(
+                    imageUrl: widget.initialPhotoUrl!,
+                    size: 100,
+                    borderRadius: 16,
                   ),
                 const SizedBox(height: 24),
                 FilledButton(

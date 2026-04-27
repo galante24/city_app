@@ -1,0 +1,46 @@
+---
+description: Критичная система — процесс, security, SRE, тесты, self-review, миграция Supabase↔VPS
+alwaysApply: true
+---
+
+# Principal engineer: критичная система (city_app)
+
+Полный текст: [docs/ENGINEERING_CHARTER.md](docs/ENGINEERING_CHARTER.md) (уровень гос/critical: **CI, секрет-скан, SLO, DoD, сценарии отказа API/WS/DB, миграция без Supabase**). **Перед написанием кода** по фиче: (1) уточнить требования и границы; (2) риски (auth, утечки, целостность, перф, масштаб, сбои); (3) архитектура (слои, контракты); (4) реализация.
+
+## Архитектура (обязательно)
+
+Переносимость **Supabase → VPS/REST** и запреты на UI: см. [`.cursor/rules/portable-backend-architecture.mdc`](.cursor/rules/portable-backend-architecture.mdc) (главный документ по слоям, `BACKEND_MODE`, `media_path`, dual impl).
+
+- **Domain / Repository / DataSource** — UI не трогает `Supabase.*`, `Dio` для доменных сценариев; только **Repository** и порты.
+- **Миграция бэкенда:** `BACKEND_MODE` + `kApiBaseUrl` / `kSupabase*`, `AuthPort`, `ChatMessagesFactory` — без vendor lock-in в UI/Domain.
+- Контракты (DTO) стабильны; инфраструктура **в DataSource/Repository impl**.
+
+## Безопасность (secure-by-default)
+
+- Секреты: [`lib/config/app_secrets.dart`](lib/config/app_secrets.dart), define / файлы **вне** git — не хардкодить ключи.
+- Валидация ввода на клиенте **и** политика на сервере; не доверять `id` из клиента для доступа (IDOR).
+- Логи без PII/токенов; защищать от injection, mass assignment, повторов там, где критично.
+
+## Производительность
+
+- Списки: нет `FutureBuilder` в `itemBuilder`, нет `IntrinsicWidth` без нужды, `const`, узкий rebuild (Selector/ValueNotifier/Notifier).
+- API: пагинация (cursor), таймауты, кеш/дедуп на горячем пути где уже принято (чат-API и т.д.).
+
+## Отказоустойчивость
+
+- Таймауты, ретраи с backoff, graceful fallback, типизированные ошибки (не сырые `Exception` в UI без map в UX).
+- Идемпотентность критичных write где применимо.
+
+## Тесты (на фичу)
+
+- Unit (логика), integration (repo + mock datasource), widget (критичный UI) — **happy, edge, сеть/ошибка, невалидные данные**. Если в MR нет тестов — **явно** написать, что дотестим и когда.
+
+## Self-review (перед сдачей)
+
+1. Уязвимости → исправлены? 2) Узкие места? 3) Краши/null/race? 4) Поддерживаемость.
+
+## Формат ответа в задаче
+
+Краткое **решение/риски** → **код** → **тесты** → при необходимости **как переключить** Supabase ↔ REST / env.
+
+**Не** расширять дифф рефакторингом вне scope задачи, если пользователь об этом не просил.

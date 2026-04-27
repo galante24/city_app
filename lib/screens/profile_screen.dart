@@ -7,9 +7,12 @@ import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../config/admin_config.dart';
 import '../config/supabase_ready.dart';
+import '../core/user_facing_error.dart';
+import '../services/app_session_cleanup.dart';
 import '../services/city_data_service.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
+import '../widgets/city_network_image.dart';
 import 'account_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -53,7 +56,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Не удалось загрузить: $e')));
+        ).showSnackBar(
+          SnackBar(content: Text(messageForUser(e, fallback: 'Не удалось загрузить.'))),
+        );
       }
     } finally {
       if (mounted) {
@@ -63,10 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _signOut() async {
-    if (!supabaseAppReady) {
-      return;
-    }
-    await Supabase.instance.client.auth.signOut();
+    await AppSessionCleanup.signOutEverywhere();
   }
 
   static String _fullNameFromSources(Map<String, dynamic>? row, User user) {
@@ -213,17 +215,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       CircleAvatar(
                         radius: 52,
                         backgroundColor: kPrimaryBlue,
-                        backgroundImage:
-                            avatarUrl != null && avatarUrl.isNotEmpty
-                            ? NetworkImage(avatarUrl)
-                            : null,
-                        child: avatarUrl == null || avatarUrl.isEmpty
-                            ? const Icon(
+                        child: avatarUrl != null && avatarUrl.isNotEmpty
+                            ? CityNetworkImage.avatar(
+                                context: context,
+                                imageUrl: avatarUrl,
+                                diameter: 104,
+                              )
+                            : const Icon(
                                 Icons.person,
                                 size: 56,
                                 color: Colors.white,
-                              )
-                            : null,
+                              ),
                       ),
                       if (_uploadingAvatar)
                         const Positioned.fill(

@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../app_constants.dart';
 import '../services/place_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import 'place_menu_item_edit_screen.dart';
@@ -270,82 +270,21 @@ class _PlaceMenuManageScreenState extends State<PlaceMenuManageScreen> {
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: <Widget>[
-                                                  ClipRRect(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                      14,
-                                                    ),
-                                                    child: SizedBox(
-                                                      width: 72,
-                                                      height: 72,
-                                                      child: photo != null &&
-                                                              photo.isNotEmpty
-                                                          ? Image.network(
-                                                              photo,
-                                                              fit: BoxFit.cover,
-                                                              alignment:
-                                                                  Alignment.center,
-                                                              cacheWidth:
-                                                                  imageCacheExtentPx(
-                                                                context,
-                                                                72,
-                                                              ),
-                                                              cacheHeight:
-                                                                  imageCacheExtentPx(
-                                                                context,
-                                                                72,
-                                                              ),
-                                                              loadingBuilder: (
-                                                                BuildContext context,
-                                                                Widget child,
-                                                                ImageChunkEvent?
-                                                                    progress,
-                                                              ) {
-                                                                if (progress ==
-                                                                    null) {
-                                                                  return child;
-                                                                }
-                                                                return ColoredBox(
-                                                                  color: Theme.of(
-                                                                    context,
-                                                                  ).colorScheme
-                                                                      .surfaceContainerHighest,
-                                                                  child:
-                                                                      const Center(
-                                                                    child:
-                                                                        SizedBox(
-                                                                      width: 22,
-                                                                      height: 22,
-                                                                      child:
-                                                                          CircularProgressIndicator(
-                                                                        strokeWidth:
-                                                                            2,
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              },
-                                                              errorBuilder:
-                                                                  (
-                                                                BuildContext context,
-                                                                Object error,
-                                                                StackTrace? stackTrace,
-                                                              ) =>
-                                                                      ColoredBox(
-                                                                color: kPrimaryBlue
-                                                                    .withValues(
-                                                                  alpha: 0.1,
-                                                                ),
-                                                                child:
-                                                                    const Icon(
-                                                                  Icons
-                                                                      .fastfood_outlined,
-                                                                  color:
-                                                                      kPrimaryBlue,
-                                                                ),
-                                                              ),
-                                                            )
-                                                          : ColoredBox(
+                                                  photo != null && photo.isNotEmpty
+                                                      ? CityNetworkImage.square(
+                                                          imageUrl: photo,
+                                                          size: 72,
+                                                          borderRadius: 14,
+                                                        )
+                                                      : ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                            14,
+                                                          ),
+                                                          child: SizedBox(
+                                                            width: 72,
+                                                            height: 72,
+                                                            child: ColoredBox(
                                                               color: kPrimaryBlue
                                                                   .withValues(
                                                                 alpha: 0.1,
@@ -357,8 +296,8 @@ class _PlaceMenuManageScreenState extends State<PlaceMenuManageScreen> {
                                                                     kPrimaryBlue,
                                                               ),
                                                             ),
-                                                    ),
-                                                  ),
+                                                          ),
+                                                        ),
                                                   const SizedBox(width: 12),
                                                   Expanded(
                                                     child: Column(

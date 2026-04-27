@@ -5,11 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:provider/provider.dart';
 
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
-import '../utils/image_cache_extent.dart';
 import '../models/chat_forward_draft.dart';
 import '../models/conversation_list_item.dart';
 import '../services/chat_download_share.dart';
@@ -17,90 +17,33 @@ import '../services/open_chat_tracker.dart';
 import '../services/chat_service.dart';
 import '../services/chat_unread_badge.dart';
 import '../services/city_data_service.dart';
-import '../services/place_service.dart';
+import '../core/auth/app_auth.dart';
+import '../core/config/backend_mode.dart';
+import '../features/chat/data/api/chat_connection_controller.dart';
+import '../features/chat/data/chat_messages_factory.dart';
+import '../features/chat/domain/chat_exceptions.dart';
+import '../features/chat/domain/chat_messages_repository.dart';
+import '../features/chat/presentation/chat_list_scroll_anchor.dart';
+import '../features/chat/presentation/chat_place_share_resolution_cache.dart';
+import '../features/chat/presentation/chat_thread_messages_notifier.dart';
+import '../features/chat/presentation/chat_user_profile_cache.dart';
+import '../features/chat/presentation/models/group_chat_sender_display.dart';
+import '../features/chat/presentation/widgets/chat_thread/chat_place_share_card.dart';
+import '../features/chat/presentation/widgets/chat_thread/forwarded_tiny_avatar.dart';
 import 'chat_full_image_viewer_screen.dart';
 import 'direct_peer_profile_screen.dart';
 import 'forward_conversation_picker_screen.dart';
 import 'group_chat_info_screen.dart';
 import 'place_detail_screen.dart';
-
-/// Декодирование для превью фото в пузырьке (см. [_ChatMessageListView._bubbleImageBlock]).
-(int, int) _bubbleImageCachePx(
-  BuildContext context,
-  double layoutW,
-  double layoutH,
-) {
-  return (
-    imageCacheExtentPx(context, layoutW),
-    imageCacheExtentPx(context, layoutH),
-  );
-}
-
-Widget _chatBubbleImagePlaceholder() {
-  return const ColoredBox(
-    color: Color(0xFFE8EAED),
-    child: Center(
-      child: Icon(
-        Icons.image_outlined,
-        size: 40,
-        color: Color(0xFF9AA0A6),
-      ),
-    ),
-  );
-}
-
-/// Лёгкая «скелетон»-подсветка во время загрузки превью в пузырьке.
-class _ChatBubbleImageSkeleton extends StatefulWidget {
-  const _ChatBubbleImageSkeleton();
-
-  @override
-  State<_ChatBubbleImageSkeleton> createState() =>
-      _ChatBubbleImageSkeletonState();
-}
-
-class _ChatBubbleImageSkeletonState extends State<_ChatBubbleImageSkeleton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (BuildContext context, Widget? child) {
-        final double t = _controller.value;
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment(-1.2 + t * 2.4, 0),
-              end: Alignment(-0.2 + t * 2.4, 0),
-              colors: const <Color>[
-                Color(0xFFE8EAED),
-                Color(0xFFF2F4F7),
-                Color(0xFFE8EAED),
-              ],
-              stops: const <double>[0.35, 0.5, 0.65],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
+import '../widgets/city_network_image.dart';
+import '../features/chat/domain/chat_message_snippet.dart';
+import '../features/chat/domain/chat_reply_draft.dart';
+import '../features/chat/domain/chat_reply_strip_data.dart';
+import '../features/chat/domain/chat_message.dart';
+import '../features/chat/presentation/widgets/chat_message_reply_strip.dart';
+import '../features/chat/presentation/widgets/chat_reply_draft_banner.dart';
+import '../features/chat/presentation/widgets/chat_voice_message_bubble.dart';
+import '../features/chat/presentation/widgets/chat_voice_record_button.dart';
 
 class UserChatThreadScreen extends StatefulWidget {
   const UserChatThreadScreen({
@@ -132,6 +75,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   bool _sending = false;
   bool _sendingImage = false;
   bool _sendingFile = false;
+  bool _sendingVoice = false;
   bool _showEmoji = false;
   String _headerTitle = '';
   bool? _isGroup;
@@ -140,6 +84,9 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   String? _peerUserId;
   String? _peerAvatarUrl;
   Timer? _readDebounce;
+
+  /// Лента сообщений: пагинация + Realtime (см. [ChatThreadMessagesNotifier]).
+  ChatThreadMessagesNotifier? _threadMessages;
 
   /// Курсор «прочитано до» (для стиля входящих + галочек исходящих).
   DateTime? _myReadCursor;
@@ -154,8 +101,8 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
 
   List<ChatForwardDraft>? _pendingForwardDrafts;
 
-  /// Цитата для ответа (префикс к тексту при отправке).
-  String? _replySnippet;
+  /// Режим ответа (как в Telegram): ссылка на сообщение + снимок для API.
+  ChatReplyDraft? _replyDraft;
 
   final GlobalKey<_MessagesListState> _messagesListKey =
       GlobalKey<_MessagesListState>();
@@ -175,6 +122,14 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     _myRole = widget.listItem?.myRole;
     _loadMeta();
     unawaited(_bootstrapReadState());
+    final ChatMessagesRepository? cr = ChatMessagesFactory.tryRepository();
+    if (cr != null) {
+      _threadMessages = ChatThreadMessagesNotifier(
+        conversationId: widget.conversationId,
+        repository: cr,
+        ownUserId: AppAuth.I.currentUserId,
+      );
+    }
   }
 
   Future<void> _loadMeta() async {
@@ -235,6 +190,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   void dispose() {
     OpenChatTracker.setOpen(null);
     _readDebounce?.cancel();
+    _threadMessages?.dispose();
     _inputFocus.dispose();
     _input.dispose();
     unawaited(ChatUnreadBadge.refresh());
@@ -250,6 +206,74 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     return 4 + mq.viewPadding.bottom;
   }
 
+  /// Тонкая полоса: состояние WebSocket к chat-api (только [BackendMode.rest]).
+  Widget _chatWireStatusBar() {
+    return ListenableBuilder(
+      listenable: ChatConnectionController.instance,
+      builder: (BuildContext context, Widget? _) {
+        final ChatWireStatus s = ChatConnectionController.instance.status;
+        if (s == ChatWireStatus.idle) {
+          return const SizedBox.shrink();
+        }
+        if (s == ChatWireStatus.connected) {
+          return ColoredBox(
+            color: Colors.green.shade600,
+            child: const SizedBox(height: 2, width: double.infinity),
+          );
+        }
+        final ThemeData theme = Theme.of(context);
+        if (s == ChatWireStatus.connecting) {
+          return _chatWireLabelStrip(
+            Colors.amber.shade800,
+            'Подключение к чату…',
+          );
+        }
+        if (s == ChatWireStatus.reconnecting) {
+          return _chatWireLabelStrip(
+            Colors.amber.shade800,
+            'Восстановление связи…',
+          );
+        }
+        if (s == ChatWireStatus.offline) {
+          return _chatWireLabelStrip(
+            theme.colorScheme.error,
+            'Нет связи с сервером чата',
+          );
+        }
+        if (s == ChatWireStatus.error) {
+          return _chatWireLabelStrip(
+            theme.colorScheme.error,
+            'Ошибка: ${ChatConnectionController.instance.lastLog ?? "см. лог"}',
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  static Widget _chatWireLabelStrip(Color bg, String label) {
+    return Material(
+      color: bg,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _toggleEmoji() {
     if (_showEmoji) {
       setState(() => _showEmoji = false);
@@ -260,7 +284,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   }
 
   Future<void> _attachImage() async {
-    if (_sending || _sendingImage) {
+    if (_sending || _sendingImage || _sendingFile || _sendingVoice) {
       return;
     }
     final ImagePicker p = ImagePicker();
@@ -275,7 +299,20 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     setState(() => _sendingImage = true);
     try {
       final String url = await CityDataService.uploadChatImage(f);
-      await ChatService.sendImageMessage(widget.conversationId, url);
+      final ChatReplyDraft? r = _replyDraft;
+      final String? repUid = r?.authorUserId.trim();
+      await ChatService.sendImageMessage(
+        widget.conversationId,
+        url,
+        replyToMessageId: r?.targetMessageId,
+        replySnippet: r?.snippet,
+        replyAuthorId:
+            (repUid != null && repUid.isNotEmpty) ? repUid : null,
+        replyAuthorLabel: r?.authorLabel,
+      );
+      if (mounted) {
+        setState(() => _replyDraft = null);
+      }
     } on Object catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -318,7 +355,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   }
 
   Future<void> _attachFile() async {
-    if (_sending || _sendingImage || _sendingFile) {
+    if (_sending || _sendingImage || _sendingFile || _sendingVoice) {
       return;
     }
     final FilePickerResult? result = await FilePicker.platform.pickFiles();
@@ -345,6 +382,8 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     setState(() => _sendingFile = true);
     try {
       final String url = await CityDataService.uploadChatAttachment(xf);
+      final ChatReplyDraft? r = _replyDraft;
+      final String? repUid = r?.authorUserId.trim();
       await ChatService.sendFileMessage(
         widget.conversationId,
         ChatFileMeta(
@@ -352,7 +391,15 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
           name: displayName,
           mime: _mimeFromFileName(displayName),
         ),
+        replyToMessageId: r?.targetMessageId,
+        replySnippet: r?.snippet,
+        replyAuthorId:
+            (repUid != null && repUid.isNotEmpty) ? repUid : null,
+        replyAuthorLabel: r?.authorLabel,
       );
+      if (mounted) {
+        setState(() => _replyDraft = null);
+      }
     } on Object catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -448,42 +495,41 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     }
   }
 
-  String _snippetFromMessageRow(Map<String, dynamic> m) {
-    if (m['deleted_at'] != null) {
-      return '';
-    }
-    final String bodyRaw = (m['body'] as String?) ?? '';
-    final String? imageUrl = ChatService.imageUrlFromMessageBody(bodyRaw);
-    final ChatFileMeta? fileMeta = ChatService.fileMetaFromMessageBody(bodyRaw);
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      return '[Фото]';
-    }
-    if (fileMeta != null) {
-      return fileMeta.isImage ? '[Фото]' : fileMeta.name;
-    }
-    final ChatPlaceShareParsed? ps = ChatService.parsePlaceShareBody(bodyRaw);
-    if (ps != null) {
-      final String h = ps.headline.trim();
-      return h.isEmpty ? '📍 Заведение' : h;
-    }
-    final String t = bodyRaw.trim();
-    if (t.length > 160) {
-      return '${t.substring(0, 157)}…';
-    }
-    return t;
-  }
-
-  void _beginReplyTo(Map<String, dynamic> m) {
-    final String s = _snippetFromMessageRow(m);
+  void _beginReplyToMessage(Map<String, dynamic> m, String authorLabel) {
+    final String s = chatMessageSnippetForReply(m);
     if (s.isEmpty) {
       return;
     }
-    setState(() => _replySnippet = s);
+    final String? mid = m['id']?.toString();
+    final String? sid = m['sender_id']?.toString();
+    if (mid == null || mid.isEmpty) {
+      return;
+    }
+    setState(
+      () => _replyDraft = ChatReplyDraft(
+        targetMessageId: mid,
+        authorUserId: sid ?? '',
+        authorLabel: authorLabel,
+        snippet: s,
+      ),
+    );
     _inputFocus.requestFocus();
   }
 
   Future<void> _send() async {
-    if (!supabaseAppReady || _sending) {
+    if (_sending || _sendingImage || _sendingFile || _sendingVoice) {
+      return;
+    }
+    if (ChatMessagesFactory.tryRepository() == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Слой сообщений недоступен: проверьте BACKEND_MODE и API_BASE_URL',
+            ),
+          ),
+        );
+      }
       return;
     }
     final String t = _input.text.trim();
@@ -504,22 +550,60 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
           );
         }
         if (mounted) {
-          setState(() => _pendingForwardDrafts = null);
+          setState(() {
+            _pendingForwardDrafts = null;
+            _replyDraft = null;
+          });
         }
         unawaited(ChatUnreadBadge.refresh());
       }
       if (t.isNotEmpty) {
-        String body = t;
-        final String? q = _replySnippet?.trim();
-        if (q != null && q.isNotEmpty) {
-          body = '«$q»\n\n$t';
-        }
-        await ChatService.sendMessage(widget.conversationId, body);
+        final ChatReplyDraft? r = _replyDraft;
+        final String? repUid = r?.authorUserId.trim();
+        await ChatService.sendMessage(
+          widget.conversationId,
+          t,
+          replyToMessageId: r?.targetMessageId,
+          replySnippet: r?.snippet,
+          replyAuthorId:
+              (repUid != null && repUid.isNotEmpty) ? repUid : null,
+          replyAuthorLabel: r?.authorLabel,
+        );
         _input.clear();
         if (mounted) {
-          setState(() => _replySnippet = null);
+          setState(() => _replyDraft = null);
         }
         unawaited(ChatUnreadBadge.refresh());
+      }
+    } on ChatFloodException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } on ChatApiNetworkException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Сеть недоступна. Проверьте подключение.'),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: _send,
+            ),
+          ),
+        );
+      }
+    } on ChatApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            action: SnackBarAction(
+              label: 'Повторить',
+              onPressed: _send,
+            ),
+          ),
+        );
       }
     } on Object {
       if (mounted) {
@@ -530,6 +614,74 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     } finally {
       if (mounted) {
         setState(() => _sending = false);
+      }
+    }
+  }
+
+  Future<void> _sendVoice(String filePath, int durationMs) async {
+    if (_sending || _sendingImage || _sendingFile || _sendingVoice) {
+      return;
+    }
+    if (parseBackendMode() != BackendMode.rest) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Голосовые — при BACKEND_MODE=rest и API_BASE_URL'),
+          ),
+        );
+      }
+      return;
+    }
+    if (ChatMessagesFactory.tryRepository() == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Чат-API не настроен'),
+          ),
+        );
+      }
+      return;
+    }
+    setState(() => _sendingVoice = true);
+    try {
+      final ChatReplyDraft? r = _replyDraft;
+      final String? repUid = r?.authorUserId.trim();
+      await ChatService.sendVoiceMessage(
+        widget.conversationId,
+        filePath,
+        durationMs: durationMs,
+        replyToMessageId: r?.targetMessageId,
+        replySnippet: r?.snippet,
+        replyAuthorId: (repUid != null && repUid.isNotEmpty) ? repUid : null,
+        replyAuthorLabel: r?.authorLabel,
+      );
+      if (mounted) {
+        setState(() => _replyDraft = null);
+      }
+      unawaited(ChatUnreadBadge.refresh());
+    } on ChatFloodException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } on UnsupportedError {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('В режиме Supabase голосовые не поддерживаются'),
+          ),
+        );
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось отправить аудио')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sendingVoice = false);
       }
     }
   }
@@ -599,17 +751,11 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
       return false;
     }
     final String? sid = m['sender_id']?.toString();
-    final bool deleted = m['deleted_at'] != null;
-    if (deleted) {
+    if (m['deleted_at'] != null) {
       return false;
     }
-    if (sid == me) {
-      return true;
-    }
-    if (_isGroup == true) {
-      return _myRole == 'owner' || _myRole == 'moderator';
-    }
-    return false;
+    // Только автор (RLS + RPC soft_delete_group_message — мигр. 035).
+    return sid == me;
   }
 
   Future<void> _deleteMessage(String messageId) async {
@@ -700,9 +846,13 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
-      return const Scaffold(body: Center(child: Text('Supabase не настроен')));
+      return const Scaffold(
+        body: Center(
+          child: Text('Приложение не инициализировано (нужен Supabase в main)'),
+        ),
+      );
     }
-    final String? me = Supabase.instance.client.auth.currentUser?.id;
+    final String? me = AppAuth.I.currentUserId;
     final bool isGroup = _isGroup == true;
     final ThemeData theme = Theme.of(context);
     final ColorScheme cs = theme.colorScheme;
@@ -751,11 +901,14 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                               radius: 20,
                               backgroundColor:
                                   kPrimaryBlue.withValues(alpha: 0.2),
-                              backgroundImage: _peerAvatarUrl != null
-                                  ? NetworkImage(_peerAvatarUrl!)
-                                  : null,
-                              child: _peerAvatarUrl == null
-                                  ? Text(
+                              child: _peerAvatarUrl != null &&
+                                      _peerAvatarUrl!.isNotEmpty
+                                  ? CityNetworkImage.avatar(
+                                      context: context,
+                                      imageUrl: _peerAvatarUrl,
+                                      diameter: 40,
+                                    )
+                                  : Text(
                                       _headerTitle.isNotEmpty
                                           ? _headerTitle[0].toUpperCase()
                                           : '?',
@@ -763,8 +916,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                                         color: kPrimaryBlue,
                                         fontWeight: FontWeight.w700,
                                       ),
-                                    )
-                                  : null,
+                                    ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -820,10 +972,12 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
       ),
       body: Column(
         children: <Widget>[
+          if (parseBackendMode() == BackendMode.rest) _chatWireStatusBar(),
           Expanded(
             child: _MessagesList(
               key: _messagesListKey,
               conversationId: widget.conversationId,
+              messageNotifier: _threadMessages,
               isGroup: isGroup,
               me: me,
               timeLabel: _timeLabel,
@@ -837,59 +991,14 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
               onToggleMessageSelection: _toggleMessageSelection,
               onBeginForwardSelection: _beginForwardSelection,
               onMessagesSnapshot: _onMessagesSnapshot,
-              onReply: _beginReplyTo,
+              onReplyMessage: _beginReplyToMessage,
+              directPeerName: isGroup ? null : _headerTitle,
             ),
           ),
-          if (!_selectingMessages &&
-              _replySnippet != null &&
-              _replySnippet!.isNotEmpty)
-            Material(
-              color: cs.surfaceContainerHighest,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 6, 0, 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child:
-                          Icon(Icons.reply_rounded, color: kPrimaryBlue, size: 22),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            'Ответ',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _replySnippet!,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: cs.onSurfaceVariant,
-                              height: 1.25,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Отменить ответ',
-                      onPressed: () => setState(() => _replySnippet = null),
-                    ),
-                  ],
-                ),
-              ),
+          if (!_selectingMessages && _replyDraft != null)
+            ChatReplyDraftBanner(
+              draft: _replyDraft!,
+              onCancel: () => setState(() => _replyDraft = null),
             ),
           if (!_selectingMessages && _showEmoji)
             SizedBox(
@@ -948,7 +1057,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                     tooltip: _showEmoji ? 'Клавиатура' : 'Смайлики',
                   ),
                   PopupMenuButton<int>(
-                    enabled: !_sendingImage && !_sendingFile,
+                    enabled: !_sendingImage && !_sendingFile && !_sendingVoice,
                     icon: _sendingImage || _sendingFile
                         ? SizedBox(
                             width: 20,
@@ -1025,10 +1134,22 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                       onSubmitted: (_) => _send(),
                     ),
                   ),
+                  if (!kIsWeb &&
+                      parseBackendMode() == BackendMode.rest &&
+                      ChatMessagesFactory.tryRepository() != null)
+                    ChatVoiceRecordButton(
+                      enabled: !_sending &&
+                          !_sendingImage &&
+                          !_sendingFile &&
+                          !_sendingVoice,
+                      onCancel: () {},
+                      onSend: _sendVoice,
+                    ),
                   const SizedBox(width: 2),
                   IconButton.filled(
-                    onPressed: _sending ? null : _send,
-                    icon: _sending
+                    onPressed:
+                        (_sending || _sendingVoice) ? null : _send,
+                    icon: _sending || _sendingVoice
                         ? const SizedBox(
                             width: 20,
                             height: 20,
@@ -1046,22 +1167,11 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   }
 }
 
-class _GroupSenderUi {
-  const _GroupSenderUi({
-    required this.profileTitle,
-    required this.bubbleLabel,
-    this.avatarUrl,
-  });
-
-  final String profileTitle;
-  final String bubbleLabel;
-  final String? avatarUrl;
-}
-
 class _MessagesList extends StatefulWidget {
   const _MessagesList({
     super.key,
     required this.conversationId,
+    required this.messageNotifier,
     required this.isGroup,
     required this.me,
     required this.timeLabel,
@@ -1075,10 +1185,12 @@ class _MessagesList extends StatefulWidget {
     required this.onToggleMessageSelection,
     required this.onBeginForwardSelection,
     required this.onMessagesSnapshot,
-    required this.onReply,
+    required this.onReplyMessage,
+    this.directPeerName,
   });
 
   final String conversationId;
+  final ChatThreadMessagesNotifier? messageNotifier;
   final bool isGroup;
   final String? me;
   final String Function(String? iso) timeLabel;
@@ -1092,7 +1204,11 @@ class _MessagesList extends StatefulWidget {
   final void Function(String messageId) onToggleMessageSelection;
   final void Function(String messageId) onBeginForwardSelection;
   final void Function(List<Map<String, dynamic>> rows) onMessagesSnapshot;
-  final void Function(Map<String, dynamic> row) onReply;
+  final void Function(Map<String, dynamic> row, String authorLabel)
+      onReplyMessage;
+
+  /// Имя собеседника в личном чате (подпись «Ответ на …»).
+  final String? directPeerName;
 
   @override
   State<_MessagesList> createState() => _MessagesListState();
@@ -1102,12 +1218,99 @@ class _MessagesListState extends State<_MessagesList> {
   String? _dataSig;
   String? _rowsReportSig;
   final Map<String, GlobalKey> _bubbleKeys = <String, GlobalKey>{};
-  final Map<String, Future<_GroupSenderUi>> _groupSenderFutures =
-      <String, Future<_GroupSenderUi>>{};
+  Timer? _onStreamDebounce;
+
+  final ScrollController _scroll = ScrollController();
+  bool _didInitScrollToBottom = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) {
+      return;
+    }
+    if (_scroll.position.pixels < 120) {
+      // ignore: discarded_futures
+      _loadOlderWithScrollPreserve();
+    }
+  }
+
+  /// Подгрузка старых: якорь по [maxScrollExtent] (без визуального скачка).
+  Future<void> _loadOlderWithScrollPreserve() async {
+    final ChatThreadMessagesNotifier? n = widget.messageNotifier;
+    if (n == null || n.loadingOlder || !n.hasMoreOlder) {
+      return;
+    }
+    final ChatListExtentAnchor? anchor = ChatListExtentAnchor.capture(_scroll);
+    if (!_scroll.hasClients) {
+      await n.loadOlder();
+      return;
+    }
+    await n.loadOlder();
+    if (!mounted) {
+      return;
+    }
+    applyPrependScrollRecovery(
+      controller: _scroll,
+      extentAnchor: anchor,
+    );
+  }
+
+  void _maybeInitScrollToBottom() {
+    if (!mounted || _didInitScrollToBottom) {
+      return;
+    }
+    final ChatThreadMessagesNotifier? n = widget.messageNotifier;
+    if (n == null || n.initialLoading || n.messageCount == 0) {
+      return;
+    }
+    _didInitScrollToBottom = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) {
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _onStreamDebounce?.cancel();
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scheduleOnStreamChanged() {
+    _onStreamDebounce?.cancel();
+    _onStreamDebounce = Timer(const Duration(milliseconds: 64), () {
+      if (mounted) {
+        widget.onStreamChanged();
+      }
+    });
+  }
 
   /// Прокрутить ленту так, чтобы сообщение [messageId] оказалось в зоне видимости.
   void scrollMessageIntoView(String messageId) {
-    final GlobalKey? k = _bubbleKeys[messageId];
+    final ChatThreadMessagesNotifier? n = widget.messageNotifier;
+    final Set<String> cands = <String>{messageId};
+    if (n != null) {
+      cands.add(n.canonicalMessageId(messageId));
+      final String? o = n.linkedMessageId(messageId);
+      if (o != null) {
+        cands.add(o);
+      }
+    }
+    GlobalKey? k;
+    for (final String id in cands) {
+      k = _bubbleKeys[id];
+      if (k != null) {
+        break;
+      }
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final BuildContext? ctx = k?.currentContext;
       if (ctx != null && ctx.mounted) {
@@ -1121,39 +1324,11 @@ class _MessagesListState extends State<_MessagesList> {
     });
   }
 
-  Future<_GroupSenderUi> _groupSenderUi(String userId) {
-    return _groupSenderFutures.putIfAbsent(
-      userId,
-      () => _fetchGroupSenderUi(userId),
-    );
-  }
-
-  Future<_GroupSenderUi> _fetchGroupSenderUi(String userId) async {
-    final Map<String, dynamic>? row =
-        await CityDataService.fetchProfileRow(userId);
-    final String? uname = (row?['username'] as String?)?.trim();
-    final String fn = (row?['first_name'] as String?)?.trim() ?? '';
-    final String ln = (row?['last_name'] as String?)?.trim() ?? '';
-    final String full = ('$fn $ln').trim();
-    final String profileTitle = full.isNotEmpty
-        ? full
-        : (uname != null && uname.isNotEmpty ? '@$uname' : 'Участник');
-    final String bubbleLabel = (uname != null && uname.isNotEmpty)
-        ? '@$uname'
-        : (full.isNotEmpty ? full : 'Участник');
-    final String? av = (row?['avatar_url'] as String?)?.trim();
-    return _GroupSenderUi(
-      profileTitle: profileTitle,
-      bubbleLabel: bubbleLabel,
-      avatarUrl: (av != null && av.isNotEmpty) ? av : null,
-    );
-  }
-
   void _onGroupMemberTap(
     BuildContext context, {
     required String messageId,
     required String peerUserId,
-    required _GroupSenderUi sender,
+    required GroupChatSenderDisplay sender,
     required bool isDeleted,
   }) {
     if (widget.selectingMessages && !isDeleted) {
@@ -1207,29 +1382,120 @@ class _MessagesListState extends State<_MessagesList> {
     widget.onMessagesSnapshot(rows);
   }
 
-  String _replySnippetFor(Map<String, dynamic> m) {
-    if (m['deleted_at'] != null) {
-      return '';
+  String _dmReplyAuthorLabel(bool mine) {
+    if (mine) {
+      return 'Вы';
     }
-    final String bodyRaw = (m['body'] as String?) ?? '';
-    final String? imageUrl = ChatService.imageUrlFromMessageBody(bodyRaw);
-    final ChatFileMeta? fileMeta = ChatService.fileMetaFromMessageBody(bodyRaw);
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      return '[Фото]';
+    final String? p = widget.directPeerName?.trim();
+    if (p != null && p.isNotEmpty) {
+      return p;
     }
-    if (fileMeta != null) {
-      return fileMeta.isImage ? '[Фото]' : fileMeta.name;
+    return 'Собеседник';
+  }
+
+  Widget? _replyStripWidget(
+    BuildContext context,
+    Map<String, dynamic> m,
+    bool outgoing,
+  ) {
+    final String? rid = m['reply_to_message_id']?.toString();
+    if (rid == null || rid.isEmpty) {
+      return null;
     }
-    final ChatPlaceShareParsed? ps = ChatService.parsePlaceShareBody(bodyRaw);
-    if (ps != null) {
-      final String h = ps.headline.trim();
-      return h.isEmpty ? '📍 Заведение' : h;
+    return _ReplyStripWithTarget(
+      messageRow: m,
+      targetMessageId: rid,
+      outgoing: outgoing,
+      onStripPressed: () {
+        unawaited(_onReplyStripTap(context, rid));
+      },
+    );
+  }
+
+  List<Widget> _replyPreviewList(
+    BuildContext context,
+    Map<String, dynamic> m,
+    bool outgoing,
+  ) {
+    final Widget? w = _replyStripWidget(context, m, outgoing);
+    if (w == null) {
+      return <Widget>[];
     }
-    final String t = bodyRaw.trim();
-    if (t.length > 160) {
-      return '${t.substring(0, 157)}…';
+    return <Widget>[w];
+  }
+
+  Future<void> _onReplyStripTap(
+    BuildContext context,
+    String targetMessageId,
+  ) async {
+    final ChatThreadMessagesNotifier? n = widget.messageNotifier;
+    if (n == null) {
+      return;
     }
-    return t;
+    await n.loadUntilMessage(targetMessageId);
+    if (!context.mounted) {
+      return;
+    }
+    scrollMessageIntoView(targetMessageId);
+    final GlobalKey? k = _bubbleKeys[targetMessageId];
+    if (k?.currentContext == null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сообщение не найдено в ленте')),
+      );
+    }
+  }
+
+  Widget _wrapReplySlidable({
+    required bool mine,
+    required bool isDeleted,
+    required Map<String, dynamic> m,
+    required String replyAuthorLabel,
+    required Widget child,
+  }) {
+    if (widget.selectingMessages || isDeleted) {
+      return child;
+    }
+    if (chatMessageSnippetForReply(m).isEmpty) {
+      return child;
+    }
+    void go() {
+      widget.onReplyMessage(m, replyAuthorLabel);
+    }
+
+    return Slidable(
+      key: ValueKey<String>('swipe_reply:${m['id']}'),
+      startActionPane: !mine
+          ? ActionPane(
+              motion: const BehindMotion(),
+              extentRatio: 0.24,
+              children: <Widget>[
+                SlidableAction(
+                  onPressed: (_) => go(),
+                  backgroundColor: kPrimaryBlue,
+                  foregroundColor: Colors.white,
+                  icon: Icons.reply_rounded,
+                  label: 'Ответ',
+                ),
+              ],
+            )
+          : null,
+      endActionPane: mine
+          ? ActionPane(
+              motion: const BehindMotion(),
+              extentRatio: 0.24,
+              children: <Widget>[
+                SlidableAction(
+                  onPressed: (_) => go(),
+                  backgroundColor: kPrimaryBlue,
+                  foregroundColor: Colors.white,
+                  icon: Icons.reply_rounded,
+                  label: 'Ответ',
+                ),
+              ],
+            )
+          : null,
+      child: child,
+    );
   }
 
   String _plainTextForShare(
@@ -1259,7 +1525,7 @@ class _MessagesListState extends State<_MessagesList> {
     final String shareText =
         _plainTextForShare(m, displayImageUrl, fileMeta);
     final bool canShare = shareText.isNotEmpty;
-    final bool canReply = _replySnippetFor(m).isNotEmpty;
+    final bool canReply = chatMessageSnippetForReply(m).isNotEmpty;
     return <PopupMenuEntry<String>>[
       const PopupMenuItem<String>(
         value: 'show',
@@ -1314,6 +1580,7 @@ class _MessagesListState extends State<_MessagesList> {
     String me, {
     required String? displayImageUrl,
     required ChatFileMeta? fileMeta,
+    required String replyAuthorLabel,
   }) async {
     final String? mid = m['id']?.toString();
     if (value == 'show') {
@@ -1323,7 +1590,7 @@ class _MessagesListState extends State<_MessagesList> {
       return;
     }
     if (value == 'reply') {
-      widget.onReply(m);
+      widget.onReplyMessage(m, replyAuthorLabel);
       return;
     }
     if (value == 'share') {
@@ -1367,6 +1634,7 @@ class _MessagesListState extends State<_MessagesList> {
     String me, {
     required String? displayImageUrl,
     required ChatFileMeta? fileMeta,
+    required String replyAuthorLabel,
   }) {
     if (m['deleted_at'] != null) {
       return;
@@ -1414,6 +1682,7 @@ class _MessagesListState extends State<_MessagesList> {
             me,
             displayImageUrl: displayImageUrl,
             fileMeta: fileMeta,
+            replyAuthorLabel: replyAuthorLabel,
           ),
         );
       }),
@@ -1424,8 +1693,9 @@ class _MessagesListState extends State<_MessagesList> {
     BuildContext context,
     Map<String, dynamic> m,
     String me,
-    String displayImageUrl,
-  ) {
+    String displayImageUrl, {
+    required String replyAuthorLabel,
+  }) {
     final String messageId = m['id']?.toString() ?? '';
     final bool canDel = widget.canDeleteMessage(m, me);
     final String sub = widget.timeLabel(m['created_at'] as String?);
@@ -1441,7 +1711,7 @@ class _MessagesListState extends State<_MessagesList> {
               scrollMessageIntoView(messageId);
             }
           },
-          onReply: () => widget.onReply(m),
+          onReply: () => widget.onReplyMessage(m, replyAuthorLabel),
           onDelete: allowDelete ? () => widget.onDelete(messageId) : null,
         ),
       ),
@@ -1456,6 +1726,7 @@ class _MessagesListState extends State<_MessagesList> {
     required ColorScheme cs,
     required String? displayImageUrl,
     required ChatFileMeta? fileMeta,
+    required String replyAuthorLabel,
   }) {
     return Material(
       color: Colors.transparent,
@@ -1490,6 +1761,7 @@ class _MessagesListState extends State<_MessagesList> {
               me,
               displayImageUrl: displayImageUrl,
               fileMeta: fileMeta,
+              replyAuthorLabel: replyAuthorLabel,
             ),
           ),
           itemBuilder: (BuildContext c) => _bubbleMenuEntries(
@@ -1510,15 +1782,21 @@ class _MessagesListState extends State<_MessagesList> {
     required String displayImageUrl,
     required ColorScheme cs,
     required bool outgoing,
+    required String replyAuthorLabel,
   }) {
     final Size mq = MediaQuery.sizeOf(context);
     final double maxAllowed = mq.width * 0.7;
     const double boxH = 200.0;
     final double minW = maxAllowed >= 150 ? 150.0 : maxAllowed;
     final BorderRadius clipR = BorderRadius.circular(16);
-    final (int iw, int ih) = _bubbleImageCachePx(context, maxAllowed, boxH);
     return GestureDetector(
-      onTap: () => _openChatImage(context, m, me, displayImageUrl),
+      onTap: () => _openChatImage(
+        context,
+        m,
+        me,
+        displayImageUrl,
+        replyAuthorLabel: replyAuthorLabel,
+      ),
       child: ClipRRect(
         borderRadius: clipR,
         clipBehavior: Clip.antiAlias,
@@ -1532,31 +1810,9 @@ class _MessagesListState extends State<_MessagesList> {
           child: SizedBox(
             width: maxAllowed,
             height: boxH,
-            child: Image.network(
-              displayImageUrl,
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-              width: maxAllowed,
-              height: boxH,
-              filterQuality: FilterQuality.medium,
-              cacheWidth: iw,
-              cacheHeight: ih,
-              loadingBuilder: (
-                BuildContext _,
-                Widget child,
-                ImageChunkEvent? loadingProgress,
-              ) {
-                if (loadingProgress == null) {
-                  return child;
-                }
-                return const _ChatBubbleImageSkeleton();
-              },
-              errorBuilder: (
-                BuildContext context,
-                Object error,
-                StackTrace? st,
-              ) =>
-                  _chatBubbleImagePlaceholder(),
+            child: CityNetworkImage.fillParent(
+              imageUrl: displayImageUrl,
+              boxFit: BoxFit.cover,
             ),
           ),
         ),
@@ -1587,50 +1843,98 @@ class _MessagesListState extends State<_MessagesList> {
       return const Center(child: Text('Нет сессии'));
     }
     final String me = widget.me!;
-    final Stream<List<Map<String, dynamic>>>? stream =
-        ChatService.watchMessages(widget.conversationId);
-    if (stream == null) {
+    final ChatThreadMessagesNotifier? n = widget.messageNotifier;
+    if (n == null) {
       return const Center(child: Text('Нет соединения'));
     }
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: stream,
-      builder: (BuildContext c, AsyncSnapshot<List<Map<String, dynamic>>> s) {
-        if (s.hasError) {
-          return Center(child: Text('Ошибка: ${s.error}'));
-        }
-        if (!s.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final List<Map<String, dynamic>> raw =
-            s.data ?? <Map<String, dynamic>>[];
-        final List<Map<String, dynamic>> rows =
-            ChatService.dedupeChatMessagesById(raw);
-        _maybeReportRowsForForward(rows);
-        final String sig = rows.isEmpty
-            ? '0'
-            : '${rows.length}:${rows.last['id']}:${rows.first['id']}';
-        if (sig != _dataSig) {
-          _dataSig = sig;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.onStreamChanged();
-          });
-        }
-        if (rows.isEmpty) {
-          final ColorScheme ecs = Theme.of(context).colorScheme;
-          return Center(
-            child: Text(
-              'Пока нет сообщений',
-              style: TextStyle(color: ecs.onSurfaceVariant),
-            ),
-          );
-        }
-        final ColorScheme cs = Theme.of(context).colorScheme;
-        final bool isDark = Theme.of(context).brightness == Brightness.dark;
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          itemCount: rows.length,
-          itemBuilder: (BuildContext context, int i) {
-            final Map<String, dynamic> m = rows[i];
+    return ChangeNotifierProvider<ChatThreadMessagesNotifier>.value(
+      value: n,
+      child: Builder(
+        builder: (BuildContext context) {
+          final Object? err = context
+              .select<ChatThreadMessagesNotifier, Object?>((nn) => nn.error);
+          final bool init =
+              context.select<ChatThreadMessagesNotifier, bool>(
+                  (nn) => nn.initialLoading);
+          if (err != null) {
+            return Center(child: Text('Ошибка: $err'));
+          }
+          if (init) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return Selector<ChatThreadMessagesNotifier, (int, bool)>(
+            selector: (_, nn) => (nn.messageCount, nn.loadingOlder),
+            builder: (BuildContext c, (int, bool) t, _) {
+              final int count = t.$1;
+              final bool loadingOlder = t.$2;
+              if (count == 0) {
+                final ColorScheme ecs = Theme.of(c).colorScheme;
+                return Center(
+                  child: Text(
+                    'Пока нет сообщений',
+                    style: TextStyle(color: ecs.onSurfaceVariant),
+                  ),
+                );
+              }
+              final ChatThreadMessagesNotifier nn =
+                  c.read<ChatThreadMessagesNotifier>();
+              _maybeReportRowsForForward(nn.orderedMessageRows);
+              _maybeInitScrollToBottom();
+              final String? firstId = nn.firstMessageId;
+              final String? lastId = nn.lastMessageId;
+              final String sig = '$count|$firstId|$lastId';
+              if (sig != _dataSig) {
+                _dataSig = sig;
+                _scheduleOnStreamChanged();
+              }
+              if (widget.isGroup) {
+                final Set<String> ids = <String>{};
+                for (int j = 0; j < count; j++) {
+                  final String id = nn.messageIdAtIndex(j);
+                  final String? s =
+                      nn.messageById(id)?['sender_id']?.toString();
+                  if (s != null) {
+                    ids.add(s);
+                  }
+                }
+                ChatUserProfileCache.I.prefetch(ids);
+              }
+              final ColorScheme cs = Theme.of(c).colorScheme;
+              final bool isDark = Theme.of(c).brightness == Brightness.dark;
+              return ListView.builder(
+                controller: _scroll,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                cacheExtent: 900,
+                addRepaintBoundaries: false,
+                itemCount: count + (loadingOlder ? 1 : 0),
+                itemBuilder: (BuildContext context, int i) {
+                  if (loadingOlder && i == 0) {
+                    return const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    );
+                  }
+                  final int idx = loadingOlder ? i - 1 : i;
+                  final String messageId = nn.messageIdAtIndex(idx);
+                  return RepaintBoundary(
+                    key: ValueKey<String>('chatMsg:$messageId'),
+                    child: Selector<ChatThreadMessagesNotifier, int>(
+                      shouldRebuild: (int a, int b) => a != b,
+                      selector: (_, nnn) => nnn.messageVersion(messageId),
+                      builder: (BuildContext context, int _, Widget? child) {
+                        final Map<String, dynamic>? m = context
+                            .read<ChatThreadMessagesNotifier>()
+                            .messageById(messageId);
+                        if (m == null) {
+                          return const SizedBox.shrink();
+                        }
             final String? sid = m['sender_id']?.toString();
             final bool mine = sid == me;
             final bool isDeleted = m['deleted_at'] != null;
@@ -1652,9 +1956,17 @@ class _MessagesListState extends State<_MessagesList> {
             final ChatPlaceShareParsed? placeShare = !isDeleted
                 ? ChatService.parsePlaceShareBody(bodyRaw)
                 : null;
+            final String? voiceUrl = !isDeleted
+                ? ChatMessage.voicePlayUrlFromRow(m)
+                : null;
+            final int? voiceDurationMs = !isDeleted
+                ? ChatMessage.voiceDurationMsFromRow(m)
+                : null;
             final String text = isDeleted
                 ? 'Сообщение удалено'
-                : displayImageUrl != null
+                : voiceUrl != null
+                    ? ''
+                    : displayImageUrl != null
                     ? ''
                     : attachmentMeta != null
                         ? attachmentMeta.name
@@ -1671,6 +1983,9 @@ class _MessagesListState extends State<_MessagesList> {
             final bool myReadByPeer = mine && !isDeleted && createdAt != null
                 ? _peersReadMessage(widget.otherReadByUser, createdAt)
                 : false;
+            final String? deliveryStatus = m['delivery_status']?.toString();
+            final bool deliveredMark =
+                deliveryStatus == 'delivered' || myReadByPeer;
             final Color incomingBubble = isDark
                 ? cs.surfaceContainerHigh
                 : Colors.white;
@@ -1697,16 +2012,11 @@ class _MessagesListState extends State<_MessagesList> {
                 key: groupBubbleKey,
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: FutureBuilder<_GroupSenderUi>(
-                    future: _groupSenderUi(gSid),
-                    builder:
-                        (BuildContext ctx, AsyncSnapshot<_GroupSenderUi> snap) {
-                      final _GroupSenderUi sender = snap.hasData
-                          ? snap.data!
-                          : const _GroupSenderUi(
-                              profileTitle: 'Участник',
-                              bubbleLabel: '…',
-                            );
+                  child: ValueListenableBuilder<Map<String, dynamic>?>(
+                    valueListenable: ChatUserProfileCache.I.listenable(gSid),
+                    builder: (BuildContext ctx, Map<String, dynamic>? row, _) {
+                      final GroupChatSenderDisplay sender =
+                          GroupChatSenderDisplay.fromRow(row);
                       return GestureDetector(
                         onTap: widget.selectingMessages && !isDeleted
                             ? () => widget.onToggleMessageSelection(gMid)
@@ -1719,6 +2029,7 @@ class _MessagesListState extends State<_MessagesList> {
                                   me,
                                   displayImageUrl: displayImageUrl,
                                   fileMeta: fileMeta,
+                                  replyAuthorLabel: sender.bubbleLabel,
                                 ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -1740,11 +2051,14 @@ class _MessagesListState extends State<_MessagesList> {
                                   radius: 18,
                                   backgroundColor:
                                       kPrimaryBlue.withValues(alpha: 0.22),
-                                  backgroundImage: sender.avatarUrl != null
-                                      ? NetworkImage(sender.avatarUrl!)
-                                      : null,
-                                  child: sender.avatarUrl == null
-                                      ? Text(
+                                  child: sender.avatarUrl != null &&
+                                          sender.avatarUrl!.isNotEmpty
+                                      ? CityNetworkImage.avatar(
+                                          context: ctx,
+                                          imageUrl: sender.avatarUrl,
+                                          diameter: 36,
+                                        )
+                                      : Text(
                                           _initialForGroupAvatar(
                                             sender.bubbleLabel,
                                           ),
@@ -1753,19 +2067,22 @@ class _MessagesListState extends State<_MessagesList> {
                                             fontWeight: FontWeight.w700,
                                             color: kPrimaryBlue,
                                           ),
-                                        )
-                                      : null,
+                                        ),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 6),
-                            ConstrainedBox(
+                            _wrapReplySlidable(
+                              mine: false,
+                              isDeleted: isDeleted,
+                              m: m,
+                              replyAuthorLabel: sender.bubbleLabel,
+                              child: ConstrainedBox(
                               constraints: BoxConstraints(
                                 maxWidth:
                                     MediaQuery.sizeOf(context).width * 0.78,
                               ),
-                              child: IntrinsicWidth(
-                                child: Stack(
+                              child: Stack(
                                   clipBehavior: Clip.none,
                                   alignment: Alignment.topRight,
                                   children: <Widget>[
@@ -1841,6 +2158,7 @@ class _MessagesListState extends State<_MessagesList> {
                                         outgoing: false,
                                       ),
                                     ),
+                                  if (!isDeleted) ..._replyPreviewList(ctx, m, false),
                                   if (!isDeleted)
                                     Material(
                                       color: Colors.transparent,
@@ -1879,9 +2197,17 @@ class _MessagesListState extends State<_MessagesList> {
                                       displayImageUrl: displayImageUrl,
                                       cs: cs,
                                       outgoing: false,
+                                      replyAuthorLabel: sender.bubbleLabel,
+                                    )
+                                  else if (voiceUrl != null && !isDeleted)
+                                    ChatVoiceMessageBubble(
+                                      playUrl: voiceUrl,
+                                      durationMs: voiceDurationMs,
+                                      outgoing: false,
+                                      incomingUnread: incomingUnread,
                                     )
                                   else if (placeShare != null && !isDeleted)
-                                    _ChatPlaceShareBubble(
+                                    ChatPlaceShareCard(
                                       share: placeShare,
                                       outgoing: false,
                                       cs: cs,
@@ -1979,6 +2305,7 @@ class _MessagesListState extends State<_MessagesList> {
                                           cs: cs,
                                           displayImageUrl: displayImageUrl,
                                           fileMeta: fileMeta,
+                                          replyAuthorLabel: sender.bubbleLabel,
                                         ),
                                       ),
                                   ],
@@ -1996,25 +2323,31 @@ class _MessagesListState extends State<_MessagesList> {
 
             final GlobalKey? dmKey =
                 mid != null ? _bubbleKeys.putIfAbsent(mid, GlobalKey.new) : null;
-            final Widget dmBubble = GestureDetector(
-              onTap: !widget.selectingMessages || isDeleted || mid == null
-                  ? null
-                  : () => widget.onToggleMessageSelection(mid),
-              onLongPress: widget.selectingMessages || isDeleted
-                  ? null
-                  : () => _showBubbleActionsMenu(
-                        context,
-                        m,
-                        me,
-                        displayImageUrl: displayImageUrl,
-                        fileMeta: fileMeta,
-                      ),
-              child: ConstrainedBox(
+            final String dmAuth = _dmReplyAuthorLabel(mine);
+            final Widget dmBubble = _wrapReplySlidable(
+              mine: mine,
+              isDeleted: isDeleted,
+              m: m,
+              replyAuthorLabel: dmAuth,
+              child: GestureDetector(
+                onTap: !widget.selectingMessages || isDeleted || mid == null
+                    ? null
+                    : () => widget.onToggleMessageSelection(mid),
+                onLongPress: widget.selectingMessages || isDeleted
+                    ? null
+                    : () => _showBubbleActionsMenu(
+                          context,
+                          m,
+                          me,
+                          displayImageUrl: displayImageUrl,
+                          fileMeta: fileMeta,
+                          replyAuthorLabel: dmAuth,
+                        ),
+                child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: MediaQuery.sizeOf(context).width * 0.82,
                 ),
-                child: IntrinsicWidth(
-                  child: Stack(
+                child: Stack(
                     clipBehavior: Clip.none,
                     alignment: mine ? Alignment.topRight : Alignment.topLeft,
                     children: <Widget>[
@@ -2088,6 +2421,7 @@ class _MessagesListState extends State<_MessagesList> {
                                   ),
                                 ),
                               ),
+                            if (!isDeleted) ..._replyPreviewList(context, m, mine),
                             if (displayImageUrl != null && !isDeleted)
                               _bubbleImageBlock(
                                 context: context,
@@ -2096,9 +2430,17 @@ class _MessagesListState extends State<_MessagesList> {
                                 displayImageUrl: displayImageUrl,
                                 cs: cs,
                                 outgoing: mine,
+                                replyAuthorLabel: dmAuth,
                               )
+                            else if (voiceUrl != null && !isDeleted)
+                                    ChatVoiceMessageBubble(
+                                      playUrl: voiceUrl,
+                                      durationMs: voiceDurationMs,
+                                      outgoing: mine,
+                                      incomingUnread: incomingUnread,
+                                    )
                             else if (placeShare != null && !isDeleted)
-                              _ChatPlaceShareBubble(
+                              ChatPlaceShareCard(
                                 share: placeShare,
                                 outgoing: mine,
                                 cs: cs,
@@ -2168,9 +2510,9 @@ class _MessagesListState extends State<_MessagesList> {
                               children: <Widget>[
                                 if (mine && !isDeleted) ...<Widget>[
                                   Icon(
-                                    myReadByPeer ? Icons.done_all : Icons.done,
+                                    deliveredMark ? Icons.done_all : Icons.done,
                                     size: 15,
-                                    color: myReadByPeer
+                                    color: deliveredMark
                                         ? const Color(0xFFB3E0FF)
                                         : Colors.white.withValues(alpha: 0.7),
                                   ),
@@ -2204,6 +2546,7 @@ class _MessagesListState extends State<_MessagesList> {
                             cs: cs,
                             displayImageUrl: displayImageUrl,
                             fileMeta: fileMeta,
+                            replyAuthorLabel: dmAuth,
                           ),
                         ),
                     ],
@@ -2217,7 +2560,73 @@ class _MessagesListState extends State<_MessagesList> {
                   ? KeyedSubtree(key: dmKey, child: dmBubble)
                   : dmBubble,
             );
-          },
+                      },
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Reply line: подписка на [ChatThreadMessagesNotifier.messageVersion] целевого id
+/// + однократная догрузка оригинала (reply_snippet — только кэш).
+class _ReplyStripWithTarget extends StatefulWidget {
+  const _ReplyStripWithTarget({
+    required this.messageRow,
+    required this.targetMessageId,
+    required this.outgoing,
+    required this.onStripPressed,
+  });
+
+  final Map<String, dynamic> messageRow;
+  final String targetMessageId;
+  final bool outgoing;
+  final VoidCallback onStripPressed;
+
+  @override
+  State<_ReplyStripWithTarget> createState() => _ReplyStripWithTargetState();
+}
+
+class _ReplyStripWithTargetState extends State<_ReplyStripWithTarget> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final ChatThreadMessagesNotifier n =
+          context.read<ChatThreadMessagesNotifier>();
+      // ignore: discarded_futures
+      n.ensureMessageLoadedForReply(widget.targetMessageId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<ChatThreadMessagesNotifier, int>(
+      selector: (_, ChatThreadMessagesNotifier n) =>
+          n.messageVersion(widget.targetMessageId),
+      builder: (BuildContext context, int _, Widget? child) {
+        final Map<String, dynamic>? orig = context
+            .read<ChatThreadMessagesNotifier>()
+            .messageById(widget.targetMessageId);
+        final ChatReplyStripData? data = ChatReplyStripData.fromMessageRow(
+          widget.messageRow,
+          original: orig,
+        );
+        if (data == null) {
+          return const SizedBox.shrink();
+        }
+        return ChatMessageReplyStrip(
+          data: data,
+          outgoing: widget.outgoing,
+          onPressed: widget.onStripPressed,
         );
       },
     );
@@ -2346,7 +2755,7 @@ class _ForwardedBubbleHeader extends StatelessWidget {
                   if (fromUserId != null && fromUserId!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: _ForwardedTinyAvatar(
+                      child: ChatForwardedTinyAvatar(
                         userId: fromUserId!,
                         outgoing: outgoing,
                       ),
@@ -2374,125 +2783,14 @@ class _ForwardedBubbleHeader extends StatelessWidget {
   }
 }
 
-class _ForwardedTinyAvatar extends StatelessWidget {
-  const _ForwardedTinyAvatar({
-    required this.userId,
-    required this.outgoing,
-  });
-
-  final String userId;
-  final bool outgoing;
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: CityDataService.fetchProfileRow(userId),
-      builder: (BuildContext context, AsyncSnapshot<Map<String, dynamic>?> s) {
-        final String? url =
-            (s.data?['avatar_url'] as String?)?.trim();
-        final String fn =
-            (s.data?['first_name'] as String?)?.trim() ?? '';
-        final String un =
-            (s.data?['username'] as String?)?.trim() ?? '';
-        final String letter = (fn.isNotEmpty
-                ? fn[0]
-                : (un.isNotEmpty ? un.replaceAll('@', '')[0] : '?'))
-            .toUpperCase();
-        return CircleAvatar(
-          radius: 11,
-          backgroundColor: outgoing
-              ? Colors.white.withValues(alpha: 0.25)
-              : kPrimaryBlue.withValues(alpha: 0.2),
-          backgroundImage:
-              url != null && url.isNotEmpty ? NetworkImage(url) : null,
-          child: url == null || url.isEmpty
-              ? Text(
-                  letter,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: outgoing ? Colors.white : kPrimaryBlue,
-                  ),
-                )
-              : null,
-        );
-      },
-    );
-  }
-}
-
-class _ResolvedPlaceShare {
-  const _ResolvedPlaceShare({
-    required this.placeId,
-    required this.title,
-    this.photoUrl,
-  });
-
-  final String placeId;
-  final String title;
-  final String? photoUrl;
-}
-
-Future<_ResolvedPlaceShare?> _resolvePlaceShare(
-  ChatPlaceShareParsed p,
-) async {
-  if (p.directPlaceId != null && p.directPlaceId!.isNotEmpty) {
-    final Map<String, dynamic>? row =
-        await PlaceService.fetchPlace(p.directPlaceId!);
-    final String? t = (row?['title'] as String?)?.trim();
-    final String title = t != null && t.isNotEmpty ? t : p.headline;
-    String? photo = p.thumbUrl?.trim();
-    if (photo == null || photo.isEmpty) {
-      photo = (row?['photo_url'] as String?)?.trim();
-    }
-    if (photo == null || photo.isEmpty) {
-      photo = (row?['cover_url'] as String?)?.trim();
-    }
-    return _ResolvedPlaceShare(
-      placeId: p.directPlaceId!,
-      title: title,
-      photoUrl: photo,
-    );
-  }
-  final String? pid = p.legacyPostId;
-  if (pid == null || pid.isEmpty) {
-    return null;
-  }
-  final Map<String, dynamic>? post = await PlaceService.fetchPlacePostById(pid);
-  if (post == null) {
-    return null;
-  }
-  final String? plId = post['place_id']?.toString();
-  if (plId == null || plId.isEmpty) {
-    return null;
-  }
-  final Map<String, dynamic>? pl = await PlaceService.fetchPlace(plId);
-  final String? pt = (pl?['title'] as String?)?.trim();
-  final String title = pt != null && pt.isNotEmpty ? pt : p.headline;
-  String? photo = (post['image_url'] as String?)?.trim();
-  if (photo == null || photo.isEmpty) {
-    photo = (pl?['photo_url'] as String?)?.trim();
-  }
-  if (photo == null || photo.isEmpty) {
-    photo = (pl?['cover_url'] as String?)?.trim();
-  }
-  if (photo == null || photo.isEmpty) {
-    photo = p.thumbUrl?.trim();
-  }
-  return _ResolvedPlaceShare(
-    placeId: plId,
-    title: title,
-    photoUrl: photo,
-  );
-}
-
 Future<void> _openSharedPlace(
   BuildContext context,
   ChatPlaceShareParsed share,
 ) async {
   String openId = (share.directPlaceId ?? '').trim();
   if (openId.isEmpty) {
-    final _ResolvedPlaceShare? r = await _resolvePlaceShare(share);
+    final ChatPlaceShareResolved? r =
+        await ChatPlaceShareResolutionCache.I.futureFor(share);
     openId = (r?.placeId ?? '').trim();
   }
   if (!context.mounted || openId.isEmpty) {
@@ -2503,158 +2801,6 @@ Future<void> _openSharedPlace(
       builder: (BuildContext c) => PlaceDetailScreen(placeId: openId),
     ),
   );
-}
-
-/// Превью заведения в пузырьке (шаринг из ленты мест).
-class _ChatPlaceShareBubble extends StatelessWidget {
-  const _ChatPlaceShareBubble({
-    required this.share,
-    required this.outgoing,
-    required this.cs,
-    required this.incomingUnread,
-  });
-
-  final ChatPlaceShareParsed share;
-  final bool outgoing;
-  final ColorScheme cs;
-  final bool incomingUnread;
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<_ResolvedPlaceShare?>(
-      future: _resolvePlaceShare(share),
-      builder:
-          (BuildContext context, AsyncSnapshot<_ResolvedPlaceShare?> snap) {
-        final _ResolvedPlaceShare? res = snap.data;
-        final String title = (res?.title ?? share.headline).trim();
-        final String? photo = res?.photoUrl ?? share.thumbUrl;
-        final String openId = res?.placeId ?? share.directPlaceId ?? '';
-        final bool waitingLegacy = share.legacyPostId != null &&
-            share.legacyPostId!.isNotEmpty &&
-            snap.connectionState == ConnectionState.waiting;
-        final bool canOpen = openId.isNotEmpty;
-
-        final Color cardBg = outgoing
-            ? Colors.white.withValues(alpha: 0.97)
-            : const Color(0xFFE2F2E3);
-        final Color borderCol =
-            kPrimaryBlue.withValues(alpha: outgoing ? 0.38 : 0.42);
-        final Color titleCol =
-            outgoing ? kPrimaryBlue : const Color(0xFF2E7D32);
-        final Color actionCol =
-            outgoing ? kPrimaryBlue.withValues(alpha: 0.9) : kPrimaryBlue;
-        final double cardMaxW = MediaQuery.sizeOf(context).width * 0.68;
-        const double thumb = 76;
-
-        return ConstrainedBox(
-          constraints: BoxConstraints(
-            minWidth: 200,
-            maxWidth: cardMaxW.clamp(200, 400),
-          ),
-          child: Material(
-            color: cardBg,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: borderCol),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: SizedBox(
-                      width: thumb,
-                      height: thumb,
-                      child: photo != null && photo.isNotEmpty
-                          ? Image.network(
-                              photo,
-                              fit: BoxFit.cover,
-                              alignment: Alignment.center,
-                              cacheWidth: imageCacheExtentPx(context, thumb),
-                              cacheHeight: imageCacheExtentPx(context, thumb),
-                              loadingBuilder: (
-                                BuildContext context,
-                                Widget child,
-                                ImageChunkEvent? progress,
-                              ) {
-                                if (progress == null) {
-                                  return child;
-                                }
-                                return const _ChatBubbleImageSkeleton();
-                              },
-                              errorBuilder:
-                                  (BuildContext c, Object e, StackTrace? st) =>
-                                      ColoredBox(
-                                color: kPrimaryBlue.withValues(alpha: 0.12),
-                                child: const Icon(
-                                  Icons.store_rounded,
-                                  color: kPrimaryBlue,
-                                  size: 32,
-                                ),
-                              ),
-                            )
-                          : ColoredBox(
-                              color: kPrimaryBlue.withValues(alpha: 0.12),
-                              child: const Icon(
-                                Icons.store_rounded,
-                                color: kPrimaryBlue,
-                                size: 32,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          title.isEmpty ? 'Заведение' : title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: incomingUnread
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                            color: titleCol,
-                            height: 1.25,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        if (waitingLegacy && !canOpen)
-                          SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: titleCol,
-                            ),
-                          )
-                        else
-                          Text(
-                            canOpen ? 'Перейти' : 'Недоступно',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: canOpen ? actionCol : cs.onSurfaceVariant,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 DateTime? _tryParse(String? iso) {

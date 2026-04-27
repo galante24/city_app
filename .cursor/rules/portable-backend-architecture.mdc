@@ -1,0 +1,120 @@
+---
+description: Переносимый бэкенд — UI→Repository→порты, без Supabase в UI, BACKEND_MODE, media_path, dual impl
+alwaysApply: true
+---
+
+# Portable backend (city_app): завтра Supabase отключён
+
+**Ментальная модель:** любая фича проектируется так, будто **завтра Supabase будет отключён**, а система продолжит работу после переключения **`BACKEND_MODE`** ([`lib/core/config/backend_mode.dart`](lib/core/config/backend_mode.dart), [`app_secrets`](lib/config/app_secrets.dart)).
+
+Полный инженерный устав: [`docs/ENGINEERING_CHARTER.md`](docs/ENGINEERING_CHARTER.md). Git hooks / CI: [`docs/git-hooks.md`](docs/git-hooks.md).
+
+---
+
+## Запрещено
+
+- **`Supabase.*` в `lib/screens/`, `lib/widgets/`, `lib/presentation/`, `lib/domain/`** — никаких `supabase.from`, `supabase.storage` вне **Data/implementation** слоёв.
+- **Бизнес-логика в Supabase RPC** как единственный источник правды, если тот же сценарий **не** реализуем через домен+репозиторий+REST-альтернативу. RPC — только с явным **портом** и второй реализацией под `rest` (или заглушкой с планом).
+- **URL медиа в БД** — в хранилище/моделях **универсальные пути** (например `media_path: "voice/…/file.aac"`), **разрешение в полный URL** — в Data/утилитах ([`ChatMediaUrl`](lib/features/chat/data/api/chat_media_url.dart) и аналоги), не в UI.
+- **Архитектура «только Supabase»** — недопустима для новой логики.
+
+---
+
+## Обязательная архитектура
+
+```
+UI → Repository (domain contract) → DataSource / Порт (interface) → Supabase* | REST* | S3*
+```
+
+- **UI:** только `Repository` / `ChangeNotifier` / `Provider`, **без** сети и без vendor SDK.
+- **Domain:** сущности, инварианты, **без** IO, без `SupabaseClient`.
+- **Repository:** use-case, маппинг, политика ошибок/кеша.
+- **DataSource / реализация портов:** `Supabase*`, `Api*`, моки — **только здесь**.
+
+Имеющиеся ориентиры: [`AuthPort`](lib/core/auth/auth_port.dart), фабрики вроде [`ChatMessagesFactory`](lib/features/chat/data/chat_messages_factory.dart), `BACKEND_MODE`.
+
+---
+
+## Внешние сервисы — всегда через абстракции
+
+Для **новой** фичи явно вводить порты/контракты (примеры имён, расширять по смыслу):
+
+| Область | Порт / интерфейс | Supabase-реализация | REST / VPS-реализация |
+|--------|------------------|---------------------|------------------------|
+| Чат / сообщения | `ChatMessagesRepository` + `ChatMessagesRemoteDataSource` | `SupabaseChatMessagesDataSource` | `ApiChatMessagesDataSource` |
+| Сессия / токен | `AuthPort` | `SupabaseAuthPort` | при `rest` — Bearer/refresh (как в дизайне API) |
+| Медиа-загрузка | отдельный `MediaStorage` / `MediaUpload` порт (если фича трогает файлы) | storage bucket + path | `POST` multipart + `media_path` в ответе |
+| Общий CRUD (если нужен) | `XxxRepository` + `XxxDataSource` | `Supabase*DataSource` | `Api*DataSource` |
+
+**Минимум две реализации** для «живой» фичи: supabase + rest, либо rest + мок, с планом второй. Для S3-совместимого хранилища — **тот же порт** `MediaStorage`, другая `S3*DataSource`.
+
+---
+
+## Переключение
+
+- **`BACKEND_MODE=supabase|rest`** (и связанные env) — **единая** точка выбора фабрики/репозитория, не `if` в UI.
+- URL API / ключи: [`app_secrets`](lib/config/app_secrets.dart), define — не хардкод в виджетах.
+
+---
+
+## Данные (БД / DTO)
+
+- Сохранять **путь/ключ** (`media_path`, `object_key`, относительный path), **не** готовый публичный URL, если тот привязан к одному хосту. Резолв URL — в слое данных и/или `kApiBaseUrl` + политика доверия (OTA, манифесты).
+
+---
+
+## UI
+
+- Не знает бэкенда; **только** репозиторий / провайдеры.
+- **Нет** тяжёлых `FutureBuilder` внутри `itemBuilder` списков; `const`, `Selector` / `Listenable` для узкого rebuild.
+- **Нет** `debugPrint` прод-данных / токенов; см. [`secure_log`](lib/core/secure_log.dart) при необходимости.
+
+## Производительность
+
+- Минимум rebuild, пагинация, кеш где уместно, без N+1 и лишних полных прогонов сети на каждый кадр.
+
+## Безопасность
+
+- Валидация ввода (клиент + **сервер**); лимиты размера/типа файлов; нет `service_role` в клиенте; политика IDOR/доступа на API.
+
+## DevOps / масштаб (10k–30k+ пользователей)
+
+- Сборки на CI, OTA, деплой API на VPS, горизонтальное масштабирование stateless API, WS/redis при необходимости — **фича не должна ломать** эту картину (без state в клиенте, критичном для кластера; идемпотентность write).
+
+---
+
+## Процесс (до кода)
+
+1. Требования и границы  
+2. Риски: перф, безопасность, масштаб, отказ  
+3. **Интерфейсы** и слои (таблица: UI / Repository / DataSource)  
+4. Код
+
+---
+
+## Self-check перед сдачей
+
+- [ ] UI заменим без смены верстки, если сменить только реализацию `Repository` / фабрику?  
+- [ ] Порты/абстракции на месте?  
+- [ ] Нет прямого `supabase` в `lib/**` **вне** `*datasource*`, `*data/`, `services/` оговоренных?  
+- [ ] `rest` путь **осмыслен** (не заглушка «TODO») или явно **отложен** с тикетом?  
+- [ ] Нет ли hot-path регрессии и утечек при нагрузке?
+
+---
+
+## Формат ответа в задаче (когда важна архитектура)
+
+Кратко (по смыслу, не копипаста заголовков в каждом чате):
+
+1. **Архитектура** (слои)  
+2. **Интерфейсы** (новые/существующие)  
+3. **Реализации** (supabase + rest + опц. S3)  
+4. **Где Supabase** (файлы/классы)  
+5. **Где VPS/REST**  
+6. **Поведение после переезда** (только `BACKEND_MODE` + env)  
+7. **Риски / проблемы**  
+8. **Оптимизации** / кеш / лимиты
+
+Дальше — **код** (минимальный дифф по scope), **тесты**, **переключение env**.
+
+**Не** раздувай рефакторингом вне запроса пользователя.

@@ -1,52 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'config/supabase_ready.dart';
-import 'widgets/app_update_dialog.dart';
+import 'app_update/app_update_entry_io.dart' if (dart.library.html) 'app_update/app_update_entry_web.dart' as e;
 
-/// Сравнивает [PackageInfo.buildNumber] с [app_config.version_code].
-/// При большем значении в БД и непустом [download_url] показывает диалог обновления.
-Future<void> checkForAppUpdates(BuildContext context) async {
-  if (!supabaseAppReady) {
-    return;
-  }
-  if (!context.mounted) {
-    return;
-  }
-  try {
-    final PackageInfo info = await PackageInfo.fromPlatform();
-    final int local = int.tryParse(info.buildNumber) ?? 0;
-    final String localLabel = '${info.version} (${info.buildNumber})';
+export 'app_update/app_update_supabase.dart' show checkForAppUpdateViaSupabase;
 
-    final Map<String, dynamic>? row = await Supabase.instance.client
-        .from('app_config')
-        .select('version_code, download_url')
-        .eq('id', 'default')
-        .maybeSingle();
-    if (row == null) {
-      return;
-    }
-    final Object? vc = row['version_code'];
-    final int? remote = vc is int ? vc : int.tryParse(vc.toString().trim());
-    if (remote == null || remote <= local) {
-      return;
-    }
-    final String? downloadUrl = row['download_url'] as String?;
-    final String url = downloadUrl == null ? '' : downloadUrl.trim();
-    if (url.isEmpty) {
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
-    await showAppUpdateDialog(
-      context,
-      localLabel: localLabel,
-      remoteBuildCode: remote,
-      downloadUrl: url,
-    );
-  } on Object {
-    // сеть/таблица — не мешаем запуску
-  }
-}
+/// Стартовая проверка: Android + [UPDATE_MANIFEST_URL] → OTA с VPS, иначе (в т.ч. iOS) — Supabase [app_config].
+Future<void> checkForAppUpdates(BuildContext context) =>
+    e.checkForAppUpdates(context);

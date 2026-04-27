@@ -6,7 +6,7 @@ import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../services/city_data_service.dart';
 import '../services/place_service.dart';
-import '../utils/image_cache_extent.dart';
+import '../widgets/city_network_image.dart';
 import '../widgets/place_card.dart';
 import '../widgets/places_style.dart';
 import '../widgets/soft_tab_header.dart';
@@ -899,31 +899,18 @@ class _ModeratorCloudTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: SizedBox(
-              width: side,
-              height: side,
-              child: avatarUrl != null
-                  ? Image.network(
-                      avatarUrl!,
-                      fit: BoxFit.cover,
-                      width: side,
-                      height: side,
-                      cacheWidth: imageCacheExtentPx(context, side),
-                      cacheHeight: imageCacheExtentPx(context, side),
-                      errorBuilder:
-                          (BuildContext context, Object error, StackTrace? st) =>
-                              ColoredBox(
-                        color: kPrimaryBlue.withValues(alpha: 0.12),
-                        child: Icon(
-                          Icons.person_rounded,
-                          color: kPrimaryBlue,
-                          size: 28,
-                        ),
-                      ),
-                    )
-                  : ColoredBox(
+          avatarUrl != null && avatarUrl!.trim().isNotEmpty
+              ? CityNetworkImage.square(
+                  imageUrl: avatarUrl,
+                  size: side,
+                  borderRadius: 14,
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    width: side,
+                    height: side,
+                    child: ColoredBox(
                       color: kPrimaryBlue.withValues(alpha: 0.12),
                       child: Icon(
                         Icons.person_rounded,
@@ -931,8 +918,8 @@ class _ModeratorCloudTile extends StatelessWidget {
                         size: 28,
                       ),
                     ),
-            ),
-          ),
+                  ),
+                ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

@@ -9,6 +9,7 @@ import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
+import '../widgets/city_network_image.dart';
 import 'user_chat_thread_screen.dart';
 
 /// Публичный профиль: только просмотр и «Написать». Редактирование — в [ProfileScreen] (вкладка «Аккаунт»).
@@ -161,11 +162,13 @@ class _PublicUserProfileScreenState extends State<PublicUserProfileScreen> {
                               radius: 48,
                               backgroundColor:
                                   kPrimaryBlue.withValues(alpha: 0.15),
-                              backgroundImage: _avatarUrl != null
-                                  ? NetworkImage(_avatarUrl!)
-                                  : null,
-                              child: _avatarUrl == null
-                                  ? Text(
+                              child: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                                  ? CityNetworkImage.avatar(
+                                      context: context,
+                                      imageUrl: _avatarUrl,
+                                      diameter: 96,
+                                    )
+                                  : Text(
                                       _displayName.isNotEmpty
                                           ? _displayName[0].toUpperCase()
                                           : '?',
@@ -174,8 +177,7 @@ class _PublicUserProfileScreenState extends State<PublicUserProfileScreen> {
                                         fontWeight: FontWeight.w700,
                                         color: kPrimaryBlue,
                                       ),
-                                    )
-                                  : null,
+                                    ),
                             ),
                             const SizedBox(height: 16),
                             Text(

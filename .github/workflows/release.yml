@@ -1,5 +1,8 @@
 # Сборка release APK, GitHub Release и запись version_code + download_url в public.app_config.
 #
+# Триггер: только вручную или тег v* — нет дублирующей сборки на push main
+# (прод: android-ota-deploy.yml).
+#
 # Секреты (Settings → Secrets and variables → Actions):
 #   SUPABASE_URL                 — https://xxxxx.supabase.co
 #   SUPABASE_SERVICE_ROLE_KEY    — service_role (API → service_role, не публиковать)
@@ -12,9 +15,10 @@
 name: Release APK
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write

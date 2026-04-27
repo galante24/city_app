@@ -3,10 +3,10 @@
 
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/weather_config.dart';
+import '../core/secure_log.dart';
 
 /// Текущая погода (компакт для AppBar).
 class WeatherCurrent {
@@ -66,9 +66,7 @@ class WeatherService {
           .get(uri, headers: _httpHeaders)
           .timeout(const Duration(seconds: 20));
       if (r.statusCode != 200) {
-        if (kDebugMode) {
-          debugPrint('Weather /weather: ${r.statusCode} ${r.body}');
-        }
+        debugLogHttpFailure('Weather /weather', r.statusCode);
         return null;
       }
       final Object? j = jsonDecode(r.body);
@@ -95,9 +93,7 @@ class WeatherService {
       }
       return WeatherCurrent(tempC: t, iconCode: icon);
     } on Object catch (e) {
-      if (kDebugMode) {
-        debugPrint('Weather fetchCurrent: $e');
-      }
+      debugLogHttpFailure('Weather fetchCurrent', null, error: e);
       return null;
     }
   }
@@ -118,15 +114,11 @@ class WeatherService {
           .get(uri, headers: _httpHeaders)
           .timeout(const Duration(seconds: 25));
     } on Object catch (e) {
-      if (kDebugMode) {
-        debugPrint('Weather forecast get: $e');
-      }
+      debugLogHttpFailure('Weather forecast get', null, error: e);
       return <WeatherDayForecast>[];
     }
     if (r.statusCode != 200) {
-      if (kDebugMode) {
-        debugPrint('Weather /forecast: ${r.statusCode} ${r.body}');
-      }
+      debugLogHttpFailure('Weather /forecast', r.statusCode);
       return <WeatherDayForecast>[];
     }
     final Object? decoded = jsonDecode(r.body);
