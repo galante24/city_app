@@ -4,9 +4,9 @@
 
 После `git config core.hooksPath .githooks` каждый **`git commit`** (без `-m` — см. `prepare-commit-msg`) гоняет **production** pipeline: **security → `dart format` (staged) → опцион. `PRE_COMMIT_DART_FIX=1` / `DART_FIX_APPLY=1` → `dart fix --apply` — блок `print`/`debugPrint`/`TODO`/`FIXME` в новых строках → `flutter analyze` → (opt.) `flutter test` → (не блокирует) `performance_warn` → bump `+build` → `flutter build apk --debug` в `builds/local_apk/`.** В конце — сводка в лог (✔ checks, version, путь к APK) и `builds/.githook_precommit.log`.**
 
-**`post-commit` не делает `git push` по умолчанию.** Push только: **`AUTO_PUSH=1 git commit`** (и настроенный upstream, не `GIT_HOOK_NO_PUSH=1`).
+**`post-commit` не делает `git push` по умолчанию.** Push: **`AUTO_PUSH=1`**, в переменных окружения, или (надёжно на **Windows** для cmd/PowerShell) **`git config githook.autoPush 1`**, который выставляет [`tool/release.ps1`](../tool/release.ps1) / [`release.cmd`](../release.cmd) перед релизным коммитом.
 
-`push` в `main` (после ручного/авто `git push` на origin) → **[`android-ota-deploy.yml`](../.github/workflows/android-ota-deploy.yml)** — (опц.) `supabase db push` при **`MIGRATION_APPROVED=1`**, `flutter analyze`, release APK, OTA на VPS. Клиент: OTA + `VpsOtaService`, без смены API.
+`push` в `main` (после ручного/авто `git push` на origin) → **[`android-ota-deploy.yml`](../.github/workflows/android-ota-deploy.yml)** — (опц.) `supabase db push` при **`MIGRATION_APPROVED=1`**, `flutter analyze`, `flutter test` (при `test/*_test.dart`), release APK, OTA на VPS, без смены portable backend / MediaStorage.
 
 **`release.yml`** — GitHub Release: теги `v*` или `workflow_dispatch` (второй путь, не дублирует каждый commit на `main`).
 
@@ -19,10 +19,26 @@
 ```bash
 git config core.hooksPath .githooks
 bash tool/setup-git-hooks.sh
-# Windows: Git Bash обязателен для pre-commit (bash + sh hooks)
+# Windows: для обычного pre-commit (полный pipeline) — Git Bash + bash. Для сценария **только** «релиз из Windows» — см. release.ps1: bash не требуется.
 ```
 
-Проверка:
+### Production release (одна команда, Windows, без обязательного bash)
+
+- **[`tool/release.ps1`](../tool/release.ps1)** — `commit` (или `commit --allow-empty` если нечего коммитить) + **`git config githook.autoPush 1`** + `AUTO_PUSH=1` + `push` → триггер **GitHub Actions** (тот же pipeline, что и при `git push` в `main`).
+- **[`release.cmd`](../release.cmd)** (корень репо) — `release.cmd` или `release.cmd -DryRun` (без side effects).
+- Перед `git commit` скрипт создаёт **`.git/release-in-progress`**: [`.githooks/pre-commit`](../.githooks/pre-commit) **пропускает** тяжёлый `pre_commit_run.sh` (аудит, локальный debug APK) — «production release» доверяет **CI**; домашняя разработка по-прежнему через полный pre-commit (bash).
+- Логи: `builds/releases/release-*.log` (паттерн `*.log` в `.gitignore`).
+
+```powershell
+# из корня city_app (PowerShell)
+.\tool\release.ps1
+# или
+.\release.cmd
+```
+
+`githook.autoPush` в `finally` снимается после релиза; `release-in-progress` удаляется, чтобы обычные коммиты снова шли через полный pre-commit.
+
+Проверка hooksPath:
 
 ```bash
 git config --get core.hooksPath
@@ -67,6 +83,7 @@ brew install gitleaks ripgrep
 | `SKIP_PERFORMANCE_WARN=1` | Не вызывать `performance_warn` |
 | `GIT_HOOK_AUTO_ADD=1` | `git add -A` до проверок |
 | `AUTO_PUSH=1` | Вместе с commit — после `post-commit` сделать `git push` (нужен upstream) |
+| `githook.autoPush` = `1` (локальный `git config`, ставит `tool/release.ps1`) | Тот же эффект, что `AUTO_PUSH=1` в `post-commit` (надёжно в cmd/PowerShell на Windows) |
 | `GIT_HOOK_NO_PUSH=1` | Никогда не пушить из hook, даже при `AUTO_PUSH=1` |
 
 ### `pre-push`

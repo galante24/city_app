@@ -17,9 +17,18 @@ if [ "${GIT_HOOK_NO_PUSH:-0}" = "1" ] || [ "${GIT_HOOK_NO_PUSH:-}" = "true" ]; t
   exit 0
 fi
 
-if [ "${AUTO_PUSH:-0}" != "1" ] && [ "${AUTO_PUSH:-}" != "true" ]; then
+# Windows: cmd/PowerShell часто не передают env в sh-хук; githook.autoPush из release.ps1 — дубль AUTO_PUSH
+GITHOOK_AP="$(git config --get githook.autoPush 2>/dev/null || true)"
+PUSH_WANTED=0
+if [ "$GITHOOK_AP" = "1" ] || [ "$GITHOOK_AP" = "true" ]; then
+  PUSH_WANTED=1
+fi
+if [ "${AUTO_PUSH:-0}" = "1" ] || [ "${AUTO_PUSH:-}" = "true" ]; then
+  PUSH_WANTED=1
+fi
+if [ "$PUSH_WANTED" != "1" ]; then
   echo "post-commit: push не выполнялся (по умолчанию). Run git push to deploy" >&2
-  echo "post-commit: или: AUTO_PUSH=1 git commit — для авто push после коммита" >&2
+  echo "post-commit: или: AUTO_PUSH=1 / tool/release.ps1 / release.cmd" >&2
   exit 0
 fi
 
