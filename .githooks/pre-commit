@@ -18,8 +18,8 @@ cd "$REPO_ROOT" || exit 0
 # Production release (tool/release.ps1 / release.cmd): one-shot, без bash, CI — analyze/test/OTA/Supabase
 GIT_DIR_REL="$(git rev-parse --git-dir 2>/dev/null || true)"
 if [ -f ".git/release-in-progress" ]; then
-  echo "pre-commit: release-in-progress — skip (CI will run checks)"
-  exit 0
+echo "pre-commit: release-in-progress — skip (CI will run checks)" >&2
+exit 0
 fi
 
 if command -v bash >/dev/null 2>&1; then
