@@ -41,14 +41,11 @@ import 'screens/tasks_list_screen.dart';
 
 Future<void> main() async {
   if (kSentryDsn.isNotEmpty) {
-    await SentryFlutter.init(
-      (SentryFlutterOptions options) {
-        options.dsn = kSentryDsn;
-        options.tracesSampleRate = kDebugMode ? 1.0 : 0.12;
-        options.environment = kDebugMode ? 'debug' : 'release';
-      },
-      appRunner: _runApp,
-    );
+    await SentryFlutter.init((SentryFlutterOptions options) {
+      options.dsn = kSentryDsn;
+      options.tracesSampleRate = kDebugMode ? 1.0 : 0.12;
+      options.environment = kDebugMode ? 'debug' : 'release';
+    }, appRunner: _runApp);
   } else {
     await _runApp();
   }
@@ -68,10 +65,10 @@ Future<void> _runApp() async {
     runApp(const _AppWithoutSupabase());
     return;
   }
-  final String sessionKey = authSessionStorageKeyForUrl(kSupabaseUrl);
+  final String sessionKey = authSessionStorageKeyForUrl(kSupabaseProjectUrl);
   await migrateLegacySupabaseSessionToSecure(sessionKey);
   await Supabase.initialize(
-    url: kSupabaseUrl,
+    url: kSupabaseProjectUrl,
     anonKey: kSupabaseAnonKey,
     authOptions: FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
@@ -248,10 +245,8 @@ class _MainScaffoldState extends State<MainScaffold> {
           physics: const NeverScrollableScrollPhysics(),
           children: List<Widget>.generate(
             _stackChildren.length,
-            (int i) => _KeepAliveTab(
-              key: ValueKey<int>(i),
-              child: _stackChildren[i],
-            ),
+            (int i) =>
+                _KeepAliveTab(key: ValueKey<int>(i), child: _stackChildren[i]),
           ),
         ),
         bottomNavigationBar: CityMainNavigationBar(
@@ -516,10 +511,7 @@ class _BentoServiceCard extends StatelessWidget {
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: borderColor,
-                width: dark ? 1.25 : 1,
-              ),
+              border: Border.all(color: borderColor, width: dark ? 1.25 : 1),
             ),
             child: Stack(
               children: <Widget>[
@@ -537,11 +529,7 @@ class _BentoServiceCard extends StatelessWidget {
                           boxShadow: iconShadows,
                         ),
                         alignment: Alignment.center,
-                        child: Icon(
-                          category.icon,
-                          size: 28,
-                          color: accent,
-                        ),
+                        child: Icon(category.icon, size: 28, color: accent),
                       ),
                       const SizedBox(height: 10),
                       FittedBox(
@@ -596,4 +584,3 @@ class _BentoServiceCard extends StatelessWidget {
     );
   }
 }
-

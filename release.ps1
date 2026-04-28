@@ -137,7 +137,8 @@ try {
     $o | ForEach-Object { Write-LogLine -Line "  $_" -DailyLogPath $DailyLog }
     Assert-LastExit 'flutter pub get' $LASTEXITCODE
 
-    Write-LogLine -Line "--- flutter build apk --release (--dart-define-from-file) ---" -DailyLogPath $DailyLog
+    Write-LogLine -Line "--- flutter build apk --release --dart-define-from-file=api_keys.json ---" -DailyLogPath $DailyLog
+    # Одна строка сборки релиза: flutter build apk --release --dart-define-from-file=api_keys.json
     $buildArgs = @('build', 'apk', '--release') + $defineArg
     $o = & flutter @buildArgs 2>&1
     $o | ForEach-Object { Write-LogLine -Line "  $_" -DailyLogPath $DailyLog }

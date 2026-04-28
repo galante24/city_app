@@ -15,6 +15,30 @@ const String kSupabaseAnonKey = String.fromEnvironment(
   defaultValue: '',
 );
 
+/// Корневой URL проекта `https://<ref>.supabase.co` без хвоста `/rest/v1` (сливаем при ошибке конфигурации).
+String get kSupabaseProjectUrl {
+  final String raw = kSupabaseUrl.trim();
+  if (raw.isEmpty) {
+    return '';
+  }
+  return _normalizeSupabaseProjectUrl(raw);
+}
+
+String _normalizeSupabaseProjectUrl(String url) {
+  var s = url;
+  while (s.endsWith('/')) {
+    s = s.substring(0, s.length - 1);
+  }
+  const String restSeg = '/rest/v1';
+  if (s.toLowerCase().endsWith(restSeg)) {
+    s = s.substring(0, s.length - restSeg.length);
+    while (s.endsWith('/')) {
+      s = s.substring(0, s.length - 1);
+    }
+  }
+  return s;
+}
+
 /// `supabase` (по умолчанию) — чат через Supabase; `rest` — HTTP [kApiBaseUrl].
 const String kBackendModeEnv = String.fromEnvironment(
   'BACKEND_MODE',
@@ -67,14 +91,16 @@ const String kUpdateRequireSha256Env = String.fromEnvironment(
 
 /// Требовать SHA-256 в манифесте (compile-time, см. [kUpdateRequireSha256Env]).
 bool get kUpdateRequireSha256 =>
-    kUpdateRequireSha256Env != 'false' && kUpdateRequireSha256Env != '0' && kUpdateRequireSha256Env != 'no';
+    kUpdateRequireSha256Env != 'false' &&
+    kUpdateRequireSha256Env != '0' &&
+    kUpdateRequireSha256Env != 'no';
 
 bool get kAreSupabaseSecretsConfigured =>
-    kSupabaseUrl.isNotEmpty && kSupabaseAnonKey.isNotEmpty;
+    kSupabaseProjectUrl.isNotEmpty && kSupabaseAnonKey.isNotEmpty;
 
 /// Ключ хранения сессии GoTrue (совместимо с прежним SharedPreferences-ключом Supabase).
 String authSessionStorageKeyForUrl(String supabaseUrl) {
-  final Uri u = Uri.parse(supabaseUrl);
+  final Uri u = Uri.parse(_normalizeSupabaseProjectUrl(supabaseUrl.trim()));
   final String host = u.host;
   if (host.isEmpty) {
     return 'sb-auth-token';

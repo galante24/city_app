@@ -1,6 +1,6 @@
 {
   "OPENWEATHER_API_KEY": "",
-  "SUPABASE_URL": "",
+  "SUPABASE_URL": "https://your-project-ref.supabase.co",
   "SUPABASE_ANON_KEY": "",
   "BACKEND_MODE": "supabase",
   "API_BASE_URL": "",
