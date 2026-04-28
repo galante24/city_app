@@ -1,6 +1,13 @@
 # Сборка Flutter Web и публикация на GitHub Pages.
 # Настройки репозитория: Settings → Pages → Build and deployment → Source: GitHub Actions.
 #
+# Обязательные secrets:
+# - предпочтительно Repository secrets:
+#     Settings → Secrets and variables → Actions → Repository secrets
+#       SUPABASE_URL, SUPABASE_ANON_KEY
+#   либо Environment secrets для среды "github-pages" — тогда они подхватятся
+#   благодаря environment.name ниже в job build.
+#
 # base-href:
 #  - обычный репозиторий:  https://USER.github.io/REPO/  →  /REPO/
 #  - сайт user.github.io:   https://USER.github.io/      →  /
@@ -24,6 +31,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment:
+      # Чтобы брались и Repository secrets, и secrets среды github-pages (Pages).
+      name: github-pages
     steps:
       - uses: actions/checkout@v4
 
@@ -46,8 +56,25 @@ jobs:
 
       - run: flutter pub get
 
+      # В CI api_keys.json в репозитории отсутствует (.gitignore) — восстанавливаем из секретов.
+      - name: Write api_keys.json from secrets (Supabase defines)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Add repository Actions secrets SUPABASE_URL and SUPABASE_ANON_KEY."
+            exit 1
+          fi
+          jq -n --arg url "$SUPABASE_URL" --arg key "$SUPABASE_ANON_KEY" \
+            '{SUPABASE_URL:$url, SUPABASE_ANON_KEY:$key}' > api_keys.json
+
       - name: Build web
-        run: flutter build web --release --base-href "${{ steps.base.outputs.href }}"
+        run: |
+          flutter build web --release \
+            --base-href "${{ steps.base.outputs.href }}" \
+            --dart-define-from-file=api_keys.json \
+            --no-wasm-dry-run
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
