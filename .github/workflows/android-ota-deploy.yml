@@ -1,4 +1,6 @@
 # Push в main: 1) опц. миграции (MIGRATION_APPROVED=1) 2) analyze 3) release APK 4) VPS + version.json (OTA)
+# Внимание: [.github/workflows/release.yml](.github/workflows/release.yml) также запускается на push в main —
+# возможна двойная сборка APK. Выключите push здесь или в release.yml, если достаточно одного пайплайна.
 #
 # Секреты: см. docs/git-hooks.md
 #

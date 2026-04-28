@@ -3,44 +3,54 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app_constants.dart';
 
-/// Диалог «Доступно обновление» с переходом по [downloadUrl].
+/// Диалог «Доступно обновление» → открывает [apkUrl] во внешнем браузере/загрузчике (без автоустановки).
 Future<void> showAppUpdateDialog(
   BuildContext context, {
   required String localLabel,
   required int remoteBuildCode,
-  required String downloadUrl,
+  required String apkUrl,
+  String? remoteVersionLabel,
+  bool forceUpdate = false,
 }) {
+  final String suffix =
+      remoteVersionLabel != null && remoteVersionLabel.isNotEmpty
+      ? '(версия $remoteVersionLabel, сборка №$remoteBuildCode)'
+      : '(сборка №$remoteBuildCode)';
   return showDialog<void>(
     context: context,
-    barrierDismissible: true,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: const Text('Доступно обновление'),
-        content: Text(
-          'Выпущена новая сборка (№$remoteBuildCode). '
-          'Ваша версия: $localLabel.\n\n'
-          'Скачайте и установите APK по ссылке.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Позже'),
+    barrierDismissible: !forceUpdate,
+    builder: (BuildContext dialogContext) {
+      return PopScope(
+        canPop: !forceUpdate,
+        child: AlertDialog(
+          title: const Text('Доступно обновление'),
+          content: Text(
+            'Выпущена новая сборка $suffix.\n'
+            'Ваша версия: $localLabel.\n\n'
+            'Скачайте APK по ссылке и установите вручную.',
           ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              final Uri uri = Uri.parse(downloadUrl);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: kPrimaryBlue,
-              foregroundColor: Colors.white,
+          actions: <Widget>[
+            if (!forceUpdate)
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Позже'),
+              ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                final Uri uri = Uri.parse(apkUrl);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: kPrimaryBlue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Обновить'),
             ),
-            child: const Text('Скачать'),
-          ),
-        ],
+          ],
+        ),
       );
     },
   );

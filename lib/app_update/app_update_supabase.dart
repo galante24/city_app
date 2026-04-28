@@ -5,7 +5,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_ready.dart';
 import '../widgets/app_update_dialog.dart';
 
-/// Проверка по таблице [app_config] (legacy), если OTA по [UPDATE_MANIFEST_URL] не настроен.
+/// Обновление по таблице [app_config]. Строка `id = 'default'`.
+///
+/// Колонки: `version_code`, `download_url`, `apk_url`, `version`, `force_update`.
+/// Ссылку на установку берём из `apk_url`, если пусто — из `download_url`.
 Future<void> checkForAppUpdateViaSupabase(BuildContext context) async {
   if (!supabaseAppReady) {
     return;
@@ -20,7 +23,7 @@ Future<void> checkForAppUpdateViaSupabase(BuildContext context) async {
 
     final Map<String, dynamic>? row = await Supabase.instance.client
         .from('app_config')
-        .select('version_code, download_url')
+        .select('version_code, download_url, apk_url, version, force_update')
         .eq('id', 'default')
         .maybeSingle();
     if (row == null) {
@@ -28,14 +31,21 @@ Future<void> checkForAppUpdateViaSupabase(BuildContext context) async {
     }
     final Object? vc = row['version_code'];
     final int? remote = vc is int ? vc : int.tryParse(vc.toString().trim());
-    if (remote == null || remote <= local) {
+    final String? apkUrlPrimary =
+        _nonEmpty(row['apk_url']) ?? _nonEmpty(row['download_url']);
+
+    final bool forced = row['force_update'] == true;
+    final String? vr = _nonEmpty(row['version']);
+
+    if (apkUrlPrimary == null || apkUrlPrimary.isEmpty) {
       return;
     }
-    final String? downloadUrl = row['download_url'] as String?;
-    final String url = downloadUrl == null ? '' : downloadUrl.trim();
-    if (url.isEmpty) {
+
+    final bool newerBuildAvailable = remote != null && remote > local;
+    if (!newerBuildAvailable) {
       return;
     }
+
     if (!context.mounted) {
       return;
     }
@@ -43,9 +53,17 @@ Future<void> checkForAppUpdateViaSupabase(BuildContext context) async {
       context,
       localLabel: localLabel,
       remoteBuildCode: remote,
-      downloadUrl: url,
+      apkUrl: apkUrlPrimary,
+      remoteVersionLabel: vr,
+      forceUpdate: forced,
     );
   } on Object {
-    // сеть/таблица — не мешаем запуску
+    // Сеть/tаблица — не блокируем запуск
   }
+}
+
+String? _nonEmpty(Object? raw) {
+  if (raw == null) return null;
+  final String s = raw.toString().trim();
+  return s.isEmpty ? null : s;
 }
