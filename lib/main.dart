@@ -38,6 +38,7 @@ import 'screens/real_estate_screen.dart';
 import 'screens/vacancies_screen.dart';
 import 'screens/places_list_screen.dart';
 import 'screens/tasks_list_screen.dart';
+import 'screens/posts_screen.dart';
 
 Future<void> main() async {
   if (kSentryDsn.isNotEmpty) {
@@ -56,17 +57,23 @@ Future<void> _runApp() async {
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   timeago.setLocaleMessages('ru', timeago.RuMessages());
   if (!kAreSupabaseSecretsConfigured) {
-    // ignore: avoid_print
-    // Не печатать сами значения: только факт и способ настройки.
     debugPrint(
-      'Заполните SUPABASE_URL и SUPABASE_ANON_KEY '
-      '(--dart-define-from-file или --dart-define=...). См. api_keys.example.json',
+      'Не заданы SUPABASE_URL / SUPABASE_ANON_KEY (--dart-define-from-file или Defines в CI).',
     );
     runApp(const _AppWithoutSupabase());
     return;
   }
   final String sessionKey = authSessionStorageKeyForUrl(kSupabaseProjectUrl);
   await migrateLegacySupabaseSessionToSecure(sessionKey);
+
+  // В SDK нужен корень проекта https://<ref>.supabase.co (без /rest/v1/).
+  // В secrets можно вставить URL из Dashboard с хвостом /rest/v1 — срезаем в [app_secrets].
+  if (kDebugMode) {
+    debugPrint(
+      'SUPABASE_URL for SDK (normalized): $kSupabaseProjectUrl',
+    );
+  }
+
   await Supabase.initialize(
     url: kSupabaseProjectUrl,
     anonKey: kSupabaseAnonKey,
@@ -100,10 +107,21 @@ class _AppWithoutSupabase extends StatelessWidget {
         body: const Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'В этой сборке не заданы SUPABASE_URL и SUPABASE_ANON_KEY.\n\n'
-            'Для разработки скопируйте api_keys.example.json → api_keys.json '
-            'и укажите URL и anon key из панели Supabase, '
-            'затем: flutter run --dart-define-from-file=api_keys.json',
+            'Проект собран без compile-time ключей Supabase.\n'
+            '\n'
+            'Локально:\n'
+            '  • скопируйте api_keys.example.json → api_keys.json (в .gitignore)\n'
+            '  • flutter run --dart-define-from-file=api_keys.json\n'
+            '\n'
+            'GitHub Pages:\n'
+            '  • Settings → Secrets: SUPABASE_URL и SUPABASE_ANON_KEY\n'
+            '  • URL: лучше https://<ref>.supabase.co (если скопировали из API с /rest/v1/ — тоже ок, приложение обрежет).\n'
+            '  • workflow «Deploy to GitHub Pages» → пересборка web.\n'
+            '\n'
+            'Если ошибка авторизации упоминает your-project-id.supabase.co:\n'
+            '  замените плейсхолдеры в api_keys.json на URL и anon key из Dashboard → Settings → API.\n'
+            '\n'
+            'Пока URL/anon не «запечены» в сборку, вход и данные недоступны — это не сбой сети.',
           ),
         ),
       ),
@@ -307,6 +325,14 @@ class ServicesGridScreen extends StatelessWidget {
 
   static const List<_ServiceCategory> _categories = <_ServiceCategory>[
     _ServiceCategory(
+      id: 'posts',
+      label: 'Посты',
+      description: 'Лента постов: создание и удаление (realtime)',
+      icon: Icons.article_rounded,
+      cardColor: Color(0xFFE8EAF8),
+      iconAndTitleColor: Color(0xFF3949AB),
+    ),
+    _ServiceCategory(
       id: 'jobs',
       label: 'Вакансии',
       description: 'Найдите подходящую работу или сотрудников',
@@ -358,7 +384,13 @@ class ServicesGridScreen extends StatelessWidget {
   ];
 
   void _onCategoryTap(BuildContext context, _ServiceCategory c) {
-    if (c.id == 'food') {
+    if (c.id == 'posts') {
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => const PostsScreen(),
+        ),
+      );
+    } else if (c.id == 'food') {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => const PlacesListScreen(),

@@ -1,16 +1,12 @@
-# Сборка Flutter Web и публикация на GitHub Pages.
-# Настройки репозитория: Settings → Pages → Build and deployment → Source: GitHub Actions.
+# Сборка Flutter Web и выкладка на GitHub Pages.
+# Repository → Settings → Pages → Source: GitHub Actions.
 #
-# Обязательные secrets:
-# - предпочтительно Repository secrets:
-#     Settings → Secrets and variables → Actions → Repository secrets
-#       SUPABASE_URL, SUPABASE_ANON_KEY
-#   либо Environment secrets для среды "github-pages" — тогда они подхватятся
-#   благодаря environment.name ниже в job build.
+# Secrets (Repository Actions и/или Environment "github-pages"):
+#   SUPABASE_URL        — любой из: https://<ref>.supabase.co или …/rest/v1/ из Dashboard (сборка режет до корня в коде через app_secrets).
+#   SUPABASE_ANON_KEY   — anon public key (Dashboard → Settings → API)
 #
-# base-href:
-#  - обычный репозиторий:  https://USER.github.io/REPO/  →  /REPO/
-#  - сайт user.github.io:   https://USER.github.io/      →  /
+# Корень приложения для gh-pages этого репозитория фиксируем в сборке как /city_app/
+# → https://<user>.github.io/city_app/
 
 name: Deploy to GitHub Pages
 
@@ -32,7 +28,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     environment:
-      # Чтобы брались и Repository secrets, и secrets среды github-pages (Pages).
       name: github-pages
     steps:
       - uses: actions/checkout@v4
@@ -42,37 +37,25 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Resolve base href
-        id: base
-        run: |
-          REPO_NAME="${{ github.event.repository.name }}"
-          if [[ "$REPO_NAME" == *.github.io ]]; then
-            echo "href=/" >> "$GITHUB_OUTPUT"
-            echo "Using base href / (user or org site)"
-          else
-            echo "href=/${REPO_NAME}/" >> "$GITHUB_OUTPUT"
-            echo "Using base href /${REPO_NAME}/"
-          fi
-
       - run: flutter pub get
 
-      # В CI api_keys.json в репозитории отсутствует (.gitignore) — восстанавливаем из секретов.
-      - name: Write api_keys.json from secrets (Supabase defines)
+      - name: Write api_keys.json from secrets (dart-define для web-сборки)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::error::Add repository Actions secrets SUPABASE_URL and SUPABASE_ANON_KEY."
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "::error::Пустые secrets: задайте SUPABASE_URL и SUPABASE_ANON_KEY (Actions / Environment github-pages)."
             exit 1
           fi
           jq -n --arg url "$SUPABASE_URL" --arg key "$SUPABASE_ANON_KEY" \
             '{SUPABASE_URL:$url, SUPABASE_ANON_KEY:$key}' > api_keys.json
 
-      - name: Build web
+      - name: Build web (dart-define baked into wasm/js)
         run: |
-          flutter build web --release \
-            --base-href "${{ steps.base.outputs.href }}" \
+          flutter build web \
+            --release \
+            --base-href "/city_app/" \
             --dart-define-from-file=api_keys.json \
             --no-wasm-dry-run
 
@@ -88,6 +71,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - name: Deploy
+      - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4

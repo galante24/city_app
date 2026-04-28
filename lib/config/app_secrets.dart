@@ -95,8 +95,49 @@ bool get kUpdateRequireSha256 =>
     kUpdateRequireSha256Env != '0' &&
     kUpdateRequireSha256Env != 'no';
 
+/// True — в сборку попали реальный URL и anon key (не плейсхолдеры из example).
 bool get kAreSupabaseSecretsConfigured =>
-    kSupabaseProjectUrl.isNotEmpty && kSupabaseAnonKey.isNotEmpty;
+    kSupabaseProjectUrl.isNotEmpty &&
+    kSupabaseAnonKey.trim().isNotEmpty &&
+    !_supabaseDefinesLookLikePlaceholder;
+
+/// Ловит случай: скопировали пример с `your-project-ref…` → DNS на несуществующий хост.
+bool get _supabaseDefinesLookLikePlaceholder {
+  return _looksLikePlaceholderSupabaseUrl(kSupabaseUrl.trim()) ||
+      _looksLikePlaceholderAnonKey(kSupabaseAnonKey.trim());
+}
+
+bool _looksLikePlaceholderSupabaseUrl(String raw) {
+  if (raw.isEmpty) {
+    return true;
+  }
+  final Uri? parsed = Uri.tryParse(raw);
+  if (parsed == null || !parsed.hasScheme || parsed.host.isEmpty) {
+    return true;
+  }
+  final String host = parsed.host.toLowerCase();
+  if (host.contains('your-project')) {
+    return true;
+  }
+  if (host.contains('changeme')) {
+    return true;
+  }
+  return false;
+}
+
+bool _looksLikePlaceholderAnonKey(String k) {
+  if (k.length < 120) {
+    return true;
+  }
+  if (k.toLowerCase().contains('your-anon')) {
+    return true;
+  }
+  // Реальный anon JWT от Supabase всегда начинается с eyJ…
+  if (!k.startsWith('eyJ')) {
+    return true;
+  }
+  return false;
+}
 
 /// Ключ хранения сессии GoTrue (совместимо с прежним SharedPreferences-ключом Supabase).
 String authSessionStorageKeyForUrl(String supabaseUrl) {
