@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
@@ -11,16 +13,17 @@ import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../services/city_data_service.dart';
+import '../services/weather_service.dart';
 import '../widgets/city_network_image.dart';
-import '../widgets/soft_tab_header.dart';
-import '../widgets/weather_app_bar_action.dart';
+import '../widgets/portal/portal_home_background_stack.dart';
+import '../widgets/portal/portal_home_weather_corner.dart';
 
 enum NewsCategory { smi, administration, discussion }
 
 String categoryLabelRu(NewsCategory c) {
   return switch (c) {
     NewsCategory.smi => 'СМИ',
-    NewsCategory.administration => 'Администрация',
+    NewsCategory.administration => 'Важные',
     NewsCategory.discussion => 'Обсуждение',
   };
 }
@@ -240,6 +243,8 @@ class _HomeScreenState extends State<HomeScreen>
   final ImagePicker _mediaPicker = ImagePicker();
   StreamSubscription<AuthState>? _authSub;
   Stream<List<Map<String, dynamic>>>? _newsStream;
+  Future<WeatherCurrent?>? _portalWeatherFuture;
+  bool _portalBgPrecached = false;
 
   @override
   void initState() {
@@ -247,6 +252,9 @@ class _HomeScreenState extends State<HomeScreen>
     _tabController = TabController(length: 3, vsync: this);
     if (supabaseAppReady) {
       _newsStream = CityDataService.watchNewsList();
+      _portalWeatherFuture = WeatherService.hasApiKey
+          ? WeatherService.fetchCurrent()
+          : null;
       _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((
         AuthState data,
       ) {
@@ -261,6 +269,16 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_portalBgPrecached) {
+      _portalBgPrecached = true;
+      unawaited(precacheImage(const AssetImage(kPortalAssetBgBottom), context));
+      unawaited(precacheImage(const AssetImage(kPortalAssetBgHeader), context));
+    }
+  }
+
+  @override
   void dispose() {
     _authSub?.cancel();
     _tabController.dispose();
@@ -268,13 +286,17 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget buildCategoryFeed(List<SocialPost> items) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     if (items.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
             'Пока нет публикаций',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            style: GoogleFonts.montserrat(
+              fontSize: 16,
+              color: isDark ? Colors.white70 : Colors.grey[600],
+            ),
           ),
         ),
       );
@@ -284,7 +306,7 @@ class _HomeScreenState extends State<HomeScreen>
         kScreenHorizontalPadding,
         12,
         kScreenHorizontalPadding,
-        100,
+        130,
       ),
       itemCount: items.length,
       separatorBuilder: (BuildContext context, int index) =>
@@ -351,7 +373,9 @@ class _HomeScreenState extends State<HomeScreen>
                   BuildContext context,
                   void Function(void Function()) setModal,
                 ) {
-                  final ColorScheme sheetCs = Theme.of(sheetContext).colorScheme;
+                  final ColorScheme sheetCs = Theme.of(
+                    sheetContext,
+                  ).colorScheme;
                   return Form(
                     key: formKey,
                     child: Column(
@@ -497,7 +521,9 @@ class _HomeScreenState extends State<HomeScreen>
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: sheetCs.onSurface.withValues(alpha: 0.55),
+                                color: sheetCs.onSurface.withValues(
+                                  alpha: 0.55,
+                                ),
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -597,23 +623,17 @@ class _HomeScreenState extends State<HomeScreen>
     if (!supabaseAppReady || _newsStream == null) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            const SoftTabHeader(
-              title: 'Главная',
-              trailing: SoftHeaderWeatherWithAction(),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Укажите SUPABASE_URL и SUPABASE_ANON_KEY '
+              '(api_keys.example.json → api_keys.json, '
+              'flutter run --dart-define-from-file=api_keys.json)',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.montserrat(fontSize: 15, height: 1.35),
             ),
-            const Expanded(
-              child: Center(
-                child: Text(
-                  'Укажите SUPABASE_URL и SUPABASE_ANON_KEY '
-                  '(api_keys.example.json → api_keys.json, '
-                  'flutter run --dart-define-from-file=api_keys.json)',
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -633,83 +653,219 @@ class _HomeScreenState extends State<HomeScreen>
                 newsSnap.data ?? <Map<String, dynamic>>[];
             final List<SocialPost> posts = raw.map(socialPostFromMap).toList();
             final _PostsBuckets byCat = _splitPostsByCategory(posts);
+            final bool isDark = Theme.of(context).brightness == Brightness.dark;
+            final EdgeInsets fabPad = EdgeInsets.only(
+              bottom: MediaQuery.paddingOf(context).bottom + 72,
+            );
             return Scaffold(
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              extendBody: true,
+              extendBodyBehindAppBar: true,
+              backgroundColor: isDark ? Colors.transparent : Colors.white,
               floatingActionButton: isAdmin
-                  ? FloatingActionButton(
-                      onPressed: openCreateSheet,
-                      backgroundColor: kPrimaryBlue,
-                      foregroundColor: Colors.white,
-                      child: const Icon(Icons.add, size: 30),
+                  ? Padding(
+                      padding: fabPad,
+                      child: FloatingActionButton(
+                        onPressed: openCreateSheet,
+                        backgroundColor: kPrimaryBlue,
+                        foregroundColor: Colors.white,
+                        child: const Icon(Icons.add, size: 30),
+                      ),
                     )
                   : null,
-              body: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              floatingActionButtonLocation:
+                  FloatingActionButtonLocation.endFloat,
+              body: Stack(
+                fit: StackFit.expand,
                 children: <Widget>[
-                  SoftTabHeader(
-                    title: 'Главная',
-                    trailing: const SoftHeaderWeatherWithAction(),
-                    bottom: TabBar(
-                      controller: _tabController,
-                      labelColor: Theme.of(context).colorScheme.primary,
-                      unselectedLabelColor: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.55),
-                      indicatorColor: Theme.of(context).colorScheme.primary,
-                      indicatorWeight: 3,
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                        height: 1.2,
+                  if (!isDark)
+                    const Positioned.fill(
+                      child: ColoredBox(color: Colors.white),
+                    ),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: !isDark,
+                      child: AnimatedOpacity(
+                        opacity: isDark ? 1 : 0,
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeInOut,
+                        child: const PortalHomeBackgroundStack(),
                       ),
-                      unselectedLabelStyle: const TextStyle(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                        height: 1.2,
-                      ),
-                      indicatorSize: TabBarIndicatorSize.label,
-                      tabs: const <Widget>[
-                        Tab(
-                          height: 50,
-                          icon: Icon(Icons.newspaper, size: 20),
-                          text: 'СМИ',
+                    ),
+                  ),
+                  SafeArea(
+                    bottom: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: 20,
+                            right: 100,
+                            top: 6,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: <Widget>[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.asset(
+                                  'assets/app_icon.png',
+                                  width: 44,
+                                  height: 44,
+                                  fit: BoxFit.cover,
+                                  errorBuilder:
+                                      (
+                                        BuildContext context,
+                                        Object error,
+                                        StackTrace? stackTrace,
+                                      ) =>
+                                          const SizedBox(width: 44, height: 44),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      'Лесосибирск',
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark
+                                            ? Colors.white
+                                            : const Color(0xFF1C1C1E),
+                                        shadows: isDark
+                                            ? const <Shadow>[
+                                                Shadow(
+                                                  color: Color(0x66000000),
+                                                  offset: Offset(0, 1),
+                                                  blurRadius: 4,
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                    ),
+                                    Text(
+                                      'город леса',
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w400,
+                                        color: isDark
+                                            ? Colors.white.withValues(
+                                                alpha: 0.8,
+                                              )
+                                            : const Color(0xFF6C6C70),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        Tab(
-                          height: 50,
-                          icon: Icon(Icons.campaign, size: 20),
-                          text: 'Важные',
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: _PortalNewsTabBarShell(
+                            isDark: isDark,
+                            child: TabBar(
+                              controller: _tabController,
+                              labelColor: isDark ? kPortalGold : kPrimaryBlue,
+                              unselectedLabelColor: isDark
+                                  ? Colors.white.withValues(alpha: 0.55)
+                                  : Theme.of(context).colorScheme.onSurface
+                                        .withValues(alpha: 0.45),
+                              indicatorColor: kPortalGold,
+                              indicatorWeight: 2.5,
+                              labelStyle: GoogleFonts.montserrat(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                              unselectedLabelStyle: GoogleFonts.montserrat(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                              indicatorSize: TabBarIndicatorSize.label,
+                              dividerColor: Colors.transparent,
+                              tabs: const <Widget>[
+                                Tab(
+                                  height: 48,
+                                  icon: Icon(Icons.newspaper, size: 20),
+                                  text: 'СМИ',
+                                ),
+                                Tab(
+                                  height: 48,
+                                  icon: Icon(Icons.campaign, size: 20),
+                                  text: 'Важные',
+                                ),
+                                Tab(
+                                  height: 48,
+                                  icon: Icon(Icons.forum, size: 20),
+                                  text: 'Обсуждение',
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        Tab(
-                          height: 50,
-                          icon: Icon(Icons.forum, size: 20),
-                          text: 'Обсуждение',
+                        if (newsWaiting)
+                          const LinearProgressIndicator(minHeight: 2),
+                        Expanded(
+                          child: TabBarView(
+                            controller: _tabController,
+                            physics: const BouncingScrollPhysics(),
+                            children: <Widget>[
+                              _KeepAliveFeed(
+                                child: buildCategoryFeed(byCat.smi),
+                              ),
+                              _KeepAliveFeed(
+                                child: buildCategoryFeed(byCat.administration),
+                              ),
+                              _KeepAliveFeed(
+                                child: buildCategoryFeed(byCat.discussion),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  if (newsWaiting) const LinearProgressIndicator(minHeight: 2),
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      physics: const BouncingScrollPhysics(),
-                      children: <Widget>[
-                        _KeepAliveFeed(
-                          child: buildCategoryFeed(byCat.smi),
-                        ),
-                        _KeepAliveFeed(
-                          child: buildCategoryFeed(byCat.administration),
-                        ),
-                        _KeepAliveFeed(
-                          child: buildCategoryFeed(byCat.discussion),
-                        ),
-                      ],
-                    ),
+                  PortalHomeWeatherCorner(
+                    future: _portalWeatherFuture,
+                    darkForeground: isDark,
                   ),
                 ],
               ),
             );
           },
+    );
+  }
+}
+
+class _PortalNewsTabBarShell extends StatelessWidget {
+  const _PortalNewsTabBarShell({required this.isDark, required this.child});
+
+  final bool isDark;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isDark) {
+      return child;
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: child,
+        ),
+      ),
     );
   }
 }
@@ -751,139 +907,179 @@ class SocialNewsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final Color onSurface = cs.onSurface;
-    final Color muted = onSurface.withValues(alpha: 0.65);
-    return RepaintBoundary(
-      child: Container(
-        decoration: cloudCardDecoration(context),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: kPrimaryBlue.withValues(alpha: 0.12),
-                  child: const Icon(
-                    Icons.campaign_outlined,
-                    color: kPrimaryBlue,
-                    size: 22,
+    final Color onSurface = isDark ? Colors.white : cs.onSurface;
+    final Color muted = isDark
+        ? Colors.white.withValues(alpha: 0.65)
+        : cs.onSurface.withValues(alpha: 0.65);
+    const double kCardRadius = 25;
+
+    final Widget column = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: kPortalGold.withValues(alpha: 0.22),
+                  border: Border.all(
+                    color: kPortalGold.withValues(alpha: 0.55),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        post.author,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        post.time,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: muted,
-                        ),
-                      ),
-                    ],
+                child: const Icon(
+                  Icons.campaign_rounded,
+                  color: kPortalGold,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  post.time,
+                  style: GoogleFonts.montserrat(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: muted,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
+        if (post.author.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
             child: Text(
-              post.title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                height: 1.25,
+              post.author,
+              style: GoogleFonts.montserrat(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
                 color: onSurface,
               ),
             ),
           ),
-          if (post.body.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                post.body,
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.4,
-                  color: onSurface,
-                ),
-              ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            post.title,
+            style: GoogleFonts.montserrat(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+              color: onSurface,
             ),
-          ],
-          const SizedBox(height: 12),
-          if (post.mediaUrl != null && post.mediaUrl!.isNotEmpty) ...<Widget>[
-            if (post.mediaType == 'video')
-              InlineVideoBlock(url: post.mediaUrl!)
-            else
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: LayoutBuilder(
-                    builder: (BuildContext context, BoxConstraints bc) {
-                      final double w = bc.maxWidth;
-                      double h = w / (16 / 9);
-                      if (h > 300) {
-                        h = 300;
-                      }
-                      return SizedBox(
-                        width: w,
-                        height: h,
-                        child: CityNetworkImage.fillParent(
-                          imageUrl: post.mediaUrl!,
-                          boxFit: BoxFit.cover,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-          ],
+          ),
+        ),
+        if (post.body.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Row(
-              children: [
-                ActionChipPill(
-                  icon: post.isLiked ? Icons.favorite : Icons.favorite_border,
-                  label: post.likes.toString(),
-                  iconColor: post.isLiked
-                      ? const Color(0xFFE91E63)
-                      : muted,
-                  onPressed: onLike,
-                ),
-                ActionChipPill(
-                  icon: Icons.chat_bubble_outline,
-                  label: post.comments.toString(),
-                  onPressed: onComment,
-                ),
-                ActionChipPill(
-                  icon: Icons.send_outlined,
-                  label: '',
-                  onPressed: onShare,
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              post.body,
+              style: GoogleFonts.montserrat(
+                fontSize: 15,
+                height: 1.4,
+                color: onSurface,
+              ),
             ),
           ),
         ],
+        const SizedBox(height: 12),
+        if (post.mediaUrl != null && post.mediaUrl!.isNotEmpty) ...<Widget>[
+          if (post.mediaType == 'video')
+            InlineVideoBlock(url: post.mediaUrl!)
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints bc) {
+                    final double w = bc.maxWidth;
+                    double h = w / (16 / 9);
+                    if (h > 300) {
+                      h = 300;
+                    }
+                    return SizedBox(
+                      width: w,
+                      height: h,
+                      child: CityNetworkImage.fillParent(
+                        imageUrl: post.mediaUrl!,
+                        boxFit: BoxFit.cover,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+        ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
+            children: <Widget>[
+              ActionChipPill(
+                icon: post.isLiked ? Icons.favorite : Icons.favorite_border,
+                label: post.likes.toString(),
+                iconColor: post.isLiked ? const Color(0xFFE91E63) : muted,
+                onPressed: onLike,
+              ),
+              ActionChipPill(
+                icon: Icons.chat_bubble_outline,
+                label: post.comments.toString(),
+                onPressed: onComment,
+              ),
+              ActionChipPill(
+                icon: Icons.send_outlined,
+                label: '',
+                onPressed: onShare,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (isDark) {
+      return RepaintBoundary(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(kCardRadius),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(kCardRadius),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: column,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(kCardRadius),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: column,
       ),
-    ),
     );
   }
 }
@@ -917,10 +1113,11 @@ class ActionChipPill extends StatelessWidget {
               Icon(
                 icon,
                 size: 24,
-                color: iconColor ??
-                    Theme.of(context).colorScheme.onSurface.withValues(
-                          alpha: 0.55,
-                        ),
+                color:
+                    iconColor ??
+                    Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.55),
               ),
               if (label.isNotEmpty) ...[
                 const SizedBox(width: 6),
@@ -929,9 +1126,9 @@ class ActionChipPill extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(
-                          alpha: 0.55,
-                        ),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.55),
                   ),
                 ),
               ],
@@ -1004,9 +1201,7 @@ class _InlineVideoBlockState extends State<InlineVideoBlock> {
         child: Center(
           child: Text(
             'Видео недоступно',
-            style: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.55),
-            ),
+            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
           ),
         ),
       );

@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../app_constants.dart';
@@ -20,36 +22,37 @@ class CityMainNavigationBar extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme cs = theme.colorScheme;
     final bool dark = theme.brightness == Brightness.dark;
-    final Color navBg =
-        theme.navigationBarTheme.backgroundColor ?? cs.surface;
-    final Color navIconMuted =
-        dark ? CityTheme.kDarkNavIconMuted : cs.onSurface.withValues(alpha: 0.7);
+    final Color navBg = theme.navigationBarTheme.backgroundColor ?? cs.surface;
+    final Color navIconMuted = dark
+        ? CityTheme.kDarkNavIconMuted
+        : cs.onSurface.withValues(alpha: 0.7);
+    final Color selectedAccent = dark ? kPortalGold : cs.primary;
 
-    return NavigationBar(
+    final Widget bar = NavigationBar(
       selectedIndex: selectedIndex,
       onDestinationSelected: onDestinationSelected,
-      backgroundColor: navBg,
+      backgroundColor: dark ? Colors.transparent : navBg,
       surfaceTintColor: Colors.transparent,
-      shadowColor: dark ? Colors.black54 : const Color(0x14000000),
-      elevation: 8,
-      indicatorColor: kPrimaryBlue.withValues(
-        alpha: dark ? 0.35 : 0.18,
-      ),
+      shadowColor: Colors.transparent,
+      elevation: dark ? 0 : 8,
+      indicatorColor: dark
+          ? kPortalGold.withValues(alpha: 0.25)
+          : kPrimaryBlue.withValues(alpha: 0.18),
       labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
       destinations: <Widget>[
         NavigationDestination(
           icon: Icon(Icons.home_outlined, color: navIconMuted),
-          selectedIcon: Icon(Icons.home, color: cs.primary),
+          selectedIcon: Icon(Icons.home_rounded, color: selectedAccent),
           label: 'Главная',
         ),
         NavigationDestination(
           icon: Icon(Icons.schedule_outlined, color: navIconMuted),
-          selectedIcon: Icon(Icons.schedule, color: cs.primary),
+          selectedIcon: Icon(Icons.schedule_rounded, color: selectedAccent),
           label: 'Расписание',
         ),
         NavigationDestination(
           icon: Icon(Icons.grid_view_outlined, color: navIconMuted),
-          selectedIcon: Icon(Icons.grid_view, color: cs.primary),
+          selectedIcon: Icon(Icons.grid_view_rounded, color: selectedAccent),
           label: 'Сервисы',
         ),
         NavigationDestination(
@@ -69,7 +72,7 @@ class CityMainNavigationBar extends StatelessWidget {
               return Badge(
                 isLabelVisible: v,
                 backgroundColor: const Color(0xFFE53935),
-                child: Icon(Icons.chat_bubble, color: cs.primary),
+                child: Icon(Icons.chat_bubble_rounded, color: selectedAccent),
               );
             },
           ),
@@ -77,10 +80,24 @@ class CityMainNavigationBar extends StatelessWidget {
         ),
         NavigationDestination(
           icon: Icon(Icons.person_outline, color: navIconMuted),
-          selectedIcon: Icon(Icons.person, color: cs.primary),
+          selectedIcon: Icon(Icons.person_rounded, color: selectedAccent),
           label: 'Аккаунт',
         ),
       ],
+    );
+
+    if (!dark) {
+      return bar;
+    }
+
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: ColoredBox(
+          color: Colors.black.withValues(alpha: 0.4),
+          child: bar,
+        ),
+      ),
     );
   }
 }

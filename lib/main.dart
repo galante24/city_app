@@ -38,7 +38,6 @@ import 'screens/real_estate_screen.dart';
 import 'screens/vacancies_screen.dart';
 import 'screens/places_list_screen.dart';
 import 'screens/tasks_list_screen.dart';
-import 'screens/posts_screen.dart';
 
 Future<void> main() async {
   if (kSentryDsn.isNotEmpty) {
@@ -69,9 +68,7 @@ Future<void> _runApp() async {
   // В SDK нужен корень проекта https://<ref>.supabase.co (без /rest/v1/).
   // В secrets можно вставить URL из Dashboard с хвостом /rest/v1 — срезаем в [app_secrets].
   if (kDebugMode) {
-    debugPrint(
-      'SUPABASE_URL for SDK (normalized): $kSupabaseProjectUrl',
-    );
+    debugPrint('SUPABASE_URL for SDK (normalized): $kSupabaseProjectUrl');
   }
 
   await Supabase.initialize(
@@ -258,6 +255,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     return MainTabIndex(
       index: _currentIndex,
       child: Scaffold(
+        extendBody: true,
         body: PageView(
           controller: _pageController,
           physics: const NeverScrollableScrollPhysics(),
@@ -325,14 +323,6 @@ class ServicesGridScreen extends StatelessWidget {
 
   static const List<_ServiceCategory> _categories = <_ServiceCategory>[
     _ServiceCategory(
-      id: 'posts',
-      label: 'Посты',
-      description: 'Лента постов: создание и удаление (realtime)',
-      icon: Icons.article_rounded,
-      cardColor: Color(0xFFE8EAF8),
-      iconAndTitleColor: Color(0xFF3949AB),
-    ),
-    _ServiceCategory(
       id: 'jobs',
       label: 'Вакансии',
       description: 'Найдите подходящую работу или сотрудников',
@@ -384,13 +374,7 @@ class ServicesGridScreen extends StatelessWidget {
   ];
 
   void _onCategoryTap(BuildContext context, _ServiceCategory c) {
-    if (c.id == 'posts') {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) => const PostsScreen(),
-        ),
-      );
-    } else if (c.id == 'food') {
+    if (c.id == 'food') {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => const PlacesListScreen(),

@@ -10,10 +10,17 @@ import '../core/secure_log.dart';
 
 /// Текущая погода (компакт для AppBar).
 class WeatherCurrent {
-  const WeatherCurrent({required this.tempC, required this.iconCode});
+  const WeatherCurrent({
+    required this.tempC,
+    required this.iconCode,
+    this.main = 'Clouds',
+  });
 
   final double tempC;
   final String iconCode;
+
+  /// Поле `weather[0].main` OpenWeather (Clear, Clouds, Rain, …).
+  final String main;
 }
 
 /// Один день в прогнозе.
@@ -58,9 +65,14 @@ class WeatherService {
     if (!hasApiKey) {
       return null;
     }
-    final Uri uri = Uri.parse(
-      '$_base/weather',
-    ).replace(queryParameters: _queryBase);
+    final Uri uri = Uri.parse('$_base/weather').replace(
+      queryParameters: <String, String>{
+        'q': 'Lesosibirsk',
+        'appid': kOpenWeatherApiKey,
+        'units': 'metric',
+        'lang': 'ru',
+      },
+    );
     try {
       final http.Response r = await http
           .get(uri, headers: _httpHeaders)
@@ -81,17 +93,17 @@ class WeatherService {
         t = n?.toDouble();
       }
       final List<dynamic>? w = root['weather'] as List<dynamic>?;
-      final String icon = w != null && w.isNotEmpty && w.first is Map
-          ? (Map<dynamic, dynamic>.from(
-                      w.first as Map<dynamic, dynamic>,
-                    )['icon']
-                    as String? ??
-                '02d')
-          : '02d';
+      String icon = '02d';
+      String mainCond = 'Clouds';
+      if (w != null && w.isNotEmpty && w.first is Map) {
+        final Map<dynamic, dynamic> wd = w.first as Map<dynamic, dynamic>;
+        icon = wd['icon'] as String? ?? icon;
+        mainCond = wd['main'] as String? ?? mainCond;
+      }
       if (t == null) {
         return null;
       }
-      return WeatherCurrent(tempC: t, iconCode: icon);
+      return WeatherCurrent(tempC: t, iconCode: icon, main: mainCond);
     } on Object catch (e) {
       debugLogHttpFailure('Weather fetchCurrent', null, error: e);
       return null;
