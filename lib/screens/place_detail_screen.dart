@@ -54,6 +54,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
   bool _loading = true;
   bool _isAdmin = false;
   bool _canMod = false;
+
   /// Совпадает с RLS menu_items: [is_profiles_admin], владелец или [place_moderators].
   bool _canEditMenu = false;
 
@@ -65,11 +66,15 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final Map<String, dynamic>? pl = await PlaceService.fetchPlace(widget.placeId);
-    final List<Map<String, dynamic>> posts =
-        await PlaceService.fetchPosts(widget.placeId);
-    final List<String> mods =
-        await PlaceService.fetchModeratorUserIds(widget.placeId);
+    final Map<String, dynamic>? pl = await PlaceService.fetchPlace(
+      widget.placeId,
+    );
+    final List<Map<String, dynamic>> posts = await PlaceService.fetchPosts(
+      widget.placeId,
+    );
+    final List<String> mods = await PlaceService.fetchModeratorUserIds(
+      widget.placeId,
+    );
     final bool sub = await PlaceService.isSubscribed(widget.placeId);
     final bool admin = await CityDataService.isProfilesOrEmailAdmin();
     final bool rlsAdmin = await CityDataService.isProfilesAdminRls();
@@ -81,10 +86,9 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
       ownerId: owner,
     );
     final String? uid = Supabase.instance.client.auth.currentUser?.id;
-    final bool canEditMenu = rlsAdmin ||
-        (uid != null &&
-            owner != null &&
-            uid == owner) ||
+    final bool canEditMenu =
+        rlsAdmin ||
+        (uid != null && owner != null && uid == owner) ||
         (uid != null && mods.contains(uid));
     if (mounted) {
       setState(() {
@@ -111,9 +115,9 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
       }
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Подписка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Подписка: $e')));
       }
     }
   }
@@ -158,8 +162,8 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
           maxLines: column == 'description'
               ? 12
               : column == 'phone'
-                  ? 1
-                  : 10,
+              ? 1
+              : 10,
         ),
       ),
     );
@@ -340,6 +344,8 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                                     context: context,
                                     imageUrl: pl['photo_url'] as String,
                                     diameter: 72,
+                                    placeholderName:
+                                        pl['title'] as String? ?? 'Заведение',
                                   ),
                                 )
                               else
@@ -387,10 +393,10 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                                 MaterialPageRoute<void>(
                                   builder: (BuildContext c) =>
                                       PlaceAssignModeratorScreen(
-                                    placeId: widget.placeId,
-                                    placeTitle:
-                                        pl['title'] as String? ?? '',
-                                  ),
+                                        placeId: widget.placeId,
+                                        placeTitle:
+                                            pl['title'] as String? ?? '',
+                                      ),
                                 ),
                               );
                               if (mounted) {
@@ -422,21 +428,25 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                                       context,
                                       'Описание',
                                       Icons.subject_rounded,
-                                      () => unawaited(_openEditField(
-                                        'description',
-                                        'Описание',
-                                        'О заведении',
-                                      )),
+                                      () => unawaited(
+                                        _openEditField(
+                                          'description',
+                                          'Описание',
+                                          'О заведении',
+                                        ),
+                                      ),
                                     ),
                                     _modChip(
                                       context,
                                       'Телефон',
                                       Icons.phone_rounded,
-                                      () => unawaited(_openEditField(
-                                        'phone',
-                                        'Телефон',
-                                        'Номер для связи',
-                                      )),
+                                      () => unawaited(
+                                        _openEditField(
+                                          'phone',
+                                          'Телефон',
+                                          'Номер для связи',
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -456,9 +466,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                                         horizontal: 14,
                                       ),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          16,
-                                        ),
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
                                     ),
                                     icon: const Icon(
@@ -512,22 +520,21 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                   )
                 else
                   SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext c, int i) {
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                          child: _PlacePostCard(
-                            placeTitle: pl['title'] as String? ?? '',
-                            placePhotoUrl:
-                                (pl['photo_url'] as String?)?.trim(),
-                            placeId: widget.placeId,
-                            post: _posts[i],
-                            onChanged: _load,
-                          ),
-                        );
-                      },
-                      childCount: _posts.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((
+                      BuildContext c,
+                      int i,
+                    ) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: _PlacePostCard(
+                          placeTitle: pl['title'] as String? ?? '',
+                          placePhotoUrl: (pl['photo_url'] as String?)?.trim(),
+                          placeId: widget.placeId,
+                          post: _posts[i],
+                          onChanged: _load,
+                        ),
+                      );
+                    }, childCount: _posts.length),
                   ),
                 const SliverToBoxAdapter(child: SizedBox(height: 40)),
               ],
@@ -639,10 +646,7 @@ class _MenuAndPromosHeroButton extends StatelessWidget {
 }
 
 class _DetailSubscribeBar extends StatefulWidget {
-  const _DetailSubscribeBar({
-    required this.subscribed,
-    required this.onToggle,
-  });
+  const _DetailSubscribeBar({required this.subscribed, required this.onToggle});
 
   final bool subscribed;
   final Future<void> Function() onToggle;
@@ -667,9 +671,10 @@ class _DetailSubscribeBarState extends State<_DetailSubscribeBar>
   @override
   Widget build(BuildContext context) {
     return ScaleTransition(
-      scale: Tween<double>(begin: 1, end: 0.97).animate(
-        CurvedAnimation(parent: _ac, curve: Curves.easeOut),
-      ),
+      scale: Tween<double>(
+        begin: 1,
+        end: 0.97,
+      ).animate(CurvedAnimation(parent: _ac, curve: Curves.easeOut)),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.tonal(
@@ -683,8 +688,7 @@ class _DetailSubscribeBarState extends State<_DetailSubscribeBar>
             backgroundColor: widget.subscribed
                 ? kPrimaryBlue.withValues(alpha: 0.12)
                 : kPrimaryBlue,
-            foregroundColor:
-                widget.subscribed ? kPrimaryBlue : Colors.white,
+            foregroundColor: widget.subscribed ? kPrimaryBlue : Colors.white,
           ),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
@@ -750,8 +754,7 @@ class _PlacePostCardState extends State<_PlacePostCard> {
           fallback: _likes,
         );
       }
-      if (oldWidget.post['comments_count'] !=
-          widget.post['comments_count']) {
+      if (oldWidget.post['comments_count'] != widget.post['comments_count']) {
         _comments = _postCounterFromJson(
           widget.post['comments_count'],
           fallback: _comments,
@@ -857,9 +860,9 @@ class _PlacePostCardState extends State<_PlacePostCard> {
                     if (!mounted) {
                       return;
                     }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка: $e')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
                   }
                 },
               ),
@@ -874,14 +877,14 @@ class _PlacePostCardState extends State<_PlacePostCard> {
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final String? imgRaw = widget.post['image_url'] as String?;
-    final String? img =
-        imgRaw != null && imgRaw.trim().isNotEmpty ? imgRaw.trim() : null;
-    final String body =
-        (widget.post['content'] as String?)?.trim() ?? '';
+    final String? img = imgRaw != null && imgRaw.trim().isNotEmpty
+        ? imgRaw.trim()
+        : null;
+    final String body = (widget.post['content'] as String?)?.trim() ?? '';
     final String? photo =
         widget.placePhotoUrl != null && widget.placePhotoUrl!.trim().isNotEmpty
-            ? widget.placePhotoUrl!.trim()
-            : null;
+        ? widget.placePhotoUrl!.trim()
+        : null;
     final String authorId = widget.post['author_id']?.toString() ?? '';
 
     return Container(
@@ -919,6 +922,9 @@ class _PlacePostCardState extends State<_PlacePostCard> {
                             context: context,
                             imageUrl: photo,
                             diameter: 44,
+                            placeholderName: widget.placeTitle.isEmpty
+                                ? 'Заведение'
+                                : widget.placeTitle,
                           )
                         : Icon(
                             Icons.storefront_outlined,
@@ -1017,8 +1023,7 @@ class _PlacePostCardState extends State<_PlacePostCard> {
                     icon: _liked == true
                         ? Icons.favorite_rounded
                         : Icons.favorite_border_rounded,
-                    iconColor:
-                        _liked == true ? Colors.redAccent : null,
+                    iconColor: _liked == true ? Colors.redAccent : null,
                     label: '$_likes',
                     onTap: _busy ? null : _toggleLike,
                     colorScheme: cs,
@@ -1149,8 +1154,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   }
 
   Future<void> _load() async {
-    final List<Map<String, dynamic>> list =
-        await PlaceService.fetchComments(widget.postId);
+    final List<Map<String, dynamic>> list = await PlaceService.fetchComments(
+      widget.postId,
+    );
     if (mounted) {
       setState(() {
         _rows = list;
@@ -1202,8 +1208,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                       itemBuilder: (BuildContext c, int i) {
                         final Map<String, dynamic> m = _rows[i];
                         final String uid = m['user_id']?.toString() ?? '';
-                        final String text =
-                            m['content'] as String? ?? '';
+                        final String text = m['content'] as String? ?? '';
                         return SocialCommentTile(
                           userId: uid,
                           bodyText: text,

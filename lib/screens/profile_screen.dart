@@ -3,14 +3,13 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../config/admin_config.dart';
 import '../config/supabase_ready.dart';
 import '../core/user_facing_error.dart';
-import '../services/app_session_cleanup.dart';
 import '../services/city_data_service.dart';
-import '../widgets/soft_tab_header.dart';
+import '../widgets/clean_screen_header.dart';
+import '../widgets/settings_tablet_card.dart';
 import '../widgets/weather_app_bar_action.dart';
 import '../widgets/city_network_image.dart';
 import 'account_settings_screen.dart';
@@ -54,10 +53,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
-          SnackBar(content: Text(messageForUser(e, fallback: 'Не удалось загрузить.'))),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(messageForUser(e, fallback: 'Не удалось загрузить.')),
+          ),
         );
       }
     } finally {
@@ -65,10 +64,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _uploadingAvatar = false);
       }
     }
-  }
-
-  Future<void> _signOut() async {
-    await AppSessionCleanup.signOutEverywhere();
   }
 
   static String _fullNameFromSources(Map<String, dynamic>? row, User user) {
@@ -122,11 +117,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
-      return const Scaffold(body: Center(child: Text('Supabase не настроен')));
+      return const Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(child: Text('Supabase не настроен')),
+      );
     }
     final User? user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text('Нет сессии')));
+      return const Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(child: Text('Нет сессии')),
+      );
     }
     final String email = user.email ?? '—';
     final bool isEmailAdmin = CityDataService.isCurrentUserAdminSync();
@@ -164,21 +165,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? '—'
             : '@$nickForDisplay';
         final ColorScheme cs = Theme.of(c).colorScheme;
-        final ThemeData theme = Theme.of(c);
         return Scaffold(
-          backgroundColor: theme.brightness == Brightness.dark
-              ? theme.scaffoldBackgroundColor
-              : const Color(0xFFF5F5F5),
+          extendBodyBehindAppBar: true,
+          backgroundColor: Colors.transparent,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              SoftTabHeader(
+              CleanFloatingHeader(
                 title: 'Аккаунт',
                 trailing: SoftHeaderWeatherWithAction(
                   action: IconButton(
                     icon: Icon(
                       Icons.settings_outlined,
-                      color: softHeaderTrailingIconColor(c),
+                      color: cleanHeaderIconColor(c),
                       size: 26,
                     ),
                     onPressed: () async {
@@ -202,184 +201,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     kScreenHorizontalPadding,
                     8,
                     kScreenHorizontalPadding,
-                    32,
+                    24,
                   ),
                   children: <Widget>[
-              const SizedBox(height: 4),
-              Center(
-                child: GestureDetector(
-                  onTap: _uploadingAvatar ? null : _pickAndUploadAvatar,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: <Widget>[
-                      CircleAvatar(
-                        radius: 52,
-                        backgroundColor: kPrimaryBlue,
-                        child: avatarUrl != null && avatarUrl.isNotEmpty
-                            ? CityNetworkImage.avatar(
-                                context: context,
-                                imageUrl: avatarUrl,
-                                diameter: 104,
-                              )
-                            : const Icon(
-                                Icons.person,
-                                size: 56,
-                                color: Colors.white,
+                    const SizedBox(height: 4),
+                    Center(
+                      child: GestureDetector(
+                        onTap: _uploadingAvatar ? null : _pickAndUploadAvatar,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: <Widget>[
+                            CircleAvatar(
+                              radius: 52,
+                              backgroundColor: kPrimaryBlue,
+                              child: avatarUrl != null && avatarUrl.isNotEmpty
+                                  ? CityNetworkImage.avatar(
+                                      context: context,
+                                      imageUrl: avatarUrl,
+                                      diameter: 104,
+                                      placeholderName: fullName,
+                                    )
+                                  : const Icon(
+                                      Icons.person,
+                                      size: 56,
+                                      color: Colors.white,
+                                    ),
+                            ),
+                            if (_uploadingAvatar)
+                              const Positioned.fill(
+                                child: ColoredBox(
+                                  color: Color(0x66000000),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                      ),
-                      if (_uploadingAvatar)
-                        const Positioned.fill(
-                          child: ColoredBox(
-                            color: Color(0x66000000),
-                            child: Center(
-                              child: SizedBox(
-                                width: 32,
-                                height: 32,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Material(
+                                color: kPrimaryBlue,
+                                shape: const CircleBorder(),
+                                elevation: 2,
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: _uploadingAvatar
+                                      ? null
+                                      : _pickAndUploadAvatar,
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(7),
+                                    child: Icon(
+                                      Icons.camera_alt,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      Positioned(
-                        right: -2,
-                        bottom: -2,
-                        child: Material(
-                          color: kPrimaryBlue,
-                          shape: const CircleBorder(),
-                          elevation: 2,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: _uploadingAvatar
-                                ? null
-                                : _pickAndUploadAvatar,
-                            child: const Padding(
-                              padding: EdgeInsets.all(7),
-                              child: Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Text(
+                        fullName == '—' ? 'Пользователь' : fullName,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                    if (snap.connectionState == ConnectionState.waiting)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: LinearProgressIndicator(
+                            minHeight: 2,
+                            borderRadius: BorderRadius.all(Radius.circular(2)),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: Text(
-                  fullName == '—' ? 'Пользователь' : fullName,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ),
-              if (snap.connectionState == ConnectionState.waiting)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Center(
-                    child: LinearProgressIndicator(
-                      minHeight: 2,
-                      borderRadius: BorderRadius.all(Radius.circular(2)),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Информация о вас',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: kPrimaryBlue.withValues(alpha: 0.95),
+                      ),
                     ),
-                  ),
-                ),
-              const SizedBox(height: 20),
-              Text(
-                'Информация о вас',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: kPrimaryBlue.withValues(alpha: 0.95),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Данные',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 17,
-                  color: cs.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Видны вам; ник — всем в чатах',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: cs.onSurface.withValues(alpha: 0.65),
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _ProfileDataCard(
-                colorScheme: cs,
-                label: 'Email',
-                child: Text(
-                  email,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _ProfileDataCard(
-                colorScheme: cs,
-                label: 'Имя и фамилия',
-                child: Text(
-                  fullName == '—'
-                      ? 'Укажите в профиле или при регистрации'
-                      : fullName,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: fullName == '—' ? FontWeight.w500 : FontWeight.w700,
-                    color: fullName == '—'
-                        ? cs.onSurface.withValues(alpha: 0.65)
-                        : cs.onSurface,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _ProfileDataCard(
-                colorScheme: cs,
-                label: 'Дата рождения',
-                child: Text(
-                  _birthDisplayText(row?['birth_date']?.toString()),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _ProfileDataCard(
-                colorScheme: cs,
-                label: 'Ник в чате',
-                footer: Text(
-                  'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: cs.onSurface.withValues(alpha: 0.58),
-                    height: 1.2,
-                  ),
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
+                    const SizedBox(height: 8),
+                    Text(
+                      'Данные',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Видны вам; ник — всем в чатах',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurface.withValues(alpha: 0.65),
+                        height: 1.2,
+                      ),
+                    ),
+                    _ProfileDataCard(
+                      colorScheme: cs,
+                      label: 'Email',
                       child: Text(
-                        nickLine,
+                        email,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -387,89 +332,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-                    if (nickForDisplay.isNotEmpty)
-                      IconButton(
-                        tooltip: 'Скопировать',
-                        onPressed: () =>
-                            _copyToClipboard('Ник', '@$nickForDisplay'),
-                        icon: const Icon(
-                          Icons.copy_outlined,
-                          size: 22,
-                          color: kPrimaryBlue,
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              _ProfileDataCard(
-                colorScheme: cs,
-                label: 'Телефон',
-                footer: Text(
-                  'Виден только вам. В списке чатов и у других не показывается.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: cs.onSurface.withValues(alpha: 0.58),
-                    height: 1.2,
-                  ),
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
+                    _ProfileDataCard(
+                      colorScheme: cs,
+                      label: 'Имя и фамилия',
                       child: Text(
-                        phoneDisplay.isEmpty ? 'не указан' : phoneDisplay,
+                        fullName == '—'
+                            ? 'Укажите в профиле или при регистрации'
+                            : fullName,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: phoneDisplay.isEmpty
+                          fontWeight: fullName == '—'
                               ? FontWeight.w500
                               : FontWeight.w700,
-                          color: phoneDisplay.isEmpty
+                          color: fullName == '—'
                               ? cs.onSurface.withValues(alpha: 0.65)
                               : cs.onSurface,
                         ),
                       ),
                     ),
-                    if (phoneDisplay.isNotEmpty)
-                      IconButton(
-                        tooltip: 'Скопировать',
-                        onPressed: () =>
-                            _copyToClipboard('Номер', phoneDisplay),
-                        icon: const Icon(
-                          Icons.copy_outlined,
-                          size: 22,
-                          color: kPrimaryBlue,
+                    _ProfileDataCard(
+                      colorScheme: cs,
+                      label: 'Дата рождения',
+                      child: Text(
+                        _birthDisplayText(row?['birth_date']?.toString()),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
                         ),
-                        visualDensity: VisualDensity.compact,
                       ),
-                  ],
-                ),
-              ),
-              if (isEmailAdmin) ...<Widget>[
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    'Админы: ${kAdministratorEmails.join(', ')}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF2E7D32),
-                      fontWeight: FontWeight.w500,
                     ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: _signOut,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFB71C1C),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                icon: const Icon(Icons.logout),
-                label: const Text('Выйти'),
-              ),
+                    _ProfileDataCard(
+                      colorScheme: cs,
+                      label: 'Ник в чате',
+                      footer: Text(
+                        'Латиница, цифры и _; 3–32 символа. Виден всем в чатах.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withValues(alpha: 0.58),
+                          height: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              nickLine,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (nickForDisplay.isNotEmpty)
+                            IconButton(
+                              tooltip: 'Скопировать',
+                              onPressed: () =>
+                                  _copyToClipboard('Ник', '@$nickForDisplay'),
+                              icon: const Icon(
+                                Icons.copy_outlined,
+                                size: 22,
+                                color: kPrimaryBlue,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                        ],
+                      ),
+                    ),
+                    _ProfileDataCard(
+                      colorScheme: cs,
+                      label: 'Телефон',
+                      footer: Text(
+                        'Виден только вам. В списке чатов и у других не показывается.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withValues(alpha: 0.58),
+                          height: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              phoneDisplay.isEmpty ? 'не указан' : phoneDisplay,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: phoneDisplay.isEmpty
+                                    ? FontWeight.w500
+                                    : FontWeight.w700,
+                                color: phoneDisplay.isEmpty
+                                    ? cs.onSurface.withValues(alpha: 0.65)
+                                    : cs.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (phoneDisplay.isNotEmpty)
+                            IconButton(
+                              tooltip: 'Скопировать',
+                              onPressed: () =>
+                                  _copyToClipboard('Номер', phoneDisplay),
+                              icon: const Icon(
+                                Icons.copy_outlined,
+                                size: 22,
+                                color: kPrimaryBlue,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (isEmailAdmin) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          'Админы: ${kAdministratorEmails.join(', ')}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF2E7D32),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -496,10 +482,7 @@ class _ProfileDataCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: cloudCardDecoration(context),
+    return SettingsTabletCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -514,10 +497,7 @@ class _ProfileDataCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           child,
-          if (footer != null) ...<Widget>[
-            const SizedBox(height: 10),
-            footer!,
-          ],
+          if (footer != null) ...<Widget>[const SizedBox(height: 10), footer!],
         ],
       ),
     );

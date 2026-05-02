@@ -34,7 +34,11 @@ class _TasksListScreenState extends State<TasksListScreen> {
   void initState() {
     super.initState();
     _search.addListener(_onSearchChanged);
-    unawaited(_load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_load());
+      }
+    });
   }
 
   @override
@@ -141,108 +145,123 @@ class _TasksListScreenState extends State<TasksListScreen> {
             ),
           ),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: TextField(
-                    controller: _search,
-                    decoration: InputDecoration(
-                      hintText: 'Поиск объявлений',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: cs.surfaceContainerHigh,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: CloudInkCard(
-                    onTap: () async {
-                      await Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          builder: (BuildContext c) => const TaskFormScreen(),
-                        ),
-                      );
-                      if (mounted) {
-                        await _load();
-                      }
-                    },
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    child: Row(
-                      children: <Widget>[
-                        Icon(
-                          Icons.add_task_rounded,
-                          size: 40,
-                          color: kPrimaryBlue,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                'Подать объявление',
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : ValueListenableBuilder<String>(
+                    valueListenable: _searchQuery,
+                    builder: (BuildContext context, String q, Widget? _) {
+                      final List<Map<String, dynamic>> shown = _filtered(q);
+                      return CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        slivers: <Widget>[
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                            sliver: SliverToBoxAdapter(
+                              child: TextField(
+                                controller: _search,
+                                decoration: InputDecoration(
+                                  hintText: 'Поиск объявлений',
+                                  prefixIcon: const Icon(Icons.search),
+                                  filled: true,
+                                  fillColor: cs.surfaceContainerHigh,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              child: CloudInkCard(
+                                onTap: () async {
+                                  await Navigator.of(context).push<void>(
+                                    MaterialPageRoute<void>(
+                                      builder: (BuildContext c) =>
+                                          const TaskFormScreen(),
+                                    ),
+                                  );
+                                  if (mounted) {
+                                    await _load();
+                                  }
+                                },
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                                child: Row(
+                                  children: <Widget>[
+                                    Icon(
+                                      Icons.add_task_rounded,
+                                      size: 40,
+                                      color: kPrimaryBlue,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            'Подать объявление',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: cs.onSurface,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Найти исполнителя или предложить услугу',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: cs.onSurface.withValues(
+                                                alpha: 0.65,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      decoration: const BoxDecoration(
+                                        color: kPrimaryBlue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.chevron_right,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                              child: Text(
+                                'Объявления',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                   color: cs.onSurface,
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Найти исполнителя или предложить услугу',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: cs.onSurface.withValues(alpha: 0.65),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                        Container(
-                          decoration: const BoxDecoration(
-                            color: kPrimaryBlue,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.chevron_right,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: Text(
-                    'Объявления',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : ValueListenableBuilder<String>(
-                          valueListenable: _searchQuery,
-                          builder: (BuildContext context, String q, Widget? _) {
-                            final List<Map<String, dynamic>> shown = _filtered(q);
-                            if (shown.isEmpty) {
-                              return Center(
+                          if (shown.isEmpty)
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(
                                 child: Text(
                                   'Пока нет объявлений',
                                   style: TextStyle(
@@ -250,122 +269,141 @@ class _TasksListScreenState extends State<TasksListScreen> {
                                     fontSize: 16,
                                   ),
                                 ),
-                              );
-                            }
-                            return ListView.separated(
+                              ),
+                            )
+                          else
+                            SliverPadding(
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                              itemCount: shown.length,
-                              separatorBuilder: (BuildContext c, int i) =>
-                                  const SizedBox(height: kCloudListSpacing),
-                              itemBuilder: (BuildContext c, int i) {
-                                final Map<String, dynamic> m = shown[i];
-                                final String id = m['id']?.toString() ?? '';
-                                final String title = m['title'] as String? ?? '';
-                                final String authorId =
-                                    m['author_id']?.toString() ?? '';
-                                final String? priceLine = _cardPriceLabel(
-                                  m['price'],
-                                );
-                                final Color accent = _accentForId(
-                                  id.isEmpty ? title : id,
-                                );
-                                return CloudInkCard(
-                                  onTap: () async {
-                                    await Navigator.of(context).push<void>(
-                                      MaterialPageRoute<void>(
-                                        builder: (BuildContext c) =>
-                                            TaskDetailScreen(
-                                          row: m,
-                                          accent: accent,
-                                        ),
-                                      ),
-                                    );
-                                    if (mounted) {
-                                      await _load();
-                                    }
-                                  },
-                                  padding: const EdgeInsets.all(12),
-                                  child: Row(
-                                    children: <Widget>[
-                                      Container(
-                                        width: 48,
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          color: accent.withValues(alpha: 0.15),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Icon(
-                                          Icons.task_alt_rounded,
-                                          color: accent,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: <Widget>[
-                                            if (authorId.isNotEmpty)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                  bottom: 8,
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate((
+                                  BuildContext c,
+                                  int i,
+                                ) {
+                                  final Map<String, dynamic> m = shown[i];
+                                  final String id = m['id']?.toString() ?? '';
+                                  final String title =
+                                      m['title'] as String? ?? '';
+                                  final String authorId =
+                                      m['author_id']?.toString() ?? '';
+                                  final String? priceLine = _cardPriceLabel(
+                                    m['price'],
+                                  );
+                                  final Color accent = _accentForId(
+                                    id.isEmpty ? title : id,
+                                  );
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: i < shown.length - 1
+                                          ? kCloudListSpacing
+                                          : 0,
+                                    ),
+                                    child: CloudInkCard(
+                                      onTap: () async {
+                                        await Navigator.of(context).push<void>(
+                                          MaterialPageRoute<void>(
+                                            builder: (BuildContext c) =>
+                                                TaskDetailScreen(
+                                                  row: m,
+                                                  accent: accent,
                                                 ),
-                                                child: SocialHeader(
-                                                  userId: authorId,
-                                                  author: authorMapFromRow(m),
-                                                  createdAt: parseIsoUtc(
-                                                    m['created_at'] as String?,
-                                                  ),
-                                                  dense: true,
-                                                ),
+                                          ),
+                                        );
+                                        if (mounted) {
+                                          await _load();
+                                        }
+                                      },
+                                      padding: const EdgeInsets.all(12),
+                                      child: Row(
+                                        children: <Widget>[
+                                          Container(
+                                            width: 48,
+                                            height: 48,
+                                            decoration: BoxDecoration(
+                                              color: accent.withValues(
+                                                alpha: 0.15,
                                               ),
-                                            Text(
-                                              title,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w700,
-                                                color: cs.onSurface,
-                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                             ),
-                                            if (priceLine != null) ...<Widget>[
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                priceLine,
-                                                style: const TextStyle(
-                                                  fontSize: 17,
-                                                  fontWeight: FontWeight.w900,
-                                                  color: Color(0xFF2E7D32),
+                                            child: Icon(
+                                              Icons.task_alt_rounded,
+                                              color: accent,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: <Widget>[
+                                                if (authorId.isNotEmpty)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          bottom: 8,
+                                                        ),
+                                                    child: SocialHeader(
+                                                      userId: authorId,
+                                                      author: authorMapFromRow(
+                                                        m,
+                                                      ),
+                                                      createdAt: parseIsoUtc(
+                                                        m['created_at']
+                                                            as String?,
+                                                      ),
+                                                      dense: true,
+                                                    ),
+                                                  ),
+                                                Text(
+                                                  title,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: cs.onSurface,
+                                                  ),
                                                 ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
+                                                if (priceLine !=
+                                                    null) ...<Widget>[
+                                                  const SizedBox(height: 6),
+                                                  Text(
+                                                    priceLine,
+                                                    style: const TextStyle(
+                                                      fontSize: 17,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                      color: Color(0xFF2E7D32),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          IconButton(
+                                            onPressed: () =>
+                                                unawaited(_share(m)),
+                                            icon: Icon(
+                                              Icons.share_outlined,
+                                              color: cs.primary,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.chevron_right_rounded,
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ],
                                       ),
-                                      IconButton(
-                                        onPressed: () =>
-                                            unawaited(_share(m)),
-                                        icon: Icon(
-                                          Icons.share_outlined,
-                                          color: cs.primary,
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.chevron_right_rounded,
-                                        color: cs.onSurfaceVariant,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
+                                    ),
+                                  );
+                                }, childCount: shown.length),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
           ),
         ],
       ),

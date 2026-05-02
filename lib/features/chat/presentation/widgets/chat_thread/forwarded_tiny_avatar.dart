@@ -23,10 +23,15 @@ class ChatForwardedTinyAvatar extends StatelessWidget {
         final String? url = (row?['avatar_url'] as String?)?.trim();
         final String fn = (row?['first_name'] as String?)?.trim() ?? '';
         final String un = (row?['username'] as String?)?.trim() ?? '';
-        final String letter = (fn.isNotEmpty
-                ? fn[0]
-                : (un.isNotEmpty ? un.replaceAll('@', '')[0] : '?'))
-            .toUpperCase();
+        final String letter =
+            (fn.isNotEmpty
+                    ? fn[0]
+                    : (un.isNotEmpty ? un.replaceAll('@', '')[0] : '?'))
+                .toUpperCase();
+        final String nameSeed = <String>[
+          fn,
+          un.replaceAll('@', ''),
+        ].where((String e) => e.isNotEmpty).join(' ');
         return CircleAvatar(
           radius: 11,
           backgroundColor: outgoing
@@ -37,6 +42,7 @@ class ChatForwardedTinyAvatar extends StatelessWidget {
                   context: context,
                   imageUrl: url,
                   diameter: 22,
+                  placeholderName: nameSeed.isNotEmpty ? nameSeed : letter,
                 )
               : Text(
                   letter,

@@ -15,8 +15,8 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
     required this.conversationId,
     required ChatMessagesRepository repository,
     String? ownUserId,
-  })  : _repo = repository,
-        _ownUserId = ownUserId {
+  }) : _repo = repository,
+       _ownUserId = ownUserId {
     // ignore: discarded_futures
     _bootstrap();
   }
@@ -27,6 +27,7 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
 
   static const int kPageSize = 50;
   static const int kMaxMessagesInMemory = 800;
+  static const Duration _kNetworkTimeout = Duration(seconds: 10);
 
   final List<String> _messageIds = <String>[];
   final Map<String, Map<String, dynamic>> _byId =
@@ -52,14 +53,11 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
       );
 
   /// Упорядоченные строки (для пересылки, снапшотов) — O(n) копия.
-  List<Map<String, dynamic>> get orderedMessageRows => _messageIds
-      .map((String id) => _byId[id]!)
-      .toList(growable: false);
+  List<Map<String, dynamic>> get orderedMessageRows =>
+      _messageIds.map((String id) => _byId[id]!).toList(growable: false);
 
-  String? get firstMessageId =>
-      _messageIds.isEmpty ? null : _messageIds.first;
-  String? get lastMessageId =>
-      _messageIds.isEmpty ? null : _messageIds.last;
+  String? get firstMessageId => _messageIds.isEmpty ? null : _messageIds.first;
+  String? get lastMessageId => _messageIds.isEmpty ? null : _messageIds.last;
 
   String messageIdAtIndex(int index) {
     if (index < 0 || index >= _messageIds.length) {
@@ -144,8 +142,7 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
       return;
     }
     int guard = 0;
-    while (
-        !_messageIds.contains(messageId) && _hasMoreOlder && guard < 50) {
+    while (!_messageIds.contains(messageId) && _hasMoreOlder && guard < 50) {
       if (_disposed) {
         return;
       }
@@ -199,10 +196,9 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
 
   /// API: от новых к старым; UI: [oldest ... newest] снизу новые.
   Future<void> _loadInitial() async {
-    final List<ChatMessage> desc = await _repo.fetchMessagesPage(
-      conversationId: conversationId,
-      limit: kPageSize,
-    );
+    final List<ChatMessage> desc = await _repo
+        .fetchMessagesPage(conversationId: conversationId, limit: kPageSize)
+        .timeout(_kNetworkTimeout);
     _messageIds.clear();
     _byId.clear();
     _rowVersion.clear();
@@ -217,10 +213,7 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
 
   /// Подгрузка к верху (более старые). Контроллер списка компенсирует offset.
   Future<void> loadOlder() async {
-    if (_disposed ||
-        _loadingOlder ||
-        !_hasMoreOlder ||
-        _messageIds.isEmpty) {
+    if (_disposed || _loadingOlder || !_hasMoreOlder || _messageIds.isEmpty) {
       return;
     }
     _loadingOlder = true;
@@ -234,11 +227,13 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
       return;
     }
     try {
-      final List<ChatMessage> desc = await _repo.fetchMessagesPage(
-        conversationId: conversationId,
-        limit: kPageSize,
-        beforeCreatedAtIso: oldestIso,
-      );
+      final List<ChatMessage> desc = await _repo
+          .fetchMessagesPage(
+            conversationId: conversationId,
+            limit: kPageSize,
+            beforeCreatedAtIso: oldestIso,
+          )
+          .timeout(_kNetworkTimeout);
       if (desc.isEmpty) {
         _hasMoreOlder = false;
       } else {
@@ -274,16 +269,18 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
       return;
     }
     await _rowEventSub?.cancel();
-    _rowEventSub = _repo.watchChatMessageRows(conversationId).listen(
-      _onRowEvent,
-      onError: (Object e, StackTrace _) {
-        if (_disposed) {
-          return;
-        }
-        _error = e;
-        _safeNotify();
-      },
-    );
+    _rowEventSub = _repo
+        .watchChatMessageRows(conversationId)
+        .listen(
+          _onRowEvent,
+          onError: (Object e, StackTrace _) {
+            if (_disposed) {
+              return;
+            }
+            _error = e;
+            _safeNotify();
+          },
+        );
   }
 
   final Set<String> _ackedDelivery = <String>{};
@@ -317,11 +314,7 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
     _rowVersion.remove(id);
   }
 
-  void _rekeyRow(
-    String localId,
-    String serverId,
-    Map<String, dynamic> row,
-  ) {
+  void _rekeyRow(String localId, String serverId, Map<String, dynamic> row) {
     final int i = _messageIds.indexOf(localId);
     _byId.remove(localId);
     _rowVersion.remove(localId);
@@ -376,14 +369,16 @@ class ChatThreadMessagesNotifier extends ChangeNotifier {
     }
     _ackedDelivery.add(id);
     // ignore: discarded_futures
-    _repo.ackMessageDelivery(conversationId: conversationId, messageId: id).then(
-      (_) => null,
-      onError: (Object _, StackTrace st) {
-        if (!_disposed) {
-          _ackedDelivery.remove(id);
-        }
-      },
-    );
+    _repo
+        .ackMessageDelivery(conversationId: conversationId, messageId: id)
+        .then(
+          (_) => null,
+          onError: (Object _, StackTrace st) {
+            if (!_disposed) {
+              _ackedDelivery.remove(id);
+            }
+          },
+        );
   }
 
   int _compareCreatedThenId(String aId, String bId) {
@@ -450,7 +445,8 @@ List<Map<String, dynamic>> mergeChatMessageRows(
   if (rows == null || rows.isEmpty) {
     return <Map<String, dynamic>>[];
   }
-  final Map<String, Map<String, dynamic>> byId = <String, Map<String, dynamic>>{};
+  final Map<String, Map<String, dynamic>> byId =
+      <String, Map<String, dynamic>>{};
   for (final Map<String, dynamic> m in rows) {
     final String? id = m['id']?.toString();
     if (id != null) {

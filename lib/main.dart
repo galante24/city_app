@@ -3,15 +3,21 @@ import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import 'app_navigator_key.dart';
+import 'app_constants.dart'
+    show
+        kAuthBackgroundAsset,
+        kDarkThemeBackgroundAsset,
+        kLightThemeBackgroundAsset;
 import 'firebase_messaging_background.dart';
 import 'services/app_theme_controller.dart';
 import 'theme/city_theme.dart' show CityTheme;
-import 'widgets/soft_tab_header.dart';
+import 'widgets/clean_screen_header.dart';
 import 'widgets/weather_app_bar_action.dart';
 import 'app_update_check.dart';
 import 'config/app_secrets.dart';
@@ -53,11 +59,28 @@ Future<void> main() async {
 
 Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await loadSupabaseRuntimeConfigIfMissing();
+  if (!kIsWeb) {
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: <SystemUiOverlay>[SystemUiOverlay.bottom],
+    );
+  }
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+    ),
+  );
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   timeago.setLocaleMessages('ru', timeago.RuMessages());
   if (!kAreSupabaseSecretsConfigured) {
     debugPrint(
-      'Не заданы SUPABASE_URL / SUPABASE_ANON_KEY (--dart-define-from-file или Defines в CI).',
+      'Не заданы SUPABASE_URL / SUPABASE_ANON_KEY: '
+      'fromEnvironment пустой, api_keys.json (диск / web) не найден или плейсхолдер.',
     );
     runApp(const _AppWithoutSupabase());
     return;
@@ -107,10 +130,12 @@ class _AppWithoutSupabase extends StatelessWidget {
             'Проект собран без compile-time ключей Supabase.\n'
             '\n'
             'Локально:\n'
-            '  • скопируйте api_keys.example.json → api_keys.json (в .gitignore)\n'
-            '  • flutter run --dart-define-from-file=api_keys.json\n'
+            '  • приоритет: --dart-define / --dart-define-from-file=api_keys.json\n'
+            '  • иначе: файл api_keys.json в рабочей директории при запуске\n'
             '\n'
             'GitHub Pages:\n'
+            '  • workflow подставляет секреты в сборку (dart-define) **или** '
+            'положите api_keys.json рядом с index.html (загрузка по сети).\n'
             '  • Settings → Secrets: SUPABASE_URL и SUPABASE_ANON_KEY\n'
             '  • URL: лучше https://<ref>.supabase.co (если скопировали из API с /rest/v1/ — тоже ок, приложение обрежет).\n'
             '  • workflow «Deploy to GitHub Pages» → пересборка web.\n'
@@ -126,24 +151,185 @@ class _AppWithoutSupabase extends StatelessWidget {
   }
 }
 
-class CityApp extends StatelessWidget {
-  const CityApp({super.key});
+/// Полноэкранное изображение фона тёмной темы (без [Positioned] — его оборачивает родитель).
+class _CityLightBackdropImage extends StatelessWidget {
+  const _CityLightBackdropImage();
+
+  /// Фиксированный decode: без [MediaQuery] слой не пересчитывает кэш при каждом билде навигатора.
+  static const int _kDecodeW = 1080;
+  static const int _kDecodeH = 1920;
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: appThemeController,
-      builder: (BuildContext context, Widget? _) {
-        return MaterialApp(
-          navigatorKey: rootNavigatorKey,
-          title: 'Лесосибирск',
-          debugShowCheckedModeBanner: false,
-          theme: CityTheme.light(),
-          darkTheme: CityTheme.dark(),
-          themeMode: appThemeController.themeMode,
-          home: const _AuthStateGate(),
+    return Image.asset(
+      kLightThemeBackgroundAsset,
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      filterQuality: FilterQuality.none,
+      isAntiAlias: false,
+      gaplessPlayback: true,
+      cacheWidth: kIsWeb ? null : _kDecodeW,
+      cacheHeight: kIsWeb ? null : _kDecodeH,
+      errorBuilder:
+          (BuildContext context, Object error, StackTrace? stackTrace) {
+            return const ColoredBox(color: Color(0xFFE8F0EC));
+          },
+    );
+  }
+}
+
+class _CityDarkBackdropImage extends StatelessWidget {
+  const _CityDarkBackdropImage();
+
+  static const int _kDecodeW = 1080;
+  static const int _kDecodeH = 1920;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      kDarkThemeBackgroundAsset,
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      filterQuality: FilterQuality.none,
+      isAntiAlias: false,
+      gaplessPlayback: true,
+      cacheWidth: kIsWeb ? null : _kDecodeW,
+      cacheHeight: kIsWeb ? null : _kDecodeH,
+      errorBuilder:
+          (BuildContext context, Object error, StackTrace? stackTrace) {
+            return const ColoredBox(color: CityTheme.kDarkScaffold);
+          },
+    );
+  }
+}
+
+/// Фон логина / регистрации (снимается из дерева после входа + evict кэша).
+class _CityAuthBackdropImage extends StatelessWidget {
+  const _CityAuthBackdropImage();
+
+  static const int _kDecodeW = 1080;
+  static const int _kDecodeH = 1920;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      kAuthBackgroundAsset,
+      fit: BoxFit.cover,
+      alignment: Alignment.center,
+      filterQuality: FilterQuality.none,
+      isAntiAlias: false,
+      gaplessPlayback: true,
+      cacheWidth: kIsWeb ? null : _kDecodeW,
+      cacheHeight: kIsWeb ? null : _kDecodeH,
+      errorBuilder:
+          (BuildContext context, Object error, StackTrace? stackTrace) {
+            return const ColoredBox(color: Color(0xFF4A7BA7));
+          },
+    );
+  }
+}
+
+class CityApp extends StatefulWidget {
+  const CityApp({super.key});
+
+  @override
+  State<CityApp> createState() => _CityAppState();
+}
+
+class _CityAppState extends State<CityApp> {
+  StreamSubscription<AuthState>? _authSub;
+  bool? _prevHadSession;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+    appThemeController.addListener(_onTheme);
+  }
+
+  void _onTheme() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    appThemeController.removeListener(_onTheme);
+    super.dispose();
+  }
+
+  void _maybeEvictAuthBackdropImage({required bool hadSession}) {
+    if (_prevHadSession == false && hadSession) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        PaintingBinding.instance.imageCache.evict(
+          const AssetImage(kAuthBackgroundAsset),
+          includeLive: true,
+        );
+      });
+    }
+    _prevHadSession = hadSession;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Session? session = Supabase.instance.client.auth.currentSession;
+    final bool hadSession = session != null;
+    _maybeEvictAuthBackdropImage(hadSession: hadSession);
+    final bool useDark = appThemeController.useDarkTheme;
+
+    return MaterialApp(
+      navigatorKey: rootNavigatorKey,
+      title: 'Лесосибирск',
+      debugShowCheckedModeBanner: false,
+      theme: CityTheme.light().copyWith(
+        scaffoldBackgroundColor: Colors.transparent,
+        canvasColor: Colors.transparent,
+        cardColor: Colors.transparent,
+      ),
+      darkTheme: CityTheme.dark().copyWith(
+        scaffoldBackgroundColor: Colors.transparent,
+        canvasColor: Colors.transparent,
+        cardColor: Colors.transparent,
+      ),
+      themeMode: appThemeController.themeMode,
+      builder: (BuildContext context, Widget? child) {
+        final String backdropKey = hadSession
+            ? (useDark ? 'app_dark' : 'app_light')
+            : 'auth';
+        return Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Positioned.fill(
+              child: IgnorePointer(
+                child: RepaintBoundary(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: SizedBox.expand(
+                      key: ValueKey<String>(backdropKey),
+                      child: hadSession
+                          ? (useDark
+                                ? const _CityDarkBackdropImage()
+                                : const _CityLightBackdropImage())
+                          : const _CityAuthBackdropImage(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            child ?? const SizedBox.shrink(),
+          ],
         );
       },
+      home: const _AuthStateGate(),
     );
   }
 }
@@ -167,7 +353,13 @@ class _AuthStateGateState extends State<_AuthStateGate> {
   @override
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Theme(
+          data: Theme.of(context).copyWith(canvasColor: Colors.transparent),
+          child: const Center(child: CircularProgressIndicator()),
+        ),
+      );
     }
     return StreamBuilder<AuthState>(
       stream: Supabase.instance.client.auth.onAuthStateChange,
@@ -194,16 +386,11 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
-  late final PageController _pageController;
-
-  static const Duration _tabAnimDuration = Duration(milliseconds: 340);
-  static const Curve _tabAnimCurve = Curves.easeOutCubic;
 
   @override
   void initState() {
     super.initState();
     MainShellNavigation.register(_onTabSelected);
-    _pageController = PageController(initialPage: _currentIndex);
     ChatUnreadBadge.start();
     MessageNotificationService.instance.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -221,7 +408,6 @@ class _MainScaffoldState extends State<MainScaffold> {
   @override
   void dispose() {
     MainShellNavigation.unregister();
-    _pageController.dispose();
     super.dispose();
   }
 
@@ -230,13 +416,6 @@ class _MainScaffoldState extends State<MainScaffold> {
       return;
     }
     setState(() => _currentIndex = i);
-    unawaited(
-      _pageController.animateToPage(
-        i,
-        duration: _tabAnimDuration,
-        curve: _tabAnimCurve,
-      ),
-    );
     if (i == 3) {
       unawaited(ChatUnreadBadge.refresh());
     }
@@ -255,10 +434,12 @@ class _MainScaffoldState extends State<MainScaffold> {
     return MainTabIndex(
       index: _currentIndex,
       child: Scaffold(
+        resizeToAvoidBottomInset: true,
         extendBody: true,
-        body: PageView(
-          controller: _pageController,
-          physics: const NeverScrollableScrollPhysics(),
+        extendBodyBehindAppBar: true,
+        backgroundColor: Colors.transparent,
+        body: IndexedStack(
+          index: _currentIndex,
           children: List<Widget>.generate(
             _stackChildren.length,
             (int i) =>
@@ -374,30 +555,35 @@ class ServicesGridScreen extends StatelessWidget {
   ];
 
   void _onCategoryTap(BuildContext context, _ServiceCategory c) {
+    /// Вкладка «Сервисы» в [PageView]; пуш через корневой [Navigator] приложения.
+    void pushRoute(Widget screen) {
+      final NavigatorState? nav = rootNavigatorKey.currentState;
+      if (nav != null && nav.mounted) {
+        unawaited(
+          nav.push<void>(
+            MaterialPageRoute<void>(builder: (BuildContext _) => screen),
+          ),
+        );
+        return;
+      }
+      final BuildContext? ctx = rootNavigatorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        unawaited(
+          Navigator.of(ctx, rootNavigator: true).push<void>(
+            MaterialPageRoute<void>(builder: (BuildContext _) => screen),
+          ),
+        );
+      }
+    }
+
     if (c.id == 'food') {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) => const PlacesListScreen(),
-        ),
-      );
+      pushRoute(const PlacesListScreen());
     } else if (c.id == 'jobs') {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) => const VacanciesScreen(),
-        ),
-      );
+      pushRoute(const VacanciesScreen());
     } else if (c.id == 'estate') {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) => const RealEstateScreen(),
-        ),
-      );
+      pushRoute(const RealEstateScreen());
     } else if (c.id == 'services') {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) => const TasksListScreen(),
-        ),
-      );
+      pushRoute(const TasksListScreen());
     } else {
       ScaffoldMessenger.of(
         context,
@@ -408,17 +594,18 @@ class ServicesGridScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          SoftTabHeader(
+          CleanFloatingHeader(
             title: 'Сервисы',
             trailing: SoftHeaderWeatherWithAction(
               action: Icon(
                 Icons.grid_view_rounded,
                 size: 28,
-                color: softHeaderTrailingIconColor(context),
+                color: cleanHeaderIconColor(context),
               ),
             ),
           ),

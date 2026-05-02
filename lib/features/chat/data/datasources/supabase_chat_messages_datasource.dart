@@ -7,6 +7,71 @@ import '../../domain/chat_message.dart';
 import '../../domain/chat_message_row_event.dart';
 import 'chat_messages_remote_datasource.dart';
 
+/// Один Realtime-канал на [conversationId] для всех подписчиков (без дублей).
+final Map<String, _SupabaseChatRowsRealtimeHub> _supabaseChatRowsHubByConv =
+    <String, _SupabaseChatRowsRealtimeHub>{};
+
+class _SupabaseChatRowsRealtimeHub {
+  _SupabaseChatRowsRealtimeHub({
+    required SupabaseClient client,
+    required this.conversationId,
+    required void Function() onLastListenerRemoved,
+  }) : _client = client,
+       _onLastListenerRemoved = onLastListenerRemoved {
+    _controller = StreamController<ChatMessageRowEvent>.broadcast(
+      onCancel: () {
+        if (!_controller.hasListener) {
+          _dispose();
+        }
+      },
+    );
+    final RealtimeChannel ch = _client.channel('chat_msg_rows:$conversationId');
+    _channel = ch;
+    ch
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'chat_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'conversation_id',
+            value: conversationId,
+          ),
+          callback: (PostgresChangePayload p) {
+            final ChatMessageRowEvent? e =
+                SupabaseChatMessagesDataSource._rowEventFromPayload(p);
+            if (e != null && !_controller.isClosed) {
+              _controller.add(e);
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  final SupabaseClient _client;
+  final String conversationId;
+  final void Function() _onLastListenerRemoved;
+
+  RealtimeChannel? _channel;
+  late final StreamController<ChatMessageRowEvent> _controller;
+  bool _tornDown = false;
+
+  Stream<ChatMessageRowEvent> get stream => _controller.stream;
+
+  void _dispose() {
+    if (_tornDown) {
+      return;
+    }
+    _tornDown = true;
+    _channel?.unsubscribe();
+    _channel = null;
+    _onLastListenerRemoved();
+    if (!_controller.isClosed) {
+      _controller.close();
+    }
+  }
+}
+
 class SupabaseChatMessagesDataSource implements ChatMessagesRemoteDataSource {
   SupabaseChatMessagesDataSource(this._client);
 
@@ -54,45 +119,23 @@ class SupabaseChatMessagesDataSource implements ChatMessagesRemoteDataSource {
     if (rows.isEmpty) {
       return null;
     }
-    return ChatMessage.fromMap(
-      Map<String, dynamic>.from(rows.first as Map),
-    );
+    return ChatMessage.fromMap(Map<String, dynamic>.from(rows.first as Map));
   }
 
   @override
   Stream<ChatMessageRowEvent> watchChatMessageRows(String conversationId) {
-    RealtimeChannel? bound;
-    late final StreamController<ChatMessageRowEvent> out;
-    out = StreamController<ChatMessageRowEvent>(
-      onListen: () {
-        final RealtimeChannel ch =
-            _client.channel('chat_msg_rows:$conversationId');
-        bound = ch;
-        ch
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'chat_messages',
-              filter: PostgresChangeFilter(
-                type: PostgresChangeFilterType.eq,
-                column: 'conversation_id',
-                value: conversationId,
-              ),
-              callback: (PostgresChangePayload p) {
-                final ChatMessageRowEvent? e = _rowEventFromPayload(p);
-                if (e != null && !out.isClosed) {
-                  out.add(e);
-                }
-              },
-            )
-            .subscribe();
-      },
-      onCancel: () {
-        bound?.unsubscribe();
-        bound = null;
-      },
-    );
-    return out.stream;
+    return _supabaseChatRowsHubByConv
+        .putIfAbsent(
+          conversationId,
+          () => _SupabaseChatRowsRealtimeHub(
+            client: _client,
+            conversationId: conversationId,
+            onLastListenerRemoved: () {
+              _supabaseChatRowsHubByConv.remove(conversationId);
+            },
+          ),
+        )
+        .stream;
   }
 
   static ChatMessageRowEvent? _rowEventFromPayload(PostgresChangePayload p) {
@@ -113,7 +156,8 @@ class SupabaseChatMessagesDataSource implements ChatMessagesRemoteDataSource {
           _asMap(p.oldRecord) ?? <String, dynamic>{},
         );
       case PostgresChangeEvent.delete:
-        final Map<String, dynamic> o = _asMap(p.oldRecord) ?? <String, dynamic>{};
+        final Map<String, dynamic> o =
+            _asMap(p.oldRecord) ?? <String, dynamic>{};
         return ChatMessageRowEvent.delete(o);
       default:
         return null;

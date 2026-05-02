@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../config/weather_config.dart';
 import '../../services/weather_service.dart' show WeatherCurrent, formatTempC;
+import '../weather_app_bar_action.dart' show showCityWeatherForecastSheet;
 
 /// Иконка по полю `weather[0].main` OpenWeather.
 IconData portalWeatherIconFromMain(String? main) {
@@ -75,35 +77,59 @@ class PortalHomeWeatherCorner extends StatelessWidget {
       return Positioned(
         top: top,
         right: 16,
-        child: Icon(Icons.cloud_off_outlined, color: fg, size: 22),
+        child: IconButton(
+          icon: Icon(Icons.cloud_off_outlined, color: fg, size: 22),
+          tooltip: 'Погода',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          onPressed: () => showCityWeatherForecastSheet(context),
+        ),
       );
     }
 
     return Positioned(
       top: top,
       right: 16,
-      child: FutureBuilder<WeatherCurrent?>(
-        future: future,
-        builder: (BuildContext context, AsyncSnapshot<WeatherCurrent?> snap) {
-          final bool wait =
-              snap.connectionState == ConnectionState.waiting && !snap.hasData;
-          final WeatherCurrent? c = snap.data;
-          final IconData icon = wait
-              ? Icons.cloud_outlined
-              : portalWeatherIconFromMain(c?.main);
-          final String temp = c != null
-              ? formatTempC(c.tempC)
-              : (wait ? '…' : '—');
+      child: Tooltip(
+        message: 'Погода: $kWeatherCityNameRu',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => showCityWeatherForecastSheet(context),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              child: FutureBuilder<WeatherCurrent?>(
+                future: future,
+                builder:
+                    (
+                      BuildContext context,
+                      AsyncSnapshot<WeatherCurrent?> snap,
+                    ) {
+                      final bool wait =
+                          snap.connectionState == ConnectionState.waiting &&
+                          !snap.hasData;
+                      final WeatherCurrent? c = snap.data;
+                      final IconData icon = wait
+                          ? Icons.cloud_outlined
+                          : portalWeatherIconFromMain(c?.main);
+                      final String temp = c != null
+                          ? formatTempC(c.tempC)
+                          : (wait ? '…' : '—');
 
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(icon, color: fg, size: 26),
-              const SizedBox(width: 6),
-              Text(temp, style: textStyle),
-            ],
-          );
-        },
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(icon, color: fg, size: 26),
+                          const SizedBox(width: 6),
+                          Text(temp, style: textStyle),
+                        ],
+                      );
+                    },
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

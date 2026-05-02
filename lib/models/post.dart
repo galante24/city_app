@@ -18,7 +18,7 @@ class Post {
     return Post(
       id: json['id'] as String,
       title: json['title'] as String,
-      content: json['content'] as String,
+      content: (json['content'] as String?) ?? '',
       createdAt: Post._parseTs(json['created_at']),
       userId: json['user_id'] as String,
     );

@@ -11,6 +11,7 @@ import '../services/notification_prefs.dart';
 import '../utils/chat_links.dart';
 import '../utils/phone_normalize.dart';
 import '../widgets/city_network_image.dart';
+
 /// Профиль собеседника в личном чате (шапка-галерея, действия, вкладки медиа/файлы/ссылки).
 class DirectPeerProfileScreen extends StatefulWidget {
   const DirectPeerProfileScreen({
@@ -49,8 +50,9 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
   }
 
   Future<void> _loadMuted() async {
-    final bool m =
-        await NotificationPrefs.isConversationMuted(widget.conversationId);
+    final bool m = await NotificationPrefs.isConversationMuted(
+      widget.conversationId,
+    );
     if (mounted) {
       setState(() => _muted = m);
     }
@@ -58,8 +60,9 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final Map<String, dynamic>? row =
-        await CityDataService.fetchProfileRow(widget.peerUserId);
+    final Map<String, dynamic>? row = await CityDataService.fetchProfileRow(
+      widget.peerUserId,
+    );
     final List<Map<String, dynamic>> msg =
         await ChatService.fetchChatMessagesNewestFirst(widget.conversationId);
     if (mounted) {
@@ -136,7 +139,7 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
     final List<String> photos = _gallery;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: Colors.transparent,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : NestedScrollView(
@@ -145,7 +148,7 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
                   SliverAppBar(
                     pinned: true,
                     expandedHeight: 280,
-                    backgroundColor: cs.surface,
+                    backgroundColor: Colors.transparent,
                     foregroundColor: cs.onSurface,
                     leading: IconButton(
                       icon: const Icon(Icons.arrow_back_rounded),
@@ -172,8 +175,9 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
                                 setState(() => _photoIndex = i);
                               },
                               itemBuilder: (BuildContext ctx, int i) {
-                                final double bannerW =
-                                    MediaQuery.sizeOf(ctx).width;
+                                final double bannerW = MediaQuery.sizeOf(
+                                  ctx,
+                                ).width;
                                 final double bannerH = bannerW * 0.55;
                                 return SizedBox(
                                   width: bannerW,
@@ -215,7 +219,12 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
                             right: 0,
                             bottom: 0,
                             child: Container(
-                              padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                32,
+                                16,
+                                16,
+                              ),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   begin: Alignment.topCenter,
@@ -242,7 +251,9 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
                                   Text(
                                     'в приложении',
                                     style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.85),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.85,
+                                      ),
                                       fontSize: 14,
                                     ),
                                   ),
@@ -356,7 +367,11 @@ class _DirectPeerProfileScreenState extends State<DirectPeerProfileScreen>
               if (_about != null) ...<Widget>[
                 Text(
                   _about!,
-                  style: TextStyle(fontSize: 15, color: cs.onSurface, height: 1.35),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: cs.onSurface,
+                    height: 1.35,
+                  ),
                 ),
                 Text(
                   'О себе',
@@ -442,11 +457,7 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
 }
 
 class _RoundAction extends StatelessWidget {
-  const _RoundAction({
-    required this.icon,
-    required this.label,
-    this.onTap,
-  });
+  const _RoundAction({required this.icon, required this.label, this.onTap});
 
   final IconData icon;
   final String label;
@@ -530,8 +541,7 @@ class _MediaTab extends StatelessWidget {
       itemCount: items.length,
       itemBuilder: (BuildContext c, int i) {
         final _MediaItem it = items[i];
-        final double thumb =
-            (MediaQuery.sizeOf(c).width - 8 * 2 - 4 * 2) / 3;
+        final double thumb = (MediaQuery.sizeOf(c).width - 8 * 2 - 4 * 2) / 3;
         return GestureDetector(
           onTap: () => shareNetworkFileToDevice(
             context: context,
@@ -549,10 +559,7 @@ class _MediaTab extends StatelessWidget {
                   ColoredBox(
                     color: Theme.of(context).colorScheme.surfaceContainerHigh,
                     child: const Center(
-                      child: Icon(
-                        Icons.videocam_outlined,
-                        size: 40,
-                      ),
+                      child: Icon(Icons.videocam_outlined, size: 40),
                     ),
                   )
                 else
@@ -673,13 +680,9 @@ class _LinksTabState extends State<_LinksTab> {
         firstSeen.putIfAbsent(u, () => at);
       }
     }
-    final List<({String url, String? created})> list =
-        firstSeen.entries
-            .map(
-              (MapEntry<String, String?> e) =>
-                  (url: e.key, created: e.value),
-            )
-            .toList();
+    final List<({String url, String? created})> list = firstSeen.entries
+        .map((MapEntry<String, String?> e) => (url: e.key, created: e.value))
+        .toList();
     if (_sort == _LinksSort.byDate) {
       list.sort((a, b) {
         final DateTime? da = a.created != null
@@ -747,9 +750,7 @@ class _LinksTabState extends State<_LinksTab> {
                           color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
-                      subtitle: e.created != null
-                          ? Text(e.created!)
-                          : null,
+                      subtitle: e.created != null ? Text(e.created!) : null,
                       onTap: () async {
                         final Uri uri = Uri.parse(e.url);
                         if (await canLaunchUrl(uri)) {

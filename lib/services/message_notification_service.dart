@@ -38,16 +38,18 @@ class MessageNotificationService {
         importance: Importance.high,
         showBadge: true,
       );
-      const AndroidNotificationChannel placeChannel = AndroidNotificationChannel(
-        'place_posts',
-        'Заведения',
-        description: 'Новости и акции подписанных заведений',
-        importance: Importance.high,
-        showBadge: true,
-      );
+      const AndroidNotificationChannel placeChannel =
+          AndroidNotificationChannel(
+            'place_posts',
+            'Заведения',
+            description: 'Новости и акции подписанных заведений',
+            importance: Importance.high,
+            showBadge: true,
+          );
       final AndroidFlutterLocalNotificationsPlugin? android = _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       await android?.createNotificationChannel(channel);
       await android?.createNotificationChannel(placeChannel);
     }
@@ -61,9 +63,7 @@ class MessageNotificationService {
     );
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: ios),
-      onDidReceiveNotificationResponse: (
-        NotificationResponse response,
-      ) {
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
         final String? p = response.payload;
         unawaited(NotificationNavigationHandler.handlePayload(p));
       },
@@ -71,12 +71,14 @@ class MessageNotificationService {
     if (Platform.isAndroid) {
       final AndroidFlutterLocalNotificationsPlugin? android = _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       await android?.requestNotificationsPermission();
     } else if (Platform.isIOS) {
       final IOSFlutterLocalNotificationsPlugin? iosP = _plugin
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>();
+            IOSFlutterLocalNotificationsPlugin
+          >();
       await iosP?.requestPermissions(alert: true, badge: true, sound: true);
     }
   }
@@ -110,7 +112,13 @@ class MessageNotificationService {
         android: android,
         iOS: ios,
       );
-      await _plugin.show(_nextNotifyId(), title, body, details, payload: payload);
+      await _plugin.show(
+        _nextNotifyId(),
+        title,
+        body,
+        details,
+        payload: payload,
+      );
     } on Object {
       /* ignore */
     }
@@ -137,7 +145,13 @@ class MessageNotificationService {
         android: android,
         iOS: ios,
       );
-      await _plugin.show(_nextNotifyId(), title, body, details, payload: payload);
+      await _plugin.show(
+        _nextNotifyId(),
+        title,
+        body,
+        details,
+        payload: payload,
+      );
     } on Object {
       /* ignore */
     }
@@ -153,7 +167,7 @@ class MessageNotificationService {
     if (!supabaseAppReady) {
       return;
     }
-    if (!await CityDataService.areNotificationsEnabledForCurrentUser()) {
+    if (!await CityDataService.mayReceiveChatPushes()) {
       return;
     }
     final Map<String, dynamic> rec = Map<String, dynamic>.from(
@@ -175,8 +189,7 @@ class MessageNotificationService {
       return;
     }
     String body = (rec['body'] as String?)?.trim() ?? '';
-    final String? fwdFrom =
-        (rec['forwarded_from_label'] as String?)?.trim();
+    final String? fwdFrom = (rec['forwarded_from_label'] as String?)?.trim();
     if (body.startsWith(ChatService.imageMessagePrefix)) {
       body = '📷 Фото';
     } else if (body.startsWith(ChatService.fileMessagePrefix)) {
@@ -206,8 +219,9 @@ class MessageNotificationService {
     String senderId,
   ) async {
     try {
-      final String chatTitle =
-          await ChatService.titleForNotification(conversationId);
+      final String chatTitle = await ChatService.titleForNotification(
+        conversationId,
+      );
       final String senderLabel =
           await ChatService.displayNameForUserId(senderId) ?? 'Сообщение';
       const AndroidNotificationDetails android = AndroidNotificationDetails(

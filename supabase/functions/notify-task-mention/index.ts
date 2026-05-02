@@ -83,13 +83,18 @@ serve(async (req) => {
 
     const { data: profiles } = await admin
       .from("profiles")
-      .select("id, fcm_token, notifications_enabled")
+      .select("id, fcm_token, notifications_enabled, notify_feed_engagement")
       .in("id", ids);
 
     const tokens = (profiles ?? [])
       .filter(
-        (p: { fcm_token?: string; notifications_enabled?: boolean }) =>
+        (p: {
+          fcm_token?: string;
+          notifications_enabled?: boolean;
+          notify_feed_engagement?: boolean;
+        }) =>
           p.notifications_enabled !== false &&
+          p.notify_feed_engagement !== false &&
           p.fcm_token &&
           String(p.fcm_token).length > 10,
       )

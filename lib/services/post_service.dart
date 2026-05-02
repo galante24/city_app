@@ -40,6 +40,8 @@ class PostService {
       'title': t,
       'content': c,
       'user_id': user.id,
+      'category': 'discussion',
+      'image_urls': <String>[],
     });
   }
 
@@ -78,8 +80,7 @@ class PostService {
         unawaited(
           Future<void>(() async {
             await push(ctl);
-            channel =
-                _client.channel('posts_channel_${ctl.hashCode}');
+            channel = _client.channel('posts_channel_${ctl.hashCode}');
             channel!
                 .onPostgresChanges(
                   event: PostgresChangeEvent.all,

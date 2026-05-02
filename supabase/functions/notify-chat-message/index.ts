@@ -63,13 +63,16 @@ serve(async (req) => {
 
     const { data: profiles } = await admin
       .from("profiles")
-      .select("id, fcm_token, notifications_enabled, username, first_name")
+      .select(
+        "id, fcm_token, notifications_enabled, notify_chat_messages, username, first_name",
+      )
       .in("id", recipients);
     const rows = profiles ?? [];
     const tokens: string[] = [];
     for (const p of rows) {
       if (
         p.notifications_enabled !== false &&
+        p.notify_chat_messages !== false &&
         p.fcm_token &&
         String(p.fcm_token).length > 10
       ) {

@@ -362,8 +362,7 @@ class ChatService {
     if (userId == null) {
       return null;
     }
-    final String? u =
-        (profById[userId]?['avatar_url'] as String?)?.trim();
+    final String? u = (profById[userId]?['avatar_url'] as String?)?.trim();
     return (u != null && u.isNotEmpty) ? u : null;
   }
 
@@ -600,6 +599,76 @@ class ChatService {
   /// Миниатюра для превью в чате (необязательная строка в теле сообщения).
   static const String placeShareThumbPrefix = '!place_thumb:';
 
+  /// Поделиться записью городской ленты: `!feed:<uuid>` + опционально `!feed_thumb:<url>`.
+  static const String feedSharePrefix = '!feed:';
+
+  static const String feedShareThumbPrefix = '!feed_thumb:';
+
+  static String buildFeedPostShareBody({
+    required String postId,
+    required String title,
+    String? thumbUrl,
+  }) {
+    final StringBuffer b = StringBuffer();
+    final String t = title.trim();
+    if (t.isNotEmpty) {
+      b.writeln(t);
+    }
+    b.write('$feedSharePrefix${postId.trim()}');
+    final String? th = thumbUrl?.trim();
+    if (th != null && th.isNotEmpty) {
+      b.writeln();
+      b.write('$feedShareThumbPrefix$th');
+    }
+    return b.toString();
+  }
+
+  /// Разбор тела «поделиться постом ленты».
+  static ChatFeedShareParsed? parseFeedShareBody(String raw) {
+    final String body = raw.trim();
+    if (body.isEmpty || !body.contains(feedSharePrefix)) {
+      return null;
+    }
+    if (body.startsWith(imageMessagePrefix) ||
+        body.startsWith(fileMessagePrefix)) {
+      return null;
+    }
+    String? postId;
+    String? thumbUrl;
+    final List<String> lines = body
+        .split('\n')
+        .map((String e) => e.trim())
+        .where((String e) => e.isNotEmpty)
+        .toList();
+    for (final String line in lines) {
+      if (line.startsWith(feedSharePrefix)) {
+        final String id = line.substring(feedSharePrefix.length).trim();
+        if (_looksLikePlaceUuid(id)) {
+          postId = id;
+        }
+      } else if (line.startsWith(feedShareThumbPrefix)) {
+        thumbUrl = line.substring(feedShareThumbPrefix.length).trim();
+      }
+    }
+    if (postId == null || postId.isEmpty) {
+      return null;
+    }
+    String headline = 'Публикация';
+    for (final String line in lines) {
+      if (line.startsWith(feedSharePrefix) ||
+          line.startsWith(feedShareThumbPrefix)) {
+        continue;
+      }
+      headline = line;
+      break;
+    }
+    return ChatFeedShareParsed(
+      postId: postId,
+      headline: headline,
+      thumbUrl: thumbUrl,
+    );
+  }
+
   static String buildFileMessageBody({
     required String publicUrl,
     required String fileName,
@@ -727,7 +796,9 @@ class ChatService {
   }) async {
     final ChatMessagesRepository? repo = ChatMessagesFactory.tryRepository();
     if (repo == null) {
-      throw StateError('Слой чата недоступен (Supabase/REST не сконфигурированы)');
+      throw StateError(
+        'Слой чата недоступен (Supabase/REST не сконфигурированы)',
+      );
     }
     final String safe = ChatInputSanitizer.sanitizeOutgoingText(body);
     if (safe.isEmpty) {
@@ -761,7 +832,9 @@ class ChatService {
   }) async {
     final ChatMessagesRepository? repo = ChatMessagesFactory.tryRepository();
     if (repo == null) {
-      throw StateError('Слой чата недоступен (Supabase/REST не сконфигурированы)');
+      throw StateError(
+        'Слой чата недоступен (Supabase/REST не сконфигурированы)',
+      );
     }
     try {
       await repo.sendVoiceMessage(
@@ -1027,7 +1100,9 @@ class ChatService {
   static Future<void> softDeleteMessage(String messageId) async {
     final ChatMessagesRepository? repo = ChatMessagesFactory.tryRepository();
     if (repo == null) {
-      throw StateError('Слой чата недоступен (Supabase/REST не сконфигурированы)');
+      throw StateError(
+        'Слой чата недоступен (Supabase/REST не сконфигурированы)',
+      );
     }
     await repo.softDeleteMessage(messageId);
   }
@@ -1260,6 +1335,19 @@ class ChatPlaceShareParsed {
   final String? thumbUrl;
 }
 
+/// Результат [ChatService.parseFeedShareBody].
+class ChatFeedShareParsed {
+  const ChatFeedShareParsed({
+    required this.postId,
+    required this.headline,
+    this.thumbUrl,
+  });
+
+  final String postId;
+  final String headline;
+  final String? thumbUrl;
+}
+
 class ChatFileMeta {
   const ChatFileMeta({
     required this.url,
@@ -1272,12 +1360,10 @@ class ChatFileMeta {
   final String mime;
 
   bool get isImage =>
-      mime.toLowerCase().startsWith('image/') ||
-      _imageName(name);
+      mime.toLowerCase().startsWith('image/') || _imageName(name);
 
   bool get isVideo =>
-      mime.toLowerCase().startsWith('video/') ||
-      _videoName(name);
+      mime.toLowerCase().startsWith('video/') || _videoName(name);
 
   static bool _imageName(String n) {
     final String l = n.toLowerCase();

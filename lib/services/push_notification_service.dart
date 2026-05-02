@@ -99,9 +99,7 @@ class PushNotificationService {
     final RemoteMessage? initial = await messaging.getInitialMessage();
     if (initial != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(
-          NotificationNavigationHandler.handleFcmData(initial.data),
-        );
+        unawaited(NotificationNavigationHandler.handleFcmData(initial.data));
       });
     }
 
@@ -139,12 +137,12 @@ class PushNotificationService {
   }
 
   Future<void> _onForegroundMessage(RemoteMessage m) async {
-    if (!await CityDataService.areNotificationsEnabledForCurrentUser()) {
-      return;
-    }
     final Map<String, dynamic> data = m.data;
     final String type = data['type']?.toString() ?? '';
     if (type == NotificationNavigationHandler.payloadTypeChat) {
+      if (!await CityDataService.mayReceiveChatPushes()) {
+        return;
+      }
       final String conv = data['conversation_id']?.toString() ?? '';
       if (conv.isEmpty) {
         return;
@@ -159,8 +157,7 @@ class PushNotificationService {
           m.notification?.title ?? data['sender_title']?.toString() ?? 'Чат';
       final String body =
           m.notification?.body ?? data['body_preview']?.toString() ?? '';
-      final String navTitle =
-          data['chat_title']?.toString() ?? title;
+      final String navTitle = data['chat_title']?.toString() ?? title;
       await MessageNotificationService.instance.showChatNotification(
         title: title,
         body: body.isEmpty ? 'Новое сообщение' : body,
@@ -171,12 +168,17 @@ class PushNotificationService {
         }),
       );
     } else if (type == NotificationNavigationHandler.payloadTypePlace) {
+      if (!await CityDataService.mayReceivePlacePushes()) {
+        return;
+      }
       final String placeId = data['place_id']?.toString() ?? '';
       if (placeId.isEmpty) {
         return;
       }
       final String title =
-          m.notification?.title ?? data['place_title']?.toString() ?? 'Заведение';
+          m.notification?.title ??
+          data['place_title']?.toString() ??
+          'Заведение';
       final String body =
           m.notification?.body ?? data['body_preview']?.toString() ?? '';
       await MessageNotificationService.instance.showPlacePostNotification(

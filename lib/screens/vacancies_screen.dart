@@ -28,6 +28,7 @@ class VacanciesScreen extends StatefulWidget {
 
 class _VacanciesScreenState extends State<VacanciesScreen> {
   final TextEditingController _search = TextEditingController();
+
   /// Поиск: обновление только списка без полного пересборки экрана.
   final ValueNotifier<String> _searchQuery = ValueNotifier<String>('');
   _VacancySort _sort = _VacancySort.newest;
@@ -38,7 +39,11 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
   void initState() {
     super.initState();
     _search.addListener(_onSearchChanged);
-    unawaited(_load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_load());
+      }
+    });
   }
 
   @override
@@ -54,6 +59,9 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) {
+      return;
+    }
     setState(() => _loading = true);
     final List<Map<String, dynamic>> list = await JobVacancyService.fetchAll();
     if (mounted) {
@@ -128,6 +136,7 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       bottomNavigationBar: CityMainNavigationBar(
         selectedIndex: 2,
@@ -148,112 +157,6 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
             ),
           ),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: _search,
-              decoration: InputDecoration(
-                hintText: 'Поиск вакансий',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: cs.surfaceContainerHigh,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 4,
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: _SuggestVacancyCard(
-              onOpen: () async {
-                await Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (BuildContext c) => const VacancyFormScreen(),
-                  ),
-                );
-                if (mounted) {
-                  await _load();
-                }
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: <Widget>[
-                Text(
-                  'Сортировка: ',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                ),
-                PopupMenuButton<_VacancySort>(
-                  initialValue: _sort,
-                  tooltip: 'Порядок сортировки',
-                  position: PopupMenuPosition.under,
-                  offset: const Offset(0, 4),
-                  onSelected: (_VacancySort v) {
-                    setState(() => _sort = v);
-                  },
-                  itemBuilder: (BuildContext context) {
-                    return <PopupMenuEntry<_VacancySort>>[
-                      const PopupMenuItem<_VacancySort>(
-                        value: _VacancySort.newest,
-                        child: Text('сначала новые'),
-                      ),
-                      const PopupMenuItem<_VacancySort>(
-                        value: _VacancySort.oldest,
-                        child: Text('сначала старые'),
-                      ),
-                    ];
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Text(
-                          _sort == _VacancySort.newest
-                              ? 'сначала новые'
-                              : 'сначала старые',
-                          style: const TextStyle(
-                            color: kPrimaryBlue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Icon(
-                          Icons.arrow_drop_down_rounded,
-                          color: kPrimaryBlue,
-                          size: 22,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Text(
-              'Актуальные вакансии',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface,
-              ),
-            ),
-          ),
-          Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : ValueListenableBuilder<String>(
@@ -261,58 +164,219 @@ class _VacanciesScreenState extends State<VacanciesScreen> {
                     builder: (BuildContext context, String q, Widget? _) {
                       final List<Map<String, dynamic>> shown =
                           _filteredAndSorted(q);
-                      if (shown.isEmpty) {
-                        return Center(
-                          child: Text(
-                            'Пока нет вакансий',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 16,
+                      return CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        slivers: <Widget>[
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                            sliver: SliverToBoxAdapter(
+                              child: TextField(
+                                controller: _search,
+                                decoration: InputDecoration(
+                                  hintText: 'Поиск вакансий',
+                                  prefixIcon: const Icon(Icons.search),
+                                  filled: true,
+                                  fillColor: cs.surfaceContainerHigh,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                    horizontal: 4,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        );
-                      }
-                      return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: shown.length,
-                    separatorBuilder: (BuildContext c, int i) =>
-                        const SizedBox(height: kCloudListSpacing),
-                    itemBuilder: (BuildContext c, int i) {
-                      final Map<String, dynamic> m = shown[i];
-                      final String id = m['id']?.toString() ?? '';
-                      final String title = m['title'] as String? ?? '';
-                      final String salary = m['salary'] as String? ?? '';
-                      final String addr = m['work_address'] as String? ?? '';
-                      final String? imageUrl = m['image_url'] as String?;
-                      final Color accent = _accentForId(
-                        id.isEmpty ? title : id,
-                      );
-                      return _VacancyListTile(
-                        row: m,
-                        title: title,
-                        salary: salary,
-                        address: addr,
-                        imageUrl: imageUrl,
-                        onShare: () => unawaited(_shareVacancy(m)),
-                        onTap: () async {
-                          await Navigator.of(context).push<void>(
-                            MaterialPageRoute<void>(
-                              builder: (BuildContext c) =>
-                                  VacancyDetailScreen(row: m, accent: accent),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              child: _SuggestVacancyCard(
+                                onOpen: () async {
+                                  await Navigator.of(context).push<void>(
+                                    MaterialPageRoute<void>(
+                                      builder: (BuildContext c) =>
+                                          const VacancyFormScreen(),
+                                    ),
+                                  );
+                                  if (mounted) {
+                                    await _load();
+                                  }
+                                },
+                              ),
                             ),
-                          );
-                          if (mounted) {
-                            await _load();
-                          }
-                        },
+                          ),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                              child: Row(
+                                children: <Widget>[
+                                  Flexible(
+                                    flex: 2,
+                                    child: Text(
+                                      'Сортировка:',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: cs.onSurfaceVariant,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: PopupMenuButton<_VacancySort>(
+                                        initialValue: _sort,
+                                        tooltip: 'Порядок сортировки',
+                                        position: PopupMenuPosition.under,
+                                        offset: const Offset(0, 4),
+                                        onSelected: (_VacancySort v) {
+                                          setState(() => _sort = v);
+                                        },
+                                        itemBuilder: (BuildContext context) {
+                                          return <PopupMenuEntry<_VacancySort>>[
+                                            const PopupMenuItem<_VacancySort>(
+                                              value: _VacancySort.newest,
+                                              child: Text('сначала новые'),
+                                            ),
+                                            const PopupMenuItem<_VacancySort>(
+                                              value: _VacancySort.oldest,
+                                              child: Text('сначала старые'),
+                                            ),
+                                          ];
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 4,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: <Widget>[
+                                              Flexible(
+                                                child: Text(
+                                                  _sort == _VacancySort.newest
+                                                      ? 'сначала новые'
+                                                      : 'сначала старые',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  textAlign: TextAlign.end,
+                                                  style: const TextStyle(
+                                                    color: kPrimaryBlue,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                              const Icon(
+                                                Icons.arrow_drop_down_rounded,
+                                                color: kPrimaryBlue,
+                                                size: 22,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              child: Text(
+                                'Актуальные вакансии',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (shown.isEmpty)
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: Center(
+                                child: Text(
+                                  'Пока нет вакансий',
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate((
+                                  BuildContext c,
+                                  int i,
+                                ) {
+                                  final Map<String, dynamic> m = shown[i];
+                                  final String id = m['id']?.toString() ?? '';
+                                  final String title =
+                                      m['title'] as String? ?? '';
+                                  final String salary =
+                                      m['salary'] as String? ?? '';
+                                  final String addr =
+                                      m['work_address'] as String? ?? '';
+                                  final String? imageUrl =
+                                      m['image_url'] as String?;
+                                  final Color accent = _accentForId(
+                                    id.isEmpty ? title : id,
+                                  );
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: i < shown.length - 1
+                                          ? kCloudListSpacing
+                                          : 0,
+                                    ),
+                                    child: _VacancyListTile(
+                                      row: m,
+                                      title: title,
+                                      salary: salary,
+                                      address: addr,
+                                      imageUrl: imageUrl,
+                                      onShare: () =>
+                                          unawaited(_shareVacancy(m)),
+                                      onTap: () async {
+                                        await Navigator.of(context).push<void>(
+                                          MaterialPageRoute<void>(
+                                            builder: (BuildContext c) =>
+                                                VacancyDetailScreen(
+                                                  row: m,
+                                                  accent: accent,
+                                                ),
+                                          ),
+                                        );
+                                        if (mounted) {
+                                          await _load();
+                                        }
+                                      },
+                                    ),
+                                  );
+                                }, childCount: shown.length),
+                              ),
+                            ),
+                        ],
                       );
-                    },
-                  );
                     },
                   ),
-          ),
-              ],
-            ),
           ),
         ],
       ),
@@ -351,10 +415,9 @@ class _SuggestVacancyCard extends StatelessWidget {
                   'Разместите вакансию и найдите подходящих сотрудников',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.65),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.65),
                     height: 1.2,
                   ),
                 ),
@@ -403,11 +466,7 @@ class _VacancyListTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          VacancyCoverImage(
-            imageUrl: imageUrl,
-            width: 112,
-            borderRadius: 16,
-          ),
+          VacancyCoverImage(imageUrl: imageUrl, width: 112, borderRadius: 16),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -425,8 +484,9 @@ class _VacancyListTile extends StatelessWidget {
                   ),
                 Text(
                   title,
-                  maxLines: 2,
+                  maxLines: 4,
                   overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -437,6 +497,9 @@ class _VacancyListTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'Зарплата: $salary',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: true,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -477,10 +540,7 @@ class _VacancyListTile extends StatelessWidget {
             tooltip: 'Поделиться',
             onPressed: onShare,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 40,
-              minHeight: 40,
-            ),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           Icon(
             Icons.chevron_right_rounded,

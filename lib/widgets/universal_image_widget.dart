@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/image_cache_extent.dart';
+import 'media_progressive_image.dart';
 import 'universal_image_local_stub.dart'
     if (dart.library.io) 'universal_image_local_io.dart'
     as universal_local;
@@ -147,7 +148,7 @@ class UniversalImageWidget extends StatelessWidget {
                 memH: memH,
                 width: boxW,
                 height: boxH,
-                placeholder: _placeholder(compact: boxH < 100),
+                placeholder: _shimmer(boxW, boxH, borderRadius),
                 errorWidget: _error(compact: boxH < 100),
               )
             : CachedNetworkImage(
@@ -161,7 +162,7 @@ class UniversalImageWidget extends StatelessWidget {
                 memCacheWidth: memW,
                 memCacheHeight: memH,
                 placeholder: (BuildContext context, String _) =>
-                    _placeholder(compact: boxH < 100),
+                    _shimmer(boxW, boxH, borderRadius),
                 errorWidget: (BuildContext context, String _, Object _) =>
                     _error(compact: boxH < 100),
               );
@@ -199,20 +200,8 @@ class UniversalImageWidget extends StatelessWidget {
     );
   }
 
-  Widget _placeholder({required bool compact}) {
-    return ColoredBox(
-      color: backgroundColor,
-      child: Center(
-        child: SizedBox(
-          width: compact ? 22 : 28,
-          height: compact ? 22 : 28,
-          child: CircularProgressIndicator(
-            strokeWidth: compact ? 2 : 2.5,
-            color: placeholderIconColor,
-          ),
-        ),
-      ),
-    );
+  Widget _shimmer(double w, double h, double radius) {
+    return MediaShimmerBox(width: w, height: h, borderRadius: radius);
   }
 
   Widget _error({required bool compact}) {

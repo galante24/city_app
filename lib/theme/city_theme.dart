@@ -2,12 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../app_constants.dart';
 
-/// Переходы при [Navigator.push]: горизонтальный слайд на телефонах, лёгкий fade на десктопе.
+/// Переходы в светлой теме.
 const PageTransitionsTheme kCityPageTransitions = PageTransitionsTheme(
   builders: <TargetPlatform, PageTransitionsBuilder>{
-    TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+    // Как в тёмной теме: без Cupertino-слоя на Android — дешевле при полноэкранном фоне.
+    TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
     TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-    TargetPlatform.fuchsia: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
+    TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+  },
+);
+
+/// В тёмой теме под полноэкранным фоном тяжёлые переходы (Cupertino / Zoom) дают просадки FPS.
+/// Лёгкий сдвиг снизу ([FadeUpwardsPageTransitionsBuilder]) на Android обычно плавнее.
+const PageTransitionsTheme kCityPageTransitionsDark = PageTransitionsTheme(
+  builders: <TargetPlatform, PageTransitionsBuilder>{
+    TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
     TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
     TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
     TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
@@ -26,22 +40,33 @@ abstract final class CityTheme {
       useMaterial3: true,
       colorScheme: cs,
       pageTransitionsTheme: kCityPageTransitions,
-      scaffoldBackgroundColor: kAppScaffoldBg,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: kPrimaryBlue,
-        foregroundColor: Colors.white,
+      scaffoldBackgroundColor: Colors.transparent,
+      canvasColor: Colors.transparent,
+      cardColor: Colors.transparent,
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        foregroundColor: kPineGreen,
+        surfaceTintColor: Colors.transparent,
         centerTitle: true,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: const IconThemeData(color: kPineGreen),
+        titleTextStyle: TextStyle(
+          color: kPineGreen,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: kPrimaryBlue,
         foregroundColor: Colors.white,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: cs.surface,
+        backgroundColor: Colors.transparent,
         indicatorColor: kPrimaryBlue.withValues(alpha: 0.18),
         surfaceTintColor: Colors.transparent,
-        elevation: 8,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (Set<WidgetState> states) => TextStyle(
             fontSize: 12,
@@ -49,18 +74,32 @@ abstract final class CityTheme {
                 ? FontWeight.w600
                 : FontWeight.w500,
             color: states.contains(WidgetState.selected)
-                ? kPrimaryBlue
-                : cs.onSurface.withValues(alpha: 0.75),
+                ? kPineGreen
+                : kNavOliveMuted,
           ),
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (Set<WidgetState> states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? kPrimaryBlue
-                : cs.onSurface.withValues(alpha: 0.7),
+                ? kPineGreen
+                : kNavOliveMuted,
             size: 24,
           ),
         ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+          if (states.contains(WidgetState.selected)) {
+            return kEmeraldGlow;
+          }
+          return null;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+          if (states.contains(WidgetState.selected)) {
+            return kEmeraldGlow.withValues(alpha: 0.38);
+          }
+          return null;
+        }),
       ),
     );
   }
@@ -74,33 +113,38 @@ abstract final class CityTheme {
   static const Color kDarkNavIconMuted = Color(0xFFB0B0B0);
 
   static ThemeData dark() {
-    final ColorScheme cs = ColorScheme.fromSeed(
-      seedColor: kPrimaryBlue,
-      primary: kPrimaryBlue,
-      brightness: Brightness.dark,
-    ).copyWith(
-      surface: kDarkSurface,
-      onSurface: kDarkOnSurface,
-      onSurfaceVariant: kDarkOnSurfaceVariant,
-      surfaceContainerLowest: kDarkScaffold,
-      surfaceContainerLow: const Color(0xFF252525),
-      surfaceContainer: kDarkSurface,
-      surfaceContainerHigh: kDarkSurface,
-      surfaceContainerHighest: const Color(0xFF2C2C2C),
-      outline: const Color(0xFF3D3D3D),
-      outlineVariant: const Color(0xFF404040),
-    );
+    final ColorScheme cs =
+        ColorScheme.fromSeed(
+          seedColor: kPrimaryBlue,
+          primary: kPrimaryBlue,
+          brightness: Brightness.dark,
+        ).copyWith(
+          surface: kDarkSurface,
+          onSurface: kDarkOnSurface,
+          onSurfaceVariant: kDarkOnSurfaceVariant,
+          surfaceContainerLowest: kDarkSurface,
+          surfaceContainerLow: kDarkSurface,
+          surfaceContainer: kDarkSurface,
+          surfaceContainerHigh: kDarkSurface,
+          surfaceContainerHighest: kDarkSurface,
+          outline: const Color(0xFF3D3D3D),
+          outlineVariant: const Color(0xFF404040),
+        );
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: cs,
-      pageTransitionsTheme: kCityPageTransitions,
-      scaffoldBackgroundColor: kDarkScaffold,
+      pageTransitionsTheme: kCityPageTransitionsDark,
+      scaffoldBackgroundColor: Colors.transparent,
+      canvasColor: Colors.transparent,
+      cardColor: Colors.transparent,
       appBarTheme: AppBarTheme(
-        backgroundColor: cs.surface,
+        backgroundColor: Colors.transparent,
         foregroundColor: cs.onSurface,
+        surfaceTintColor: Colors.transparent,
         centerTitle: true,
         elevation: 0,
+        scrolledUnderElevation: 0,
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: kPrimaryBlue,

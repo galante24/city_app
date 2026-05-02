@@ -32,7 +32,11 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_load());
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -72,7 +76,11 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
     }
   }
 
-  Future<void> _openEditBasic(String id, String title, String description) async {
+  Future<void> _openEditBasic(
+    String id,
+    String title,
+    String description,
+  ) async {
     final bool? ok = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (BuildContext c) => PlaceEditBasicScreen(
@@ -90,10 +98,8 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
   Future<void> _openAssignModerator(String id, String title) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext c) => PlaceAssignModeratorScreen(
-          placeId: id,
-          placeTitle: title,
-        ),
+        builder: (BuildContext c) =>
+            PlaceAssignModeratorScreen(placeId: id, placeTitle: title),
       ),
     );
     if (mounted) {
@@ -144,14 +150,14 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Название обновлено')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Название обновлено')));
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -187,15 +193,15 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заведение удалено')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Заведение удалено')));
       await _load();
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -213,10 +219,8 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
     }
     await showDialog<void>(
       context: context,
-      builder: (BuildContext c) => _RemovePlaceModeratorsDialog(
-        placeId: placeId,
-        placeTitle: title,
-      ),
+      builder: (BuildContext c) =>
+          _RemovePlaceModeratorsDialog(placeId: placeId, placeTitle: title),
     );
   }
 
@@ -287,9 +291,7 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                             style: FilledButton.styleFrom(
                               backgroundColor: kPrimaryBlue,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 14,
-                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
@@ -325,7 +327,8 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                             final String desc =
                                 (m['description'] as String?)?.trim() ?? '';
                             final String? photo =
-                                m['photo_url'] as String? ?? m['cover_url'] as String?;
+                                m['photo_url'] as String? ??
+                                m['cover_url'] as String?;
                             final bool sub = _subscribed.contains(id);
                             return Padding(
                               padding: const EdgeInsets.only(
@@ -339,9 +342,7 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                         await Navigator.of(context).push<void>(
                                           MaterialPageRoute<void>(
                                             builder: (BuildContext c) =>
-                                                PlaceDetailScreen(
-                                              placeId: id,
-                                            ),
+                                                PlaceDetailScreen(placeId: id),
                                           ),
                                         );
                                         if (mounted) {
@@ -363,7 +364,8 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                             CrossAxisAlignment.start,
                                         children: <Widget>[
                                           PlaceListSquareThumb(
-                                            imageUrl: photo != null &&
+                                            imageUrl:
+                                                photo != null &&
                                                     photo.isNotEmpty
                                                 ? photo
                                                 : null,
@@ -374,10 +376,9 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                           Expanded(
                                             child: Padding(
                                               padding: EdgeInsets.only(
-                                                right:
-                                                    _isAdmin && id.isNotEmpty
-                                                        ? 36
-                                                        : 0,
+                                                right: _isAdmin && id.isNotEmpty
+                                                    ? 36
+                                                    : 0,
                                               ),
                                               child: Column(
                                                 crossAxisAlignment:
@@ -397,18 +398,19 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                                       color: cs.onSurface,
                                                     ),
                                                   ),
-                                                  if (desc.isNotEmpty) ...<Widget>[
+                                                  if (desc
+                                                      .isNotEmpty) ...<Widget>[
                                                     const SizedBox(height: 6),
                                                     Text(
                                                       desc,
                                                       maxLines: 2,
-                                                      overflow: TextOverflow
-                                                          .ellipsis,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
                                                       style: TextStyle(
                                                         fontSize: 13,
                                                         height: 1.35,
-                                                        color: cs
-                                                            .onSurfaceVariant,
+                                                        color:
+                                                            cs.onSurfaceVariant,
                                                       ),
                                                     ),
                                                   ],
@@ -416,8 +418,7 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                                   _PlaceSubscribeControl(
                                                     subscribed: sub,
                                                     enabled: id.isNotEmpty,
-                                                    onPressed: () =>
-                                                        unawaited(
+                                                    onPressed: () => unawaited(
                                                       _toggleSubscribe(id),
                                                     ),
                                                   ),
@@ -442,8 +443,9 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                             minHeight: 36,
                                           ),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                           color: cs.surfaceContainerHighest,
                                           icon: Icon(
@@ -539,8 +541,8 @@ class _PlacesListScreenState extends State<PlacesListScreen> {
                                                     Text(
                                                       'Удалить заведение',
                                                       style: TextStyle(
-                                                        color: Colors
-                                                            .red.shade800,
+                                                        color:
+                                                            Colors.red.shade800,
                                                         fontWeight:
                                                             FontWeight.w600,
                                                       ),
@@ -688,7 +690,9 @@ class _RemovePlaceModeratorsDialogState
     final String ln = (row['last_name'] as String?)?.trim() ?? '';
     final String full = '$fn $ln'.trim();
     final String? u = row['username'] as String?;
-    final String nick = (u != null && u.trim().isNotEmpty) ? '@${u.trim()}' : '';
+    final String nick = (u != null && u.trim().isNotEmpty)
+        ? '@${u.trim()}'
+        : '';
     if (label.startsWith('@')) {
       return full.isNotEmpty ? full : '';
     }
@@ -742,15 +746,15 @@ class _RemovePlaceModeratorsDialogState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Модератор успешно снят')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Модератор успешно снят')));
       _reload();
     } on Object catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -819,53 +823,55 @@ class _RemovePlaceModeratorsDialogState
                   ),
                   child: FutureBuilder<List<Map<String, dynamic>>>(
                     future: _future,
-                    builder: (
-                      BuildContext context,
-                      AsyncSnapshot<List<Map<String, dynamic>>> snap,
-                    ) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: CircularProgressIndicator(),
-                          ),
-                        );
-                      }
-                      final List<Map<String, dynamic>> list =
-                          snap.data ?? <Map<String, dynamic>>[];
-                      if (list.isEmpty) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Text(
-                              'Нет назначенных модераторов',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: cs.onSurfaceVariant,
+                    builder:
+                        (
+                          BuildContext context,
+                          AsyncSnapshot<List<Map<String, dynamic>>> snap,
+                        ) {
+                          if (snap.connectionState == ConnectionState.waiting) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(24),
+                                child: CircularProgressIndicator(),
                               ),
-                            ),
-                          ),
-                        );
-                      }
-                      return ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemCount: list.length,
-                        separatorBuilder: (BuildContext context, int index) =>
-                            const SizedBox(height: kCloudListSpacing),
-                        itemBuilder: (BuildContext c, int i) {
-                          final Map<String, dynamic> row = list[i];
-                          final String lab = _label(row);
-                          final String sub = _subtitle(row, lab);
-                          return _ModeratorCloudTile(
-                            label: lab,
-                            subtitle: sub,
-                            avatarUrl: _avatarUrl(row),
-                            onRemove: () => unawaited(_confirmRemove(row)),
+                            );
+                          }
+                          final List<Map<String, dynamic>> list =
+                              snap.data ?? <Map<String, dynamic>>[];
+                          if (list.isEmpty) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Text(
+                                  'Нет назначенных модераторов',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          return ListView.separated(
+                            padding: EdgeInsets.zero,
+                            itemCount: list.length,
+                            separatorBuilder:
+                                (BuildContext context, int index) =>
+                                    const SizedBox(height: kCloudListSpacing),
+                            itemBuilder: (BuildContext c, int i) {
+                              final Map<String, dynamic> row = list[i];
+                              final String lab = _label(row);
+                              final String sub = _subtitle(row, lab);
+                              return _ModeratorCloudTile(
+                                label: lab,
+                                subtitle: sub,
+                                avatarUrl: _avatarUrl(row),
+                                onRemove: () => unawaited(_confirmRemove(row)),
+                              );
+                            },
                           );
                         },
-                      );
-                    },
                   ),
                 ),
               ),
@@ -953,14 +959,10 @@ class _ModeratorCloudTile extends StatelessWidget {
           IconButton(
             tooltip: 'Снять с роли',
             onPressed: onRemove,
-            icon: Icon(
-              Icons.person_remove_rounded,
-              color: cs.primary,
-            ),
+            icon: Icon(Icons.person_remove_rounded, color: cs.primary),
           ),
         ],
       ),
     );
   }
 }
-

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/admin_config.dart';
 import '../config/supabase_ready.dart';
+import 'notification_channel_prefs.dart';
 
 /// Фиксированная строка расписания парома в `public.schedules`.
 const String kFerryScheduleRowId = '00000000-0000-0000-0000-000000000001';
@@ -49,15 +50,25 @@ class CityDataService {
 
   /// Кэш [profiles.notifications_enabled] для пушей и Realtime-уведомлений.
   static bool? _cachedNotificationsEnabled;
+  static bool? _cachedNotifyChatMessages;
+  static bool? _cachedNotifyFeedEngagement;
+  static bool? _cachedNotifyNewsFeed;
 
   static Future<void> refreshNotificationsEnabledCache() async {
     final String? uid = client?.auth.currentUser?.id;
     if (uid == null) {
       _cachedNotificationsEnabled = null;
+      _cachedNotifyChatMessages = null;
+      _cachedNotifyFeedEngagement = null;
+      _cachedNotifyNewsFeed = null;
       return;
     }
     final Map<String, dynamic>? row = await fetchProfileRow(uid);
     _cachedNotificationsEnabled = row?['notifications_enabled'] != false;
+    _cachedNotifyChatMessages = row?['notify_chat_messages'] != false;
+    _cachedNotifyFeedEngagement = row?['notify_feed_engagement'] != false;
+    _cachedNotifyNewsFeed = row?['notify_news_feed'] != false;
+    await NotificationChannelPrefs.applyFromProfileRow(row);
   }
 
   /// Разрешены ли push-уведомления (чаты и заведения) по профилю.
@@ -67,6 +78,77 @@ class CityDataService {
     }
     await refreshNotificationsEnabledCache();
     return _cachedNotificationsEnabled ?? true;
+  }
+
+  /// Чаты: глобальный флаг и канал «сообщения в чатах».
+  static Future<bool> mayReceiveChatPushes() async {
+    if (_cachedNotificationsEnabled == null ||
+        _cachedNotifyChatMessages == null) {
+      await refreshNotificationsEnabledCache();
+    } else {
+      await areNotificationsEnabledForCurrentUser();
+    }
+    if (_cachedNotificationsEnabled == false) {
+      return false;
+    }
+    return _cachedNotifyChatMessages != false;
+  }
+
+  /// Заведения (FCM notify-place-post): глобальный + канал «новости СМИ / важное».
+  static Future<bool> mayReceivePlacePushes() async {
+    if (_cachedNotificationsEnabled == null || _cachedNotifyNewsFeed == null) {
+      await refreshNotificationsEnabledCache();
+    } else {
+      await areNotificationsEnabledForCurrentUser();
+    }
+    if (_cachedNotificationsEnabled == false) {
+      return false;
+    }
+    return _cachedNotifyNewsFeed != false;
+  }
+
+  /// Лайки/комментарии ленты и аналогичные социальные пуши.
+  static Future<bool> mayReceiveFeedEngagementPushes() async {
+    if (_cachedNotificationsEnabled == null ||
+        _cachedNotifyFeedEngagement == null) {
+      await refreshNotificationsEnabledCache();
+    } else {
+      await areNotificationsEnabledForCurrentUser();
+    }
+    if (_cachedNotificationsEnabled == false) {
+      return false;
+    }
+    return _cachedNotifyFeedEngagement != false;
+  }
+
+  /// Сохранить каналы уведомлений в [profiles], выставить [notifications_enabled]
+  /// и продублировать в SharedPreferences.
+  static Future<void> updateMyNotificationChannels({
+    required bool chat,
+    required bool feed,
+    required bool news,
+  }) async {
+    final SupabaseClient? c = client;
+    final String? uid = c?.auth.currentUser?.id;
+    if (c == null || uid == null) {
+      throw StateError('Нет сессии');
+    }
+    final bool master = chat || feed || news;
+    await c
+        .from('profiles')
+        .update(<String, dynamic>{
+          'notify_chat_messages': chat,
+          'notify_feed_engagement': feed,
+          'notify_news_feed': news,
+          'notifications_enabled': master,
+        })
+        .eq('id', uid);
+    await NotificationChannelPrefs.saveLocal(
+      chat: chat,
+      feed: feed,
+      news: news,
+    );
+    await refreshNotificationsEnabledCache();
   }
 
   /// Копирует в `profiles` имя, фамилию и дату рождения из [User.userMetadata],
@@ -291,9 +373,7 @@ class CityDataService {
     final String? t = about?.trim();
     await c
         .from('profiles')
-        .update(<String, dynamic>{
-          'about': (t == null || t.isEmpty) ? null : t,
-        })
+        .update(<String, dynamic>{'about': (t == null || t.isEmpty) ? null : t})
         .eq('id', uid);
   }
 

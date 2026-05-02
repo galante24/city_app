@@ -1,0 +1,29 @@
+# Медиа и сетевые изображения (city_app)
+
+### ИНСТРУКЦИЯ ПО РАБОТЕ С МЕДИА
+
+- **ЗАПРЕЩЕНО** использовать стандартные `Image.network()` или `NetworkImage()` для загрузки по URL.
+- **ВСЕГДА** используй для сетевых изображений один из утверждённых компонентов:
+  - `ProgressiveCachedImage` ([`lib/widgets/media_progressive_image.dart`](lib/widgets/media_progressive_image.dart)) — лента, превью с Shimmer;
+  - `UniversalImageWidget` ([`lib/widgets/universal_image_widget.dart`](lib/widgets/universal_image_widget.dart)) — карточки (вакансии, заведения, учреждения и т.п.);
+  - `CityNetworkImage` / `CityNetworkImage.fillParent` / `CityNetworkImage.square` / `CityNetworkImage.viewer` ([`lib/widgets/city_network_image.dart`](lib/widgets/city_network_image.dart)) — обложки, квадратные превью, полноэкранный просмотр URL; тот же стек `CachedNetworkImage` + memCache + fade.
+- **Аватары пользователей:** только `CityNetworkImage.avatar` с параметром `placeholderName` (инициалы на цветном фоне при загрузке/ошибке). **Не** подставляй тяжёлый Shimmer на аватары.
+
+### ОБЯЗАТЕЛЬНЫЕ ПАРАМЕТРЫ для новых сетевых превью (кроме аватаров и микро-иконок ≤56 logical px)
+
+1. **Shimmer:** `MediaShimmerBox` как плейсхолдер (уже встроен в `ProgressiveCachedImage` и `UniversalImageWidget`; в `CityNetworkImage` — для крупных превью; для очень мелких плейсхолдеров допускается простой `ColoredBox` по правилам виджета).
+2. **Плавное появление:** `fadeInDuration` / `fadeOutDuration` у `CachedNetworkImage` (как в перечисленных виджетах).
+3. **Память:** `memCacheWidth` и `memCacheHeight` через [`imageCacheExtentPx`](lib/utils/image_cache_extent.dart) для превью в списках и сетках.
+4. **Списки:** оборачивай тяжёлую ячейку с картинкой в `RepaintBoundary` в `ListView` / `GridView` / `Sliver`-списках.
+
+### ФИКСИРОВАННЫЕ ПРОПОРЦИИ (Zero Jump Layout)
+
+- Для превью в **чатах** и **ленте** задавай стабильные пропорции: `AspectRatio`, явные `width`/`height` или внутренние ограничения виджета, чтобы не было скачков верстки при подгрузке.
+
+### ГАЛЕРЕЯ
+
+- Любое **кликабельное** изображение в ленте/комментариях открывай через **`FeedFullscreenGallery`** ([`lib/widgets/feed/feed_fullscreen_gallery.dart`](lib/widgets/feed/feed_fullscreen_gallery.dart)) с зумом и панорамированием, если контекст — галерея поста (как уже сделано для превью в [`home_screen.dart`](lib/screens/home_screen.dart) и экране поста).
+
+### Проверка перед MR
+
+- Поиск по проекту: `Image.network`, `NetworkImage(` — в `lib/` не должно встречаться (исключение: комментарии-документация).

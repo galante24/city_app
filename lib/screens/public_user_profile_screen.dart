@@ -41,8 +41,9 @@ class _PublicUserProfileScreenState extends State<PublicUserProfileScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final Map<String, dynamic>? r =
-        await CityDataService.fetchProfileRow(widget.userId);
+    final Map<String, dynamic>? r = await CityDataService.fetchProfileRow(
+      widget.userId,
+    );
     if (mounted) {
       setState(() {
         _row = r;
@@ -101,10 +102,12 @@ class _PublicUserProfileScreenState extends State<PublicUserProfileScreen> {
     }
     setState(() => _busyChat = true);
     try {
-      final String conv =
-          await ChatService.getOrCreateDirectConversation(widget.userId);
+      final String conv = await ChatService.getOrCreateDirectConversation(
+        widget.userId,
+      );
       final String name =
-          (await ChatService.displayNameForUserId(widget.userId)) ?? _displayName;
+          (await ChatService.displayNameForUserId(widget.userId)) ??
+          _displayName;
       if (!mounted) {
         return;
       }
@@ -120,9 +123,9 @@ class _PublicUserProfileScreenState extends State<PublicUserProfileScreen> {
       );
     } on Object {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось открыть чат')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Не удалось открыть чат')));
       }
     } finally {
       if (mounted) {
@@ -160,13 +163,16 @@ class _PublicUserProfileScreenState extends State<PublicUserProfileScreen> {
                           children: <Widget>[
                             CircleAvatar(
                               radius: 48,
-                              backgroundColor:
-                                  kPrimaryBlue.withValues(alpha: 0.15),
-                              child: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                              backgroundColor: kPrimaryBlue.withValues(
+                                alpha: 0.15,
+                              ),
+                              child:
+                                  _avatarUrl != null && _avatarUrl!.isNotEmpty
                                   ? CityNetworkImage.avatar(
                                       context: context,
                                       imageUrl: _avatarUrl,
                                       diameter: 96,
+                                      placeholderName: _displayName,
                                     )
                                   : Text(
                                       _displayName.isNotEmpty

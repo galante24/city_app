@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../theme/city_theme.dart';
+import 'clean_screen_header.dart' show cleanHeaderIconColor;
 
-/// Для иконок справа в [SoftTabHeader]: в светлой — primary, в тёмной — приглушённый серый.
-Color softHeaderTrailingIconColor(BuildContext context) {
-  final ThemeData t = Theme.of(context);
-  if (t.brightness == Brightness.dark) {
-    return CityTheme.kDarkNavIconMuted;
-  }
-  return t.colorScheme.primary;
-}
+/// Для иконок справа у шапок: согласовано с чистым заголовком.
+Color softHeaderTrailingIconColor(BuildContext context) =>
+    cleanHeaderIconColor(context);
 
 const double kSoftHeaderBottomRadius = 24;
 
@@ -21,10 +16,9 @@ class SoftHeaderBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = Theme.of(context).colorScheme.onSurface;
     return IconButton(
       icon: const Icon(Icons.arrow_back_rounded, size: 26),
-      color: fg,
+      color: cleanHeaderIconColor(context),
       onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
       tooltip: 'Назад',
       padding: EdgeInsets.zero,
@@ -61,7 +55,7 @@ class SoftTabHeader extends StatelessWidget {
     final Color headerBg = isDark ? cs.surfaceContainerHigh : cs.surface;
     final Color titleColor = cs.onSurface;
     final Color shadow = isDark
-        ? Colors.black.withValues(alpha: 0.45)
+        ? Colors.black.withValues(alpha: 0.35)
         : const Color(0xFF0A0A0A).withValues(alpha: 0.06);
     return Container(
       decoration: BoxDecoration(
@@ -72,7 +66,7 @@ class SoftTabHeader extends StatelessWidget {
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: shadow,
-            blurRadius: 16,
+            blurRadius: isDark ? 10 : 16,
             offset: const Offset(0, 4),
           ),
         ],
@@ -136,10 +130,7 @@ class SoftTabHeader extends StatelessWidget {
                   ),
               ],
             ),
-            if (bottom != null) ...<Widget>[
-              const SizedBox(height: 4),
-              bottom!,
-            ],
+            if (bottom != null) ...<Widget>[const SizedBox(height: 4), bottom!],
           ],
         ),
       ),

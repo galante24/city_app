@@ -50,6 +50,7 @@ class SocialHeader extends StatelessWidget {
             context: context,
             imageUrl: url,
             diameter: d,
+            placeholderName: authorFullNameFromMap(m),
           ),
         );
       }
@@ -129,8 +130,10 @@ class SocialHeader extends StatelessWidget {
           onTap: openProfile,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding:
-                EdgeInsets.symmetric(vertical: dense ? 2 : 4, horizontal: 2),
+            padding: EdgeInsets.symmetric(
+              vertical: dense ? 2 : 4,
+              horizontal: 2,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[

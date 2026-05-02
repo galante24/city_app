@@ -1,19 +1,89 @@
-/// Секреты **не** хранятся в репозитории. Задаются при сборке/запуске:
-/// `flutter run --dart-define-from-file=api_keys.json`
-/// или `flutter run --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...`
+/// Секреты **не** хранятся в репозитории.
+///
+/// **Порядок (как в [loadSupabaseRuntimeConfigIfMissing]):**
+/// 1. Компиляция: `String.fromEnvironment('SUPABASE_URL')` и `SUPABASE_ANON_KEY`
+///    (`flutter run --dart-define=…`, CI, `flutter build web --dart-define-from-file=api_keys.json`).
+/// 2. Если после сборки строки пустые: чтение **`api_keys.json`** рядом с процессом (не web)
+///    или по HTTP **`api_keys.json`** относительно [Uri.base] (web, например GitHub Pages).
 ///
 /// Формат `api_keys.example.json` — в корне проекта.
 library;
 
-const String kSupabaseUrl = String.fromEnvironment(
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import 'supabase_overrides_stub.dart'
+    if (dart.library.io) 'supabase_overrides_io.dart'
+    as supabase_overrides;
+
+/// Значения из `--dart-define` / `--dart-define-from-file` (приоритет №1).
+String _supabaseUrlResolved = const String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: '',
 );
-
-const String kSupabaseAnonKey = String.fromEnvironment(
+String _supabaseAnonKeyResolved = const String.fromEnvironment(
   'SUPABASE_ANON_KEY',
   defaultValue: '',
 );
+
+/// Текущий URL (после возможной подгрузки [loadSupabaseRuntimeConfigIfMissing]).
+String get kSupabaseUrl => _supabaseUrlResolved;
+
+/// Текущий anon key.
+String get kSupabaseAnonKey => _supabaseAnonKeyResolved;
+
+/// Подставляет ключи из `api_keys.json`, если compile-time define’ы пустые.
+Future<void> loadSupabaseRuntimeConfigIfMissing() async {
+  if (_supabaseUrlResolved.trim().isNotEmpty &&
+      _supabaseAnonKeyResolved.trim().isNotEmpty) {
+    return;
+  }
+  final Map<String, String>? fromDisk = await supabase_overrides
+      .readApiKeysJsonFromProjectRoot();
+  if (fromDisk != null) {
+    final String? u = fromDisk['SUPABASE_URL']?.trim();
+    final String? k = fromDisk['SUPABASE_ANON_KEY']?.trim();
+    if (u != null && u.isNotEmpty) {
+      _supabaseUrlResolved = u;
+    }
+    if (k != null && k.isNotEmpty) {
+      _supabaseAnonKeyResolved = k;
+    }
+  }
+  if (_supabaseUrlResolved.trim().isNotEmpty &&
+      _supabaseAnonKeyResolved.trim().isNotEmpty) {
+    return;
+  }
+  if (!kIsWeb) {
+    return;
+  }
+  try {
+    final Uri url = Uri.base.resolve('api_keys.json');
+    final http.Response r = await http
+        .get(url)
+        .timeout(const Duration(seconds: 10));
+    if (r.statusCode != 200 || r.body.trim().isEmpty) {
+      return;
+    }
+    final Object? decoded = jsonDecode(r.body);
+    if (decoded is! Map) {
+      return;
+    }
+    final Map<String, dynamic> m = Map<String, dynamic>.from(decoded);
+    final String? u = m['SUPABASE_URL']?.toString().trim();
+    final String? k = m['SUPABASE_ANON_KEY']?.toString().trim();
+    if (u != null && u.isNotEmpty) {
+      _supabaseUrlResolved = u;
+    }
+    if (k != null && k.isNotEmpty) {
+      _supabaseAnonKeyResolved = k;
+    }
+  } on Object {
+    // Опционально: статический api_keys.json рядом с index.html на хостинге.
+  }
+}
 
 /// Корневой URL проекта `https://<ref>.supabase.co` без хвоста `/rest/v1` (сливаем при ошибке конфигурации).
 String get kSupabaseProjectUrl {
@@ -95,7 +165,7 @@ bool get kUpdateRequireSha256 =>
     kUpdateRequireSha256Env != '0' &&
     kUpdateRequireSha256Env != 'no';
 
-/// True — в сборку попали реальный URL и anon key (не плейсхолдеры из example).
+/// True — заданы реальный URL и anon key (не плейсхолдеры из example).
 bool get kAreSupabaseSecretsConfigured =>
     kSupabaseProjectUrl.isNotEmpty &&
     kSupabaseAnonKey.trim().isNotEmpty &&

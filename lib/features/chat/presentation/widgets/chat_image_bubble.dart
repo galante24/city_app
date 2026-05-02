@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../widgets/media_progressive_image.dart';
+
 /// Вынесенный кэш соотношения сторон по URL — меньше работы при скролле списка.
 final Map<String, Size> _chatImageIntrinsicSizeCache = <String, Size>{};
 
@@ -24,8 +26,10 @@ class ChatImageBubble extends StatefulWidget {
 class _ChatImageBubbleState extends State<ChatImageBubble> {
   static const double _kMaxHeight = 280;
   static const double _kCornerRadius = 14;
-  static const double _kPlaceholderHeight = 150;
   static const Color _kPlaceholderColor = Color(0xFFE0E0E0);
+
+  /// Плейсхолдер до известных пропорций — тот же max width, AR 4:3, без скачка высоты баббла.
+  static const double _kPlaceholderAspect = 16 / 9;
 
   Size? _intrinsic;
   bool _failed = false;
@@ -150,22 +154,24 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
         : Alignment.centerLeft;
 
     if (widget.imageUrl.trim().isEmpty || _failed) {
-      return Align(
-        alignment: align,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(_kCornerRadius),
-            clipBehavior: Clip.antiAlias,
-            child: SizedBox(
-              height: 120,
-              width: math.min(maxW, 160),
-              child: ColoredBox(
-                color: _kPlaceholderColor,
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  color: Colors.grey.shade600,
-                  size: 40,
+      return RepaintBoundary(
+        child: Align(
+          alignment: align,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(_kCornerRadius),
+              clipBehavior: Clip.antiAlias,
+              child: SizedBox(
+                height: 120,
+                width: math.min(maxW, 160),
+                child: ColoredBox(
+                  color: _kPlaceholderColor,
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    color: Colors.grey.shade600,
+                    size: 40,
+                  ),
                 ),
               ),
             ),
@@ -176,17 +182,24 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
 
     if (_intrinsic == null) {
       final double placeholderW = math.min(maxW, math.max(100.0, maxW * 0.5));
-      return Align(
-        alignment: align,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(_kCornerRadius),
-            clipBehavior: Clip.antiAlias,
-            child: SizedBox(
-              width: placeholderW,
-              height: _kPlaceholderHeight,
-              child: const ColoredBox(color: _kPlaceholderColor),
+      final double placeholderH = placeholderW / _kPlaceholderAspect;
+      return RepaintBoundary(
+        child: Align(
+          alignment: align,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(_kCornerRadius),
+              clipBehavior: Clip.antiAlias,
+              child: SizedBox(
+                width: placeholderW,
+                height: math.min(placeholderH, _kMaxHeight),
+                child: MediaShimmerBox(
+                  width: placeholderW,
+                  height: math.min(placeholderH, _kMaxHeight),
+                  borderRadius: _kCornerRadius,
+                ),
+              ),
             ),
           ),
         ),
@@ -198,41 +211,45 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
     final int memW = (box.width * dpr).round().clamp(1, 4096);
     final int memH = (box.height * dpr).round().clamp(1, 4096);
 
-    return Align(
-      alignment: align,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(_kCornerRadius),
-          clipBehavior: Clip.antiAlias,
-          child: CachedNetworkImage(
-            imageUrl: widget.imageUrl,
-            width: box.width,
-            height: box.height,
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.low,
-            memCacheWidth: memW,
-            memCacheHeight: memH,
-            placeholder: (BuildContext context, String _) {
-              return SizedBox(
-                width: box.width,
-                height: box.height,
-                child: const ColoredBox(color: _kPlaceholderColor),
-              );
-            },
-            errorWidget: (BuildContext context, String url, Object error) {
-              return SizedBox(
-                width: box.width,
-                height: box.height,
-                child: ColoredBox(
-                  color: _kPlaceholderColor,
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: Colors.grey.shade600,
+    return RepaintBoundary(
+      child: Align(
+        alignment: align,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(_kCornerRadius),
+            clipBehavior: Clip.antiAlias,
+            child: CachedNetworkImage(
+              imageUrl: widget.imageUrl,
+              width: box.width,
+              height: box.height,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.low,
+              fadeInDuration: const Duration(milliseconds: 380),
+              fadeOutDuration: const Duration(milliseconds: 100),
+              memCacheWidth: memW,
+              memCacheHeight: memH,
+              placeholder: (BuildContext context, String _) {
+                return MediaShimmerBox(
+                  width: box.width,
+                  height: box.height,
+                  borderRadius: _kCornerRadius,
+                );
+              },
+              errorWidget: (BuildContext context, String url, Object error) {
+                return SizedBox(
+                  width: box.width,
+                  height: box.height,
+                  child: ColoredBox(
+                    color: _kPlaceholderColor,
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),

@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_card_styles.dart';
-import '../app_constants.dart'
-    show kPrimaryBlue, listingFloorAreaWithSuffix;
+import '../app_constants.dart' show kPrimaryBlue, listingFloorAreaWithSuffix;
 import '../main_shell_navigation.dart';
 import '../models/real_estate_listing_kind.dart';
 import '../services/real_estate_listing_service.dart';
@@ -39,7 +38,11 @@ class _RealEstateCategoryListingsScreenState
   void initState() {
     super.initState();
     _search.addListener(_onSearchChanged);
-    unawaited(_load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_load());
+      }
+    });
   }
 
   @override
@@ -74,10 +77,10 @@ class _RealEstateCategoryListingsScreenState
       final String t = (m['title'] as String? ?? '').toLowerCase();
       final String d = (m['description'] as String? ?? '').toLowerCase();
       final String p = (m['price'] as String? ?? '').toLowerCase();
-      final String a =
-          RealEstateListingService.addressFromRow(m).toLowerCase();
-      final String f =
-          RealEstateListingService.floorAreaFromRow(m).toLowerCase();
+      final String a = RealEstateListingService.addressFromRow(m).toLowerCase();
+      final String f = RealEstateListingService.floorAreaFromRow(
+        m,
+      ).toLowerCase();
       return t.contains(q) ||
           d.contains(q) ||
           p.contains(q) ||
@@ -185,8 +188,10 @@ class _RealEstateCategoryListingsScreenState
                   ),
                 ),
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   child: _PostListingCard(
                     kind: _k,
                     onOpen: () async {
@@ -218,10 +223,10 @@ class _RealEstateCategoryListingsScreenState
                       ? const Center(child: CircularProgressIndicator())
                       : ValueListenableBuilder<String>(
                           valueListenable: _searchQuery,
-                          builder:
-                              (BuildContext context, String q, Widget? _) {
-                            final List<Map<String, dynamic>> shown =
-                                _filtered(q);
+                          builder: (BuildContext context, String q, Widget? _) {
+                            final List<Map<String, dynamic>> shown = _filtered(
+                              q,
+                            );
                             if (shown.isEmpty) {
                               return Center(
                                 child: Text(
@@ -234,8 +239,7 @@ class _RealEstateCategoryListingsScreenState
                               );
                             }
                             return ListView.separated(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                               itemCount: shown.length,
                               separatorBuilder: (BuildContext c, int i) =>
                                   const SizedBox(height: kCloudListSpacing),
@@ -247,13 +251,11 @@ class _RealEstateCategoryListingsScreenState
                                 final String price =
                                     m['price'] as String? ?? '';
                                 final String addr =
-                                    RealEstateListingService.addressFromRow(
-                                  m,
-                                );
+                                    RealEstateListingService.addressFromRow(m);
                                 final String fa =
                                     RealEstateListingService.floorAreaFromRow(
-                                  m,
-                                );
+                                      m,
+                                    );
                                 final String? floorLine = fa.isEmpty
                                     ? null
                                     : listingFloorAreaWithSuffix(fa);
@@ -279,10 +281,10 @@ class _RealEstateCategoryListingsScreenState
                                       MaterialPageRoute<void>(
                                         builder: (BuildContext c) =>
                                             RealEstateCategoryDetailScreen(
-                                          kind: _k,
-                                          row: m,
-                                          accent: accent,
-                                        ),
+                                              kind: _k,
+                                              row: m,
+                                              accent: accent,
+                                            ),
                                       ),
                                     );
                                     if (mounted) {
@@ -336,10 +338,9 @@ class _PostListingCard extends StatelessWidget {
                   kind.postCardSubtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.65),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.65),
                     height: 1.2,
                   ),
                 ),
@@ -469,10 +470,7 @@ class _EstateListingTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     dateLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.onSurfaceVariant,
-                    ),
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                   ),
                 ],
               ],
@@ -483,10 +481,7 @@ class _EstateListingTile extends StatelessWidget {
             tooltip: 'Поделиться',
             onPressed: onShare,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 40,
-              minHeight: 40,
-            ),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           Icon(
             Icons.chevron_right_rounded,
@@ -498,11 +493,7 @@ class _EstateListingTile extends StatelessWidget {
   }
 }
 
-Widget _listingImagePlaceholder(
-  Color accent,
-  double size,
-  IconData icon,
-) {
+Widget _listingImagePlaceholder(Color accent, double size, IconData icon) {
   return Container(
     width: size,
     height: size,

@@ -35,6 +35,77 @@ IconData _weatherIconDataFromCode(String? icon) {
   return Icons.cloud_outlined;
 }
 
+/// Тот же bottom sheet, что и у [WeatherAppBarAction] (прогноз или «недоступно»).
+Future<void> showCityWeatherForecastSheet(BuildContext context) {
+  if (!WeatherService.hasApiKey) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext c) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Material(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
+              bottom: Radius.circular(20),
+            ),
+            color: kNewsScaffoldBg,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const Text(
+                    'Прогноз погоды',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Сейчас прогноз погоды недоступен. Попробуйте позже.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: kNewsTextPrimary,
+                      height: 1.35,
+                    ),
+                  ),
+                  if (kDebugMode) ...<Widget>[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Для разработчика: задайте OPENWEATHER_API_KEY при сборке '
+                      '(dart-define или api_keys.json).',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: kNewsTextSecondary,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(c),
+                    child: const Text('Закрыть'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (BuildContext context) {
+      return const _WeatherForecastSheet();
+    },
+  );
+}
+
 /// Компактная кнопка погоды (иконка + °C) и bottom sheet с прогнозом.
 class WeatherAppBarAction extends StatefulWidget {
   const WeatherAppBarAction({
@@ -64,15 +135,7 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
   }
 
   void _openSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return const _WeatherForecastSheet();
-      },
-    ).then((_) {
+    showCityWeatherForecastSheet(context).then((void _) {
       if (!WeatherService.hasApiKey) {
         return;
       }
@@ -92,65 +155,7 @@ class _WeatherAppBarActionState extends State<WeatherAppBarAction> {
         icon: const Icon(Icons.cloud_off, size: 22),
         tooltip: 'Погода недоступна',
         onPressed: () {
-          showModalBottomSheet<void>(
-            context: context,
-            backgroundColor: Colors.transparent,
-            builder: (BuildContext c) {
-              return Padding(
-                padding: const EdgeInsets.all(20),
-                child: Material(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                    bottom: Radius.circular(20),
-                  ),
-                  color: kNewsScaffoldBg,
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        const Text(
-                          'Прогноз погоды',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Сейчас прогноз погоды недоступен. Попробуйте позже.',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: kNewsTextPrimary,
-                            height: 1.35,
-                          ),
-                        ),
-                        if (kDebugMode) ...<Widget>[
-                          const SizedBox(height: 12),
-                          Text(
-                            'Для разработчика: задайте OPENWEATHER_API_KEY при сборке '
-                            '(dart-define или api_keys.json).',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: kNewsTextSecondary,
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(c),
-                          child: const Text('Закрыть'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
+          showCityWeatherForecastSheet(context);
         },
       );
     }
@@ -401,8 +406,9 @@ class _WeatherForecastSheetState extends State<_WeatherForecastSheet> {
                                           width: 48,
                                           height: 48,
                                           child: CityNetworkImage.fillParent(
-                                            imageUrl:
-                                                openWeatherIconUrl(d.iconCode),
+                                            imageUrl: openWeatherIconUrl(
+                                              d.iconCode,
+                                            ),
                                             boxFit: BoxFit.contain,
                                             errorIcon: _weatherIconDataFromCode(
                                               d.iconCode,

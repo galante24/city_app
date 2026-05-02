@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_card_styles.dart';
-import '../app_constants.dart'
-    show kPrimaryBlue, listingFloorAreaWithSuffix;
+import '../app_constants.dart' show kPrimaryBlue, listingFloorAreaWithSuffix;
 import '../main_shell_navigation.dart';
 import '../services/garage_listing_service.dart';
 import '../widgets/city_network_image.dart';
@@ -32,7 +31,11 @@ class _GarageListingsScreenState extends State<GarageListingsScreen> {
   void initState() {
     super.initState();
     _search.addListener(_onSearchChanged);
-    unawaited(_load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_load());
+      }
+    });
   }
 
   @override
@@ -49,7 +52,8 @@ class _GarageListingsScreenState extends State<GarageListingsScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final List<Map<String, dynamic>> list = await GarageListingService.fetchAll();
+    final List<Map<String, dynamic>> list =
+        await GarageListingService.fetchAll();
     if (mounted) {
       setState(() {
         _rows = list;
@@ -175,7 +179,10 @@ class _GarageListingsScreenState extends State<GarageListingsScreen> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   child: _PostGarageCard(
                     onOpen: () async {
                       await Navigator.of(context).push<void>(
@@ -207,8 +214,9 @@ class _GarageListingsScreenState extends State<GarageListingsScreen> {
                       : ValueListenableBuilder<String>(
                           valueListenable: _searchQuery,
                           builder: (BuildContext context, String q, Widget? _) {
-                            final List<Map<String, dynamic>> shown =
-                                _filtered(q);
+                            final List<Map<String, dynamic>> shown = _filtered(
+                              q,
+                            );
                             if (shown.isEmpty) {
                               return Center(
                                 child: Text(
@@ -260,9 +268,9 @@ class _GarageListingsScreenState extends State<GarageListingsScreen> {
                                       MaterialPageRoute<void>(
                                         builder: (BuildContext c) =>
                                             GarageListingDetailScreen(
-                                          row: m,
-                                          accent: accent,
-                                        ),
+                                              row: m,
+                                              accent: accent,
+                                            ),
                                       ),
                                     );
                                     if (mounted) {
@@ -315,10 +323,9 @@ class _PostGarageCard extends StatelessWidget {
                   'Разместите объявление о продаже или аренде гаража',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.65),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.65),
                     height: 1.2,
                   ),
                 ),
@@ -446,10 +453,7 @@ class _GarageListTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     dateLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: cs.onSurfaceVariant,
-                    ),
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                   ),
                 ],
               ],
@@ -460,10 +464,7 @@ class _GarageListTile extends StatelessWidget {
             tooltip: 'Поделиться',
             onPressed: onShare,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 40,
-              minHeight: 40,
-            ),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           Icon(
             Icons.chevron_right_rounded,

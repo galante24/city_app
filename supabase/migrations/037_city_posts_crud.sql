@@ -42,10 +42,30 @@ create policy "posts delete own row"
   for delete
   using ( auth.uid () = user_id );
 
--- Realtime (подложка под supabase.channel + onPostgresChanges)
-alter publication supabase_realtime add table public.posts;
+-- Realtime: на hosted проектах publication часто FOR ALL TABLES — ADD TABLE запрещён.
+do $pub$
+begin
+  if exists (
+    select 1
+    from pg_publication p
+    where p.pubname = 'supabase_realtime'
+      and not p.puballtables
+  )
+  and not exists (
+    select 1
+    from pg_publication_tables t
+    where t.pubname = 'supabase_realtime'
+      and t.schemaname = 'public'
+      and t.tablename = 'posts'
+  ) then
+    alter publication supabase_realtime add table public.posts;
+  end if;
+exception
+  when others then
+    null;
+end $pub$;
 
--- Seed: три поста — только если в auth.users уже есть хотя бы один пользователь (SQL Editor / локальная связка после регистрации).
+-- Seed: три поста — один раз, если таблица ещё пуста (повторный db push без дублей).
 insert into public.posts (title, content, user_id)
 select
   t.title::text,
@@ -63,4 +83,5 @@ cross join lateral (
     ('Новости приложения', 'Второй демонстрационный текст для проверки ленты.'),
     ('Объявление', 'Третий пост — удалить или изменить можете вы сами после входа.')
 ) as t(title, body)
-where u.user_id is not null;
+where u.user_id is not null
+  and not exists (select 1 from public.posts limit 1);

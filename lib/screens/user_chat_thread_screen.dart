@@ -28,6 +28,7 @@ import '../features/chat/presentation/chat_place_share_resolution_cache.dart';
 import '../features/chat/presentation/chat_thread_messages_notifier.dart';
 import '../features/chat/presentation/chat_user_profile_cache.dart';
 import '../features/chat/presentation/models/group_chat_sender_display.dart';
+import '../features/chat/presentation/widgets/chat_thread/chat_feed_share_card.dart';
 import '../features/chat/presentation/widgets/chat_thread/chat_place_share_card.dart';
 import '../features/chat/presentation/widgets/chat_thread/forwarded_tiny_avatar.dart';
 import 'chat_full_image_viewer_screen.dart';
@@ -839,6 +840,7 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
   Widget build(BuildContext context) {
     if (!supabaseAppReady) {
       return const Scaffold(
+        backgroundColor: Colors.transparent,
         body: Center(
           child: Text('Приложение не инициализировано (нужен Supabase в main)'),
         ),
@@ -849,13 +851,12 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
     final ThemeData theme = Theme.of(context);
     final ColorScheme cs = theme.colorScheme;
     final bool isDark = theme.brightness == Brightness.dark;
-    final Color chatBg = isDark
-        ? theme.scaffoldBackgroundColor
-        : const Color(0xFFF0F2F5);
-    final Color appBarBg = isDark ? cs.surface : Colors.white;
+    final Color chatBg = Colors.transparent;
+    final Color appBarBg = Colors.transparent;
     final Color appBarIcon = isDark ? cs.onSurface : kPrimaryBlue;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: chatBg,
       appBar: AppBar(
         backgroundColor: appBarBg,
@@ -890,28 +891,48 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: <Widget>[
-                            CircleAvatar(
-                              radius: 20,
-                              backgroundColor: kPrimaryBlue.withValues(
-                                alpha: 0.2,
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: <BoxShadow>[
+                                  BoxShadow(
+                                    color: kEmeraldGlow.withValues(alpha: 0.42),
+                                    blurRadius: 12,
+                                    spreadRadius: 0,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                  BoxShadow(
+                                    color: kEmeraldGlow.withValues(alpha: 0.16),
+                                    blurRadius: 20,
+                                    spreadRadius: 1,
+                                    offset: Offset.zero,
+                                  ),
+                                ],
                               ),
-                              child:
-                                  _peerAvatarUrl != null &&
-                                      _peerAvatarUrl!.isNotEmpty
-                                  ? CityNetworkImage.avatar(
-                                      context: context,
-                                      imageUrl: _peerAvatarUrl,
-                                      diameter: 40,
-                                    )
-                                  : Text(
-                                      _headerTitle.isNotEmpty
-                                          ? _headerTitle[0].toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                        color: kPrimaryBlue,
-                                        fontWeight: FontWeight.w700,
+                              child: CircleAvatar(
+                                radius: 20,
+                                backgroundColor: kPrimaryBlue.withValues(
+                                  alpha: 0.2,
+                                ),
+                                child:
+                                    _peerAvatarUrl != null &&
+                                        _peerAvatarUrl!.isNotEmpty
+                                    ? CityNetworkImage.avatar(
+                                        context: context,
+                                        imageUrl: _peerAvatarUrl,
+                                        diameter: 40,
+                                        placeholderName: _headerTitle,
+                                      )
+                                    : Text(
+                                        _headerTitle.isNotEmpty
+                                            ? _headerTitle[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          color: kPrimaryBlue,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -970,25 +991,27 @@ class _UserChatThreadScreenState extends State<UserChatThreadScreen> {
         children: <Widget>[
           if (parseBackendMode() == BackendMode.rest) _chatWireStatusBar(),
           Expanded(
-            child: _MessagesList(
-              key: _messagesListKey,
-              conversationId: widget.conversationId,
-              messageNotifier: _threadMessages,
-              isGroup: isGroup,
-              me: me,
-              timeLabel: _timeLabel,
-              canDeleteMessage: _canDeleteMessage,
-              onDelete: _deleteMessage,
-              myReadAt: _myReadCursor,
-              otherReadByUser: _otherReadByUser,
-              onStreamChanged: _scheduleReadSync,
-              selectingMessages: _selectingMessages,
-              selectedMessageIds: _selectedMessageIds,
-              onToggleMessageSelection: _toggleMessageSelection,
-              onBeginForwardSelection: _beginForwardSelection,
-              onMessagesSnapshot: _onMessagesSnapshot,
-              onReplyMessage: _beginReplyToMessage,
-              directPeerName: isGroup ? null : _headerTitle,
+            child: RepaintBoundary(
+              child: _MessagesList(
+                key: _messagesListKey,
+                conversationId: widget.conversationId,
+                messageNotifier: _threadMessages,
+                isGroup: isGroup,
+                me: me,
+                timeLabel: _timeLabel,
+                canDeleteMessage: _canDeleteMessage,
+                onDelete: _deleteMessage,
+                myReadAt: _myReadCursor,
+                otherReadByUser: _otherReadByUser,
+                onStreamChanged: _scheduleReadSync,
+                selectingMessages: _selectingMessages,
+                selectedMessageIds: _selectedMessageIds,
+                onToggleMessageSelection: _toggleMessageSelection,
+                onBeginForwardSelection: _beginForwardSelection,
+                onMessagesSnapshot: _onMessagesSnapshot,
+                onReplyMessage: _beginReplyToMessage,
+                directPeerName: isGroup ? null : _headerTitle,
+              ),
             ),
           ),
           if (!_selectingMessages && _replyDraft != null)
@@ -1872,7 +1895,8 @@ class _MessagesListState extends State<_MessagesList> {
                   vertical: 8,
                 ),
                 cacheExtent: 900,
-                addRepaintBoundaries: false,
+                addAutomaticKeepAlives: true,
+                addRepaintBoundaries: true,
                 itemCount: count + (loadingOlder ? 1 : 0),
                 itemBuilder: (BuildContext context, int i) {
                   if (loadingOlder && i == 0) {
@@ -1924,7 +1948,11 @@ class _MessagesListState extends State<_MessagesList> {
                             fileMeta != null && !fileMeta.isImage
                             ? fileMeta
                             : null;
-                        final ChatPlaceShareParsed? placeShare = !isDeleted
+                        final ChatFeedShareParsed? feedShare = !isDeleted
+                            ? ChatService.parseFeedShareBody(bodyRaw)
+                            : null;
+                        final ChatPlaceShareParsed? placeShare =
+                            !isDeleted && feedShare == null
                             ? ChatService.parsePlaceShareBody(bodyRaw)
                             : null;
                         final String? voiceUrl = !isDeleted
@@ -1941,7 +1969,7 @@ class _MessagesListState extends State<_MessagesList> {
                             ? ''
                             : attachmentMeta != null
                             ? attachmentMeta.name
-                            : placeShare != null
+                            : placeShare != null || feedShare != null
                             ? ''
                             : bodyRaw;
                         final DateTime? createdAt = _tryParse(
@@ -2038,32 +2066,59 @@ class _MessagesListState extends State<_MessagesList> {
                                               sender: sender,
                                               isDeleted: isDeleted,
                                             ),
-                                            child: CircleAvatar(
-                                              radius: 18,
-                                              backgroundColor: kPrimaryBlue
-                                                  .withValues(alpha: 0.22),
-                                              child:
-                                                  sender.avatarUrl != null &&
-                                                      sender
-                                                          .avatarUrl!
-                                                          .isNotEmpty
-                                                  ? CityNetworkImage.avatar(
-                                                      context: ctx,
-                                                      imageUrl:
-                                                          sender.avatarUrl,
-                                                      diameter: 36,
-                                                    )
-                                                  : Text(
-                                                      _initialForGroupAvatar(
-                                                        sender.bubbleLabel,
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                boxShadow: <BoxShadow>[
+                                                  BoxShadow(
+                                                    color: kEmeraldGlow
+                                                        .withValues(
+                                                          alpha: 0.38,
+                                                        ),
+                                                    blurRadius: 10,
+                                                    spreadRadius: 0,
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                  BoxShadow(
+                                                    color: kEmeraldGlow
+                                                        .withValues(
+                                                          alpha: 0.14,
+                                                        ),
+                                                    blurRadius: 18,
+                                                    spreadRadius: 0,
+                                                    offset: Offset.zero,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: CircleAvatar(
+                                                radius: 18,
+                                                backgroundColor: kPrimaryBlue
+                                                    .withValues(alpha: 0.22),
+                                                child:
+                                                    sender.avatarUrl != null &&
+                                                        sender
+                                                            .avatarUrl!
+                                                            .isNotEmpty
+                                                    ? CityNetworkImage.avatar(
+                                                        context: ctx,
+                                                        imageUrl:
+                                                            sender.avatarUrl,
+                                                        diameter: 36,
+                                                        placeholderName:
+                                                            sender.bubbleLabel,
+                                                      )
+                                                    : Text(
+                                                        _initialForGroupAvatar(
+                                                          sender.bubbleLabel,
+                                                        ),
+                                                        style: const TextStyle(
+                                                          fontSize: 15,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color: kPrimaryBlue,
+                                                        ),
                                                       ),
-                                                      style: const TextStyle(
-                                                        fontSize: 15,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        color: kPrimaryBlue,
-                                                      ),
-                                                    ),
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -2265,6 +2320,16 @@ class _MessagesListState extends State<_MessagesList> {
                                                             durationMs:
                                                                 voiceDurationMs,
                                                             outgoing: false,
+                                                            incomingUnread:
+                                                                incomingUnread,
+                                                          )
+                                                        else if (feedShare !=
+                                                                null &&
+                                                            !isDeleted)
+                                                          ChatFeedShareCard(
+                                                            share: feedShare,
+                                                            outgoing: false,
+                                                            cs: cs,
                                                             incomingUnread:
                                                                 incomingUnread,
                                                           )
@@ -2565,6 +2630,14 @@ class _MessagesListState extends State<_MessagesList> {
                                               playUrl: voiceUrl,
                                               durationMs: voiceDurationMs,
                                               outgoing: mine,
+                                              incomingUnread: incomingUnread,
+                                            )
+                                          else if (feedShare != null &&
+                                              !isDeleted)
+                                            ChatFeedShareCard(
+                                              share: feedShare,
+                                              outgoing: mine,
+                                              cs: cs,
                                               incomingUnread: incomingUnread,
                                             )
                                           else if (placeShare != null &&

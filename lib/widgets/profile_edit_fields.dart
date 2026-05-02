@@ -7,6 +7,7 @@ import '../app_constants.dart';
 import '../services/chat_service.dart';
 import '../services/city_data_service.dart';
 import '../utils/phone_normalize.dart';
+import 'settings_tablet_card.dart';
 
 class NickBlock extends StatelessWidget {
   const NickBlock({
@@ -225,26 +226,41 @@ class AboutBlock extends StatelessWidget {
       final bool? ok = await showDialog<bool>(
         context: context,
         builder: (BuildContext ctx) {
-          return AlertDialog(
-            title: const Text('О себе'),
-            content: TextField(
-              controller: controller,
-              maxLines: 4,
-              maxLength: 500,
-              decoration: const InputDecoration(
-                hintText: 'Коротко о себе — видно в профиле в чатах',
-              ),
+          final double maxH = MediaQuery.sizeOf(ctx).height * 0.72;
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(ctx).bottom,
             ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Отмена'),
+            child: AlertDialog(
+              title: const Text('О себе'),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 520, maxHeight: maxH),
+                child: SingleChildScrollView(
+                  child: TextField(
+                    controller: controller,
+                    minLines: 4,
+                    maxLines: 10,
+                    maxLength: 500,
+                    decoration: const InputDecoration(
+                      hintText: 'Коротко о себе — видно в профиле в чатах',
+                      alignLabelWithHint: true,
+                      contentPadding: EdgeInsets.all(16),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
               ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Сохранить'),
-              ),
-            ],
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Отмена'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Сохранить'),
+                ),
+              ],
+            ),
           );
         },
       );
@@ -354,9 +370,7 @@ class PhoneBlock extends StatelessWidget {
             final TextStyle valueStyle = TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: phoneDisplay.isEmpty
-                  ? cs.onSurfaceVariant
-                  : cs.onSurface,
+              color: phoneDisplay.isEmpty ? cs.onSurfaceVariant : cs.onSurface,
             );
             final Widget phone = SelectableText(
               display,
@@ -541,6 +555,9 @@ class _ProfileUsernameState extends State<ProfileUsername> {
   Future<void> _save() async {
     final String s = _normalizedInput();
     if (s.isEmpty) {
+      if (!mounted) {
+        return;
+      }
       setState(() => _saving = true);
       try {
         await ChatService.setMyUsername(null);
@@ -589,6 +606,9 @@ class _ProfileUsernameState extends State<ProfileUsername> {
       }
       return;
     }
+    if (!mounted) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ChatService.setMyUsername(s);
@@ -630,6 +650,17 @@ class _ProfileUsernameState extends State<ProfileUsername> {
   InputDecoration _deco(BuildContext context, String hint) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    if (SettingsTabletFieldScope.borderlessFields(context)) {
+      return InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: cs.onSurfaceVariant),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        filled: false,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+      );
+    }
     return InputDecoration(
       hintText: hint,
       hintStyle: TextStyle(color: cs.onSurfaceVariant),
@@ -703,11 +734,7 @@ class _ProfileUsernameState extends State<ProfileUsername> {
 }
 
 class ProfilePhoneE164 extends StatefulWidget {
-  const ProfilePhoneE164({
-    super.key,
-    this.initial,
-    required this.onSaved,
-  });
+  const ProfilePhoneE164({super.key, this.initial, required this.onSaved});
 
   final String? initial;
   final VoidCallback onSaved;
@@ -791,6 +818,17 @@ class _ProfilePhoneE164State extends State<ProfilePhoneE164> {
   InputDecoration _deco(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    if (SettingsTabletFieldScope.borderlessFields(context)) {
+      return InputDecoration(
+        hintText: '+79991234567',
+        hintStyle: TextStyle(color: cs.onSurfaceVariant),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        filled: false,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+      );
+    }
     return InputDecoration(
       hintText: '+79991234567',
       filled: true,
@@ -922,7 +960,7 @@ class _ProfileBirthDateState extends State<ProfileBirthDate> {
       firstDate: DateTime(1920, 1, 1),
       lastDate: now,
     );
-    if (d != null) {
+    if (d != null && mounted) {
       setState(() => _date = d);
     }
   }
@@ -990,74 +1028,92 @@ class _ProfileBirthDateState extends State<ProfileBirthDate> {
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color tileBg =
-        isDark ? cs.surfaceContainerHigh : const Color(0xFFF2F2F7);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    final bool inTablet = SettingsTabletFieldScope.borderlessFields(context);
+    final Color tileBg = inTablet
+        ? Colors.transparent
+        : (isDark ? cs.surfaceContainerHigh : const Color(0xFFF2F2F7));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Expanded(
-          child: Material(
-            color: tileBg,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              onTap: _saving ? null : _pick,
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: 20,
-                      color: cs.onSurfaceVariant,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            Expanded(
+              child: Material(
+                color: tileBg,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: _saving ? null : _pick,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      _label(),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: cs.onSurface,
-                      ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.calendar_today_outlined,
+                          size: 20,
+                          color: cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _label(),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            softWrap: true,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+            if (_date != null) ...<Widget>[
+              const SizedBox(width: 6),
+              IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.secondaryContainer,
+                ),
+                onPressed: _saving ? null : _clear,
+                icon: const Icon(Icons.clear, size: 20),
+                tooltip: 'Сбросить',
+              ),
+            ],
+          ],
         ),
-        const SizedBox(width: 6),
-        if (_date != null)
-          IconButton(
-            style: IconButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(
+            onPressed: _saving ? null : _save,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            onPressed: _saving ? null : _clear,
-            icon: const Icon(Icons.clear, size: 20),
-            tooltip: 'Сбросить',
+            child: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Сохранить'),
           ),
-        const SizedBox(width: 2),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: _saving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Text('Сохранить'),
         ),
       ],
     );

@@ -1,52 +1,25 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
 import '../app_card_styles.dart';
 import '../app_constants.dart';
 import '../config/supabase_ready.dart';
-import '../services/city_data_service.dart';
+import '../models/news_feed_category.dart';
+import '../services/feed_post_state_hub.dart';
+import '../services/feed_service.dart';
 import '../services/weather_service.dart';
+import '../widgets/feed/feed_comments_bottom_sheet.dart';
+import '../widgets/feed/feed_compose_sheet.dart';
+import '../widgets/feed/feed_fullscreen_gallery.dart';
+import '../widgets/feed/feed_share_to_chat_dialog.dart';
 import '../widgets/city_network_image.dart';
-import '../widgets/portal/portal_home_background_stack.dart';
+import '../widgets/media_progressive_image.dart';
+import '../utils/social_feed_format.dart';
 import '../widgets/portal/portal_home_weather_corner.dart';
-
-enum NewsCategory { smi, administration, discussion }
-
-String categoryLabelRu(NewsCategory c) {
-  return switch (c) {
-    NewsCategory.smi => 'СМИ',
-    NewsCategory.administration => 'Важные',
-    NewsCategory.discussion => 'Обсуждение',
-  };
-}
-
-String categoryToDb(NewsCategory c) {
-  return switch (c) {
-    NewsCategory.smi => 'smi',
-    NewsCategory.administration => 'administration',
-    NewsCategory.discussion => 'discussion',
-  };
-}
-
-NewsCategory categoryFromDb(String? s) {
-  switch (s) {
-    case 'administration':
-      return NewsCategory.administration;
-    case 'discussion':
-      return NewsCategory.discussion;
-    case 'smi':
-    default:
-      return NewsCategory.smi;
-  }
-}
 
 class _PostsBuckets {
   const _PostsBuckets({
@@ -60,114 +33,18 @@ class _PostsBuckets {
   final List<SocialPost> discussion;
 }
 
-_PostsBuckets _splitPostsByCategory(List<SocialPost> posts) {
-  final List<SocialPost> smi = <SocialPost>[];
-  final List<SocialPost> administration = <SocialPost>[];
-  final List<SocialPost> discussion = <SocialPost>[];
-  for (final SocialPost p in posts) {
-    switch (p.category) {
-      case NewsCategory.smi:
-        smi.add(p);
-      case NewsCategory.administration:
-        administration.add(p);
-      case NewsCategory.discussion:
-        discussion.add(p);
-    }
-  }
-  return _PostsBuckets(
-    smi: smi,
-    administration: administration,
-    discussion: discussion,
-  );
-}
-
-String formatPostTime(String? iso) {
-  if (iso == null) {
-    return '';
-  }
-  final d = DateTime.tryParse(iso);
-  if (d == null) {
-    return '';
-  }
-  final now = DateTime.now();
-  final local = d.toLocal();
-  final diff = now.difference(d);
-  if (diff.inMinutes < 1) {
-    return 'только что';
-  }
-  if (diff.inMinutes < 60) {
-    return '${diff.inMinutes} мин. назад';
-  }
-  if (diff.inHours < 24) {
-    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-  }
-  if (diff.inDays < 7) {
-    return '${diff.inDays} дн. назад';
-  }
-  return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}.${local.year}';
-}
-
-String _fileExtFromName(String name) {
-  final int i = name.lastIndexOf('.');
-  if (i < 0 || i >= name.length - 1) {
-    return 'jpg';
-  }
-  return name.substring(i + 1).toLowerCase();
-}
-
-String _contentTypeForMedia(String kind, String ext) {
-  if (kind == 'video') {
-    return switch (ext) {
-      'webm' => 'video/webm',
-      'mov' => 'video/quicktime',
-      _ => 'video/mp4',
-    };
-  }
-  return switch (ext) {
-    'png' => 'image/png',
-    'gif' => 'image/gif',
-    'webp' => 'image/webp',
-    _ => 'image/jpeg',
-  };
-}
-
-/// Загрузка в бакет [CityDataService.cityMediaBucket], возвращает публичный URL.
-Future<String> _uploadCityMediaFile(
-  XFile file, {
-  required String mediaKind,
-}) async {
-  final c = CityDataService.client;
-  if (c == null) {
-    throw StateError('Supabase не инициализирован');
-  }
-  final String ext = _fileExtFromName(file.name);
-  final String uid = c.auth.currentUser?.id ?? 'anon';
-  final String path = 'news/$uid/${DateTime.now().millisecondsSinceEpoch}.$ext';
-  final String contentType = _contentTypeForMedia(mediaKind, ext);
-  final bucket = c.storage.from(CityDataService.cityMediaBucket);
-  if (kIsWeb) {
-    final bytes = await file.readAsBytes();
-    await bucket.uploadBinary(
-      path,
-      bytes,
-      fileOptions: FileOptions(upsert: true, contentType: contentType),
-    );
-  } else {
-    await bucket.upload(
-      path,
-      File(file.path),
-      fileOptions: FileOptions(upsert: true, contentType: contentType),
-    );
-  }
-  return bucket.getPublicUrl(path);
-}
-
 SocialPost socialPostFromMap(Map<String, dynamic> m) {
   final String bodyRaw =
       (m['body'] as String?)?.trim() ??
       (m['content'] as String?)?.trim() ??
       (m['text'] as String?)?.trim() ??
       '';
+  final List<String> imageUrls =
+      (m['image_urls'] as List?)
+          ?.map((dynamic e) => e.toString().trim())
+          .where((String s) => s.isNotEmpty)
+          .toList() ??
+      <String>[];
   String? mediaUrl = (m['media_url'] as String?)?.trim();
   String? mediaType = (m['media_type'] as String?)?.trim();
   if (mediaUrl == null || mediaUrl.isEmpty) {
@@ -179,23 +56,54 @@ SocialPost socialPostFromMap(Map<String, dynamic> m) {
     } else if (iu != null && iu.isNotEmpty) {
       mediaUrl = iu;
       mediaType = 'image';
+    } else if (imageUrls.isNotEmpty) {
+      mediaUrl = imageUrls.first;
+      mediaType = 'image';
     }
   }
+  String authorLabel = '';
+  String? authorAvatar;
+  final Object? ar = m['author'];
+  if (ar is Map) {
+    final String? fn = (ar['first_name'] as String?)?.trim();
+    final String? un = (ar['username'] as String?)?.trim();
+    if (fn != null && fn.isNotEmpty) {
+      authorLabel = fn;
+    } else if (un != null && un.isNotEmpty) {
+      authorLabel = '@$un';
+    }
+    authorAvatar = (ar['avatar_url'] as String?)?.trim();
+  } else if (m['author'] is String) {
+    authorLabel = (m['author'] as String).trim();
+  }
+  final String? createdRaw =
+      m['created_at'] as String? ??
+      m['published_at'] as String? ??
+      m['inserted_at'] as String?;
+  final DateTime? createdUtc = createdRaw == null
+      ? null
+      : DateTime.tryParse(createdRaw)?.toUtc();
   return SocialPost(
     id: m['id']?.toString() ?? '',
-    author: m['author'] as String? ?? '',
-    time: formatPostTime(
-      m['created_at'] as String? ??
-          m['published_at'] as String? ??
-          m['inserted_at'] as String?,
-    ),
+    author: authorLabel,
+    authorAvatarUrl: authorAvatar,
+    time: formatPostTime(createdRaw),
     title: m['title'] as String? ?? '',
     body: bodyRaw,
     category: categoryFromDb(m['category'] as String?),
     mediaUrl: mediaUrl,
     mediaType: mediaType,
-    likes: (m['likes'] as num?)?.toInt() ?? 0,
-    comments: (m['comments'] as num?)?.toInt() ?? 0,
+    likes:
+        (m['likes_count'] as num?)?.toInt() ??
+        (m['likes'] as num?)?.toInt() ??
+        0,
+    comments:
+        (m['comments_count'] as num?)?.toInt() ??
+        (m['comments'] as num?)?.toInt() ??
+        0,
+    imageUrls: imageUrls,
+    userId: m['user_id']?.toString(),
+    createdAtUtc: createdUtc,
   );
 }
 
@@ -203,6 +111,7 @@ class SocialPost {
   SocialPost({
     required this.id,
     required this.author,
+    this.authorAvatarUrl,
     required this.time,
     required this.title,
     this.body = '',
@@ -211,10 +120,14 @@ class SocialPost {
     this.mediaType,
     this.likes = 0,
     this.comments = 0,
+    this.imageUrls = const <String>[],
+    this.userId,
+    this.createdAtUtc,
   });
 
   final String id;
   String author;
+  final String? authorAvatarUrl;
   String time;
   String title;
   String body;
@@ -228,6 +141,14 @@ class SocialPost {
   int likes;
   int comments;
   bool isLiked = false;
+
+  /// Галерея поста (`posts.image_urls`).
+  final List<String> imageUrls;
+
+  /// Автор (`posts.user_id`).
+  final String? userId;
+
+  final DateTime? createdAtUtc;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -240,27 +161,228 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  final ImagePicker _mediaPicker = ImagePicker();
   StreamSubscription<AuthState>? _authSub;
-  Stream<List<Map<String, dynamic>>>? _newsStream;
+  StreamSubscription<void>? _feedInvalidateSub;
+  VoidCallback? _onFeedInvalidateBus;
+  FeedService? _feed;
+  FeedAccess _feedAccess = FeedAccess.fallbackUser();
+  final Map<NewsCategory, List<SocialPost>> _feedPages =
+      <NewsCategory, List<SocialPost>>{
+        NewsCategory.smi: <SocialPost>[],
+        NewsCategory.administration: <SocialPost>[],
+        NewsCategory.discussion: <SocialPost>[],
+      };
+  final Map<NewsCategory, int> _feedOffset = <NewsCategory, int>{
+    NewsCategory.smi: 0,
+    NewsCategory.administration: 0,
+    NewsCategory.discussion: 0,
+  };
+  final Map<NewsCategory, bool> _feedHasMore = <NewsCategory, bool>{
+    NewsCategory.smi: true,
+    NewsCategory.administration: true,
+    NewsCategory.discussion: true,
+  };
+  final Map<NewsCategory, bool> _feedLoadingMore = <NewsCategory, bool>{
+    NewsCategory.smi: false,
+    NewsCategory.administration: false,
+    NewsCategory.discussion: false,
+  };
+  final Map<NewsCategory, ScrollController> _feedScrollControllers =
+      <NewsCategory, ScrollController>{
+        NewsCategory.smi: ScrollController(),
+        NewsCategory.administration: ScrollController(),
+        NewsCategory.discussion: ScrollController(),
+      };
+  bool _feedBootstrapping = false;
   Future<WeatherCurrent?>? _portalWeatherFuture;
-  bool _portalBgPrecached = false;
+  bool _darkBgPrecached = false;
+
+  Future<void> _bootstrapFeed() async {
+    if (_feed == null) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() => _feedBootstrapping = true);
+    try {
+      _feedAccess = await _feed!.loadMyAccess();
+      for (final NewsCategory c in NewsCategory.values) {
+        _feedOffset[c] = 0;
+        _feedHasMore[c] = true;
+        _feedPages[c] = <SocialPost>[];
+      }
+      await _loadFeedPage(NewsCategory.smi, reset: true);
+      await _loadFeedPage(NewsCategory.administration, reset: true);
+      await _loadFeedPage(NewsCategory.discussion, reset: true);
+    } finally {
+      if (mounted) {
+        setState(() => _feedBootstrapping = false);
+      }
+    }
+  }
+
+  Future<void> _prependPostFromRow(Map<String, dynamic> row) async {
+    if (_feed == null) {
+      return;
+    }
+    final SocialPost p = socialPostFromMap(row);
+    final NewsCategory cat = p.category;
+    try {
+      final Set<String> liked = await _feed!.fetchMyLikedPostIds(<String>{
+        p.id,
+      });
+      p.isLiked = liked.contains(p.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final List<SocialPost> cur = List<SocialPost>.from(
+          _feedPages[cat] ?? <SocialPost>[],
+        );
+        final List<SocialPost> next = <SocialPost>[
+          p,
+          ...cur.where((SocialPost x) => x.id != p.id),
+        ];
+        _feedPages[cat] = next;
+        _feedOffset[cat] = next.length;
+        FeedPostStateHub.instance.syncFromCounts(
+          p.id,
+          likes: p.likes,
+          comments: p.comments,
+          isLiked: p.isLiked,
+        );
+      });
+    } on Object {
+      if (mounted) {
+        unawaited(_bootstrapFeed());
+      }
+    }
+  }
+
+  Future<void> _loadFeedPage(NewsCategory cat, {required bool reset}) async {
+    if (_feed == null) {
+      return;
+    }
+    if (_feedLoadingMore[cat] == true) {
+      return;
+    }
+    final int off = reset ? 0 : (_feedOffset[cat] ?? 0);
+    if (!reset && (_feedHasMore[cat] != true)) {
+      return;
+    }
+    _feedLoadingMore[cat] = true;
+    if (mounted) {
+      setState(() {});
+    }
+    try {
+      final List<Map<String, dynamic>> rows = await _feed!.fetchPostsPage(
+        category: cat,
+        offset: off,
+      );
+      final List<SocialPost> mapped = rows
+          .map(socialPostFromMap)
+          .toList(growable: false);
+      final Set<String> ids = mapped.map((SocialPost p) => p.id).toSet();
+      final Set<String> liked = await _feed!.fetchMyLikedPostIds(ids);
+      for (final SocialPost p in mapped) {
+        p.isLiked = liked.contains(p.id);
+        FeedPostStateHub.instance.syncFromCounts(
+          p.id,
+          likes: p.likes,
+          comments: p.comments,
+          isLiked: p.isLiked,
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (reset) {
+          _feedPages[cat] = mapped;
+          _feedOffset[cat] = mapped.length;
+        } else {
+          _feedPages[cat] = <SocialPost>[
+            ..._feedPages[cat] ?? <SocialPost>[],
+            ...mapped,
+          ];
+          _feedOffset[cat] = (_feedOffset[cat] ?? 0) + mapped.length;
+        }
+        _feedHasMore[cat] = mapped.length >= FeedService.pageSize;
+        _feedLoadingMore[cat] = false;
+      });
+    } on Object {
+      if (mounted) {
+        setState(() => _feedLoadingMore[cat] = false);
+      }
+    }
+  }
+
+  void _onFeedScroll(NewsCategory cat) {
+    final ScrollController sc = _feedScrollControllers[cat]!;
+    if (!sc.hasClients || _feed == null) {
+      return;
+    }
+    if (_feedLoadingMore[cat] == true || _feedHasMore[cat] != true) {
+      return;
+    }
+    final double max = sc.position.maxScrollExtent;
+    if (max <= 0) {
+      return;
+    }
+    if (sc.position.pixels > max - 280) {
+      unawaited(_loadFeedPage(cat, reset: false));
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     if (supabaseAppReady) {
-      _newsStream = CityDataService.watchNewsList();
+      _feed = FeedService.tryOf(Supabase.instance.client);
       _portalWeatherFuture = WeatherService.hasApiKey
           ? WeatherService.fetchCurrent()
           : null;
+      if (_feed != null) {
+        unawaited(_bootstrapFeed());
+        _feedInvalidateSub = _feed!.feedInvalidateStream().listen((_) {
+          if (mounted) {
+            unawaited(_bootstrapFeed());
+          }
+        });
+        _onFeedInvalidateBus = () {
+          if (!mounted) {
+            return;
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            final FeedInvalidateSignal? s =
+                FeedInvalidateBus.instance.signal.value;
+            if (s == null) {
+              return;
+            }
+            if (s.insertedPostRow != null) {
+              unawaited(_prependPostFromRow(s.insertedPostRow!));
+            } else {
+              unawaited(_bootstrapFeed());
+            }
+          });
+        };
+        FeedInvalidateBus.instance.signal.addListener(_onFeedInvalidateBus!);
+      }
+      for (final NewsCategory c in NewsCategory.values) {
+        _feedScrollControllers[c]!.addListener(() => _onFeedScroll(c));
+      }
       _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((
         AuthState data,
       ) {
         if (data.event == AuthChangeEvent.signedIn ||
             data.event == AuthChangeEvent.signedOut) {
           if (mounted) {
+            unawaited(_bootstrapFeed());
             setState(() {});
           }
         }
@@ -271,573 +393,509 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_portalBgPrecached) {
-      _portalBgPrecached = true;
-      unawaited(precacheImage(const AssetImage(kPortalAssetBgBottom), context));
-      unawaited(precacheImage(const AssetImage(kPortalAssetBgHeader), context));
+    if (!_darkBgPrecached) {
+      _darkBgPrecached = true;
+      unawaited(precacheImage(AssetImage(kDarkThemeBackgroundAsset), context));
     }
   }
 
   @override
   void dispose() {
+    if (_onFeedInvalidateBus != null) {
+      FeedInvalidateBus.instance.signal.removeListener(_onFeedInvalidateBus!);
+      _onFeedInvalidateBus = null;
+    }
+    _feedInvalidateSub?.cancel();
     _authSub?.cancel();
+    for (final ScrollController sc in _feedScrollControllers.values) {
+      sc.dispose();
+    }
     _tabController.dispose();
     super.dispose();
   }
 
-  Widget buildCategoryFeed(List<SocialPost> items) {
+  Widget buildCategoryFeed(List<SocialPost> items, NewsCategory category) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            'Пока нет публикаций',
-            style: GoogleFonts.montserrat(
-              fontSize: 16,
-              color: isDark ? Colors.white70 : Colors.grey[600],
-            ),
+    final ScrollController sc = _feedScrollControllers[category]!;
+    final bool showLoader = _feedLoadingMore[category] == true;
+    final int n = items.length;
+    if (n == 0 && !_feedBootstrapping) {
+      return ColoredBox(
+        color: Colors.transparent,
+        child: ListView(
+          controller: sc,
+          padding: const EdgeInsets.fromLTRB(
+            kScreenHorizontalPadding,
+            12,
+            kScreenHorizontalPadding,
+            130,
           ),
+          children: <Widget>[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Пока нет публикаций',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 16,
+                    color: isDark ? Colors.white70 : Colors.grey[600],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(
-        kScreenHorizontalPadding,
-        12,
-        kScreenHorizontalPadding,
-        130,
-      ),
-      itemCount: items.length,
-      separatorBuilder: (BuildContext context, int index) =>
-          const SizedBox(height: kCloudListSpacing),
-      itemBuilder: (BuildContext context, int index) {
-        final p = items[index];
-        return SocialNewsCard(
-          post: p,
-          onLike: () {
-            setState(() {
-              if (p.isLiked) {
-                p.likes = (p.likes - 1).clamp(0, 1 << 30);
-              } else {
-                p.likes += 1;
+    return ColoredBox(
+      color: Colors.transparent,
+      child: ListView.separated(
+        addAutomaticKeepAlives: true,
+        controller: sc,
+        padding: const EdgeInsets.fromLTRB(
+          kScreenHorizontalPadding,
+          12,
+          kScreenHorizontalPadding,
+          130,
+        ),
+        itemCount: n + (showLoader ? 1 : 0),
+        separatorBuilder: (_, _) => const SizedBox(height: kCloudListSpacing),
+        itemBuilder: (BuildContext context, int index) {
+          if (index >= n) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final SocialPost p = items[index];
+          return SocialNewsCard(
+            post: p,
+            onLike: () {
+              if (_feed == null) {
+                return;
               }
-              p.isLiked = !p.isLiked;
-            });
-          },
-          onComment: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Комментарии — в разработке')),
-            );
-          },
-          onShare: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Поделиться в чате — в разработке')),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> openCreateSheet() async {
-    final formKey = GlobalKey<FormState>();
-    String title = '';
-    String body = '';
-    XFile? pickedFile;
-    String? pickedKind; // 'image' | 'video'
-    var targetCategory = NewsCategory.values[_tabController.index];
-
-    if (!context.mounted) {
-      return;
-    }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 16,
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
-          ),
-          child: StatefulBuilder(
-            builder:
-                (
-                  BuildContext context,
-                  void Function(void Function()) setModal,
-                ) {
-                  final ColorScheme sheetCs = Theme.of(
-                    sheetContext,
-                  ).colorScheme;
-                  return Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        Text(
-                          'Новая публикация',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: sheetCs.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        DropdownButtonFormField<NewsCategory>(
-                          key: ValueKey<NewsCategory>(targetCategory),
-                          initialValue: targetCategory,
-                          decoration: InputDecoration(
-                            labelText: 'Категория',
-                            border: const OutlineInputBorder(),
-                            filled: true,
-                            fillColor: sheetCs.surfaceContainerHighest,
-                          ),
-                          items: NewsCategory.values
-                              .map(
-                                (NewsCategory c) =>
-                                    DropdownMenuItem<NewsCategory>(
-                                      value: c,
-                                      child: Text(categoryLabelRu(c)),
-                                    ),
-                              )
-                              .toList(),
-                          onChanged: (NewsCategory? c) {
-                            if (c == null) {
-                              return;
-                            }
-                            setModal(() {
-                              targetCategory = c;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          decoration: InputDecoration(
-                            labelText: 'Заголовок',
-                            border: const OutlineInputBorder(),
-                            filled: true,
-                            fillColor: sheetCs.surfaceContainerHighest,
-                          ),
-                          maxLines: 2,
-                          validator: (String? v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Введите заголовок';
-                            }
-                            return null;
-                          },
-                          onSaved: (String? v) => title = v?.trim() ?? '',
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          decoration: InputDecoration(
-                            labelText: 'Текст',
-                            border: const OutlineInputBorder(),
-                            filled: true,
-                            fillColor: sheetCs.surfaceContainerHighest,
-                            alignLabelWithHint: true,
-                            hintText: 'Текст новости',
-                          ),
-                          minLines: 4,
-                          maxLines: 10,
-                          validator: (String? v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Введите текст';
-                            }
-                            return null;
-                          },
-                          onSaved: (String? v) => body = v?.trim() ?? '',
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: <Widget>[
-                            IconButton(
-                              icon: Icon(
-                                Icons.photo_camera_outlined,
-                                color:
-                                    pickedFile != null && pickedKind == 'image'
-                                    ? kPrimaryBlue
-                                    : sheetCs.onSurface.withValues(alpha: 0.55),
-                                size: 28,
-                              ),
-                              tooltip: 'Фото',
-                              onPressed: () async {
-                                final XFile? x = await _mediaPicker.pickImage(
-                                  source: ImageSource.gallery,
-                                  maxWidth: 1920,
-                                  imageQuality: 85,
-                                );
-                                if (x == null) {
-                                  return;
-                                }
-                                setModal(() {
-                                  pickedFile = x;
-                                  pickedKind = 'image';
-                                });
-                              },
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.videocam_outlined,
-                                color:
-                                    pickedFile != null && pickedKind == 'video'
-                                    ? kPrimaryBlue
-                                    : sheetCs.onSurface.withValues(alpha: 0.55),
-                                size: 28,
-                              ),
-                              tooltip: 'Видео',
-                              onPressed: () async {
-                                final XFile? x = await _mediaPicker.pickVideo(
-                                  source: ImageSource.gallery,
-                                );
-                                if (x == null) {
-                                  return;
-                                }
-                                setModal(() {
-                                  pickedFile = x;
-                                  pickedKind = 'video';
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                        if (pickedFile != null) ...<Widget>[
-                          const SizedBox(height: 4),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Text(
-                              pickedKind == 'video'
-                                  ? 'Видео: ${pickedFile!.name}'
-                                  : 'Фото: ${pickedFile!.name}',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: sheetCs.onSurface.withValues(
-                                  alpha: 0.55,
-                                ),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 20),
-                        FilledButton(
-                          onPressed: () async {
-                            if (!formKey.currentState!.validate()) {
-                              return;
-                            }
-                            if (!CityDataService.isCurrentUserAdminSync()) {
-                              if (sheetContext.mounted) {
-                                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Войдите как администратор: Профиль → вход по email',
-                                    ),
-                                  ),
-                                );
-                              }
-                              return;
-                            }
-                            formKey.currentState!.save();
-                            String? mediaUrl;
-                            String? mediaType;
-                            if (pickedFile != null && pickedKind != null) {
-                              try {
-                                mediaUrl = await _uploadCityMediaFile(
-                                  pickedFile!,
-                                  mediaKind: pickedKind!,
-                                );
-                                mediaType = pickedKind;
-                              } on Object catch (e) {
-                                if (sheetContext.mounted) {
-                                  ScaffoldMessenger.of(
-                                    sheetContext,
-                                  ).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Загрузка файла: $e'),
-                                    ),
-                                  );
-                                }
-                                return;
-                              }
-                            }
-                            try {
-                              await CityDataService.insertNewsRow(
-                                category: categoryToDb(targetCategory),
-                                title: title,
-                                body: body,
-                                mediaUrl: mediaUrl,
-                                mediaType: mediaType,
-                              );
-                            } on Object catch (e) {
-                              if (sheetContext.mounted) {
-                                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                  SnackBar(content: Text('Сохранение: $e')),
-                                );
-                              }
-                              return;
-                            }
-                            if (sheetContext.mounted) {
-                              Navigator.pop(sheetContext);
-                            }
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Публикация сохранена'),
-                                ),
-                              );
-                            }
-                          },
-                          style: FilledButton.styleFrom(
-                            backgroundColor: kPrimaryBlue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text('Опубликовать'),
-                        ),
-                      ],
-                    ),
+              final FeedPostStateHub hub = FeedPostStateHub.instance;
+              final ValueNotifier<FeedPostCounters> n = hub.notifierFor(p.id);
+              final FeedPostCounters before = n.value;
+              hub.toggleLikeOptimistic(p.id, before.isLiked);
+              setState(() {
+                p.isLiked = n.value.isLiked;
+                p.likes = n.value.likes;
+                p.comments = n.value.comments;
+              });
+              unawaited(() async {
+                try {
+                  await _feed!.togglePostLike(
+                    postId: p.id,
+                    currentlyLiked: before.isLiked,
                   );
-                },
-          ),
-        );
-      },
+                  final Map<String, dynamic>? row = await _feed!.fetchPostRow(
+                    p.id,
+                  );
+                  if (row != null && mounted) {
+                    hub.applyServerRow(
+                      p.id,
+                      row,
+                      isLiked: hub.notifierFor(p.id).value.isLiked,
+                    );
+                    setState(() {
+                      p.isLiked = hub.notifierFor(p.id).value.isLiked;
+                      p.likes = hub.notifierFor(p.id).value.likes;
+                      p.comments = hub.notifierFor(p.id).value.comments;
+                    });
+                  }
+                } on Object {
+                  if (mounted) {
+                    n.value = before;
+                    setState(() {
+                      p.isLiked = before.isLiked;
+                      p.likes = before.likes;
+                      p.comments = before.comments;
+                    });
+                  }
+                }
+              }());
+            },
+            onComment: () {
+              if (_feed == null) {
+                return;
+              }
+              unawaited(
+                showFeedCommentsBottomSheet(
+                  context: context,
+                  feed: _feed!,
+                  postId: p.id,
+                  postTitle: p.title,
+                ),
+              );
+            },
+            onShare: () {
+              if (_feed == null) {
+                return;
+              }
+              final FeedPostCounters s = FeedPostStateHub.instance
+                  .notifierFor(p.id)
+                  .value;
+              p.isLiked = s.isLiked;
+              p.likes = s.likes;
+              p.comments = s.comments;
+              unawaited(
+                showFeedShareToChatDialog(
+                  context: context,
+                  feed: _feed!,
+                  post: p,
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!supabaseAppReady || _newsStream == null) {
+    if (!supabaseAppReady || _feed == null) {
       return Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              'Укажите SUPABASE_URL и SUPABASE_ANON_KEY '
-              '(api_keys.example.json → api_keys.json, '
-              'flutter run --dart-define-from-file=api_keys.json)',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.montserrat(fontSize: 15, height: 1.35),
+        backgroundColor: Colors.transparent,
+        body: Theme(
+          data: Theme.of(context).copyWith(canvasColor: Colors.transparent),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Укажите SUPABASE_URL и SUPABASE_ANON_KEY '
+                '(api_keys.example.json → api_keys.json, '
+                'flutter run --dart-define-from-file=api_keys.json)',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.montserrat(fontSize: 15, height: 1.35),
+              ),
             ),
           ),
         ),
       );
     }
 
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _newsStream!,
-      builder:
-          (
-            BuildContext context,
-            AsyncSnapshot<List<Map<String, dynamic>>> newsSnap,
-          ) {
-            final bool isAdmin = CityDataService.isCurrentUserAdminSync();
-            final bool newsWaiting =
-                newsSnap.connectionState == ConnectionState.waiting &&
-                !newsSnap.hasData;
-            final List<Map<String, dynamic>> raw =
-                newsSnap.data ?? <Map<String, dynamic>>[];
-            final List<SocialPost> posts = raw.map(socialPostFromMap).toList();
-            final _PostsBuckets byCat = _splitPostsByCategory(posts);
-            final bool isDark = Theme.of(context).brightness == Brightness.dark;
-            final EdgeInsets fabPad = EdgeInsets.only(
-              bottom: MediaQuery.paddingOf(context).bottom + 72,
-            );
-            return Scaffold(
-              extendBody: true,
-              extendBodyBehindAppBar: true,
-              backgroundColor: isDark ? Colors.transparent : Colors.white,
-              floatingActionButton: isAdmin
-                  ? Padding(
-                      padding: fabPad,
-                      child: FloatingActionButton(
-                        onPressed: openCreateSheet,
-                        backgroundColor: kPrimaryBlue,
-                        foregroundColor: Colors.white,
-                        child: const Icon(Icons.add, size: 30),
-                      ),
-                    )
-                  : null,
-              floatingActionButtonLocation:
-                  FloatingActionButtonLocation.endFloat,
-              body: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  if (!isDark)
-                    const Positioned.fill(
-                      child: ColoredBox(color: Colors.white),
-                    ),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      ignoring: !isDark,
-                      child: AnimatedOpacity(
-                        opacity: isDark ? 1 : 0,
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeInOut,
-                        child: const PortalHomeBackgroundStack(),
-                      ),
-                    ),
-                  ),
-                  SafeArea(
-                    bottom: false,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            left: 20,
-                            right: 100,
-                            top: 6,
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: <Widget>[
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: Image.asset(
-                                  'assets/app_icon.png',
-                                  width: 44,
-                                  height: 44,
-                                  fit: BoxFit.cover,
-                                  errorBuilder:
-                                      (
-                                        BuildContext context,
-                                        Object error,
-                                        StackTrace? stackTrace,
-                                      ) =>
-                                          const SizedBox(width: 44, height: 44),
-                                ),
+    final _PostsBuckets byCat = _PostsBuckets(
+      smi: List<SocialPost>.from(
+        _feedPages[NewsCategory.smi] ?? <SocialPost>[],
+      ),
+      administration: List<SocialPost>.from(
+        _feedPages[NewsCategory.administration] ?? <SocialPost>[],
+      ),
+      discussion: List<SocialPost>.from(
+        _feedPages[NewsCategory.discussion] ?? <SocialPost>[],
+      ),
+    );
+    return Builder(
+      builder: (BuildContext context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final double screenW = MediaQuery.sizeOf(context).width;
+        final double screenH = MediaQuery.sizeOf(context).height;
+        final EdgeInsets safePad = MediaQuery.paddingOf(context);
+        final double headerLeft = screenW < 360 ? 14.0 : 20.0;
+        final double headerRightInset = (safePad.right + 84.0).clamp(
+          78.0,
+          120.0,
+        );
+        final double lentaFont = isDark ? 14.5 : 14.5;
+        final double cityTitleFont = isDark ? 16.5 : 16.5;
+        final double citySubFont = isDark ? 11.0 : 11.0;
+        final double heraldSize = screenW < 360 ? 28.0 : 30.0;
+        // Светлая тема: те же вертикальные отступы, что и в тёмной (портал).
+        final double topSkyGap = (screenH * 0.088 + 34).clamp(58.0, 118.0);
+        final double headerExtraDrop = (screenH * 0.078).clamp(46.0, 96.0);
+        final double headerTopInset = (topSkyGap + headerExtraDrop).clamp(
+          72.0,
+          178.0,
+        );
+        return Scaffold(
+          extendBody: true,
+          extendBodyBehindAppBar: true,
+          backgroundColor: Colors.transparent,
+          body: Theme(
+            data: Theme.of(context).copyWith(canvasColor: Colors.transparent),
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.transparent,
+                    child: SafeArea(
+                      bottom: false,
+                      minimum: const EdgeInsets.only(top: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            SizedBox(height: headerTopInset),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                left: headerLeft,
+                                right: headerRightInset,
+                                bottom: 6,
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      'Лесосибирск',
-                                      style: GoogleFonts.montserrat(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w700,
-                                        color: isDark
-                                            ? Colors.white
-                                            : const Color(0xFF1C1C1E),
-                                        shadows: isDark
-                                            ? const <Shadow>[
-                                                Shadow(
-                                                  color: Color(0x66000000),
-                                                  offset: Offset(0, 1),
-                                                  blurRadius: 4,
-                                                ),
-                                              ]
-                                            : null,
-                                      ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: <Widget>[
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.asset(
+                                      'assets/app_icon.png',
+                                      width: heraldSize,
+                                      height: heraldSize,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (
+                                            BuildContext context,
+                                            Object error,
+                                            StackTrace? stackTrace,
+                                          ) {
+                                            return SizedBox(
+                                              width: heraldSize,
+                                              height: heraldSize,
+                                            );
+                                          },
                                     ),
-                                    Text(
-                                      'город леса',
-                                      style: GoogleFonts.montserrat(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w400,
-                                        color: isDark
-                                            ? Colors.white.withValues(
-                                                alpha: 0.8,
-                                              )
-                                            : const Color(0xFF6C6C70),
-                                      ),
+                                  ),
+                                  SizedBox(width: screenW < 360 ? 8 : 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          'Лесосибирск',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.montserrat(
+                                            fontSize: cityTitleFont,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.15,
+                                            color: Colors.white,
+                                            shadows: const <Shadow>[
+                                              Shadow(
+                                                color: Color(0x66000000),
+                                                offset: Offset(0, 1),
+                                                blurRadius: 3,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Text(
+                                          'город леса',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.montserrat(
+                                            fontSize: citySubFont,
+                                            fontWeight: FontWeight.w400,
+                                            height: 1.15,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.9,
+                                            ),
+                                            shadows: const <Shadow>[
+                                              Shadow(
+                                                color: Color(0x59000000),
+                                                offset: Offset(0, 1),
+                                                blurRadius: 2,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: _PortalNewsTabBarShell(
-                            isDark: isDark,
-                            child: TabBar(
-                              controller: _tabController,
-                              labelColor: isDark ? kPortalGold : kPrimaryBlue,
-                              unselectedLabelColor: isDark
-                                  ? Colors.white.withValues(alpha: 0.55)
-                                  : Theme.of(context).colorScheme.onSurface
-                                        .withValues(alpha: 0.45),
-                              indicatorColor: kPortalGold,
-                              indicatorWeight: 2.5,
-                              labelStyle: GoogleFonts.montserrat(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                              unselectedLabelStyle: GoogleFonts.montserrat(
-                                fontWeight: FontWeight.w500,
-                                fontSize: 12,
-                              ),
-                              indicatorSize: TabBarIndicatorSize.label,
-                              dividerColor: Colors.transparent,
-                              tabs: const <Widget>[
-                                Tab(
-                                  height: 48,
-                                  icon: Icon(Icons.newspaper, size: 20),
-                                  text: 'СМИ',
-                                ),
-                                Tab(
-                                  height: 48,
-                                  icon: Icon(Icons.campaign, size: 20),
-                                  text: 'Важные',
-                                ),
-                                Tab(
-                                  height: 48,
-                                  icon: Icon(Icons.forum, size: 20),
-                                  text: 'Обсуждение',
-                                ),
-                              ],
                             ),
-                          ),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                left: headerLeft,
+                                right: headerRightInset,
+                                bottom: 6,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Городская лента',
+                                  textAlign: TextAlign.left,
+                                  style: GoogleFonts.montserrat(
+                                    fontSize: lentaFont,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.15,
+                                    height: 1.2,
+                                    color: isDark ? Colors.white : kPineGreen,
+                                    shadows: isDark
+                                        ? const <Shadow>[
+                                            Shadow(
+                                              color: Color(0x59000000),
+                                              offset: Offset(0, 1),
+                                              blurRadius: 2,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4, bottom: 4),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: _PortalNewsTabBarShell(
+                                          isDark: isDark,
+                                          child: TabBar(
+                                            controller: _tabController,
+                                            isScrollable: true,
+                                            tabAlignment: TabAlignment.start,
+                                            padding: EdgeInsets.zero,
+                                            labelColor: isDark
+                                                ? kPortalGold
+                                                : kPineGreen,
+                                            unselectedLabelColor: isDark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.55,
+                                                  )
+                                                : kNavOliveMuted,
+                                            indicatorColor: isDark
+                                                ? kPortalGold
+                                                : kPineGreen,
+                                            indicatorWeight: 2.5,
+                                            labelStyle: GoogleFonts.montserrat(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                            unselectedLabelStyle:
+                                                GoogleFonts.montserrat(
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 12,
+                                                ),
+                                            indicatorSize:
+                                                TabBarIndicatorSize.label,
+                                            dividerColor: Colors.transparent,
+                                            tabs: const <Widget>[
+                                              Tab(
+                                                height: 48,
+                                                icon: Icon(
+                                                  Icons.newspaper,
+                                                  size: 20,
+                                                ),
+                                                text: 'СМИ',
+                                              ),
+                                              Tab(
+                                                height: 48,
+                                                icon: Icon(
+                                                  Icons.campaign,
+                                                  size: 20,
+                                                ),
+                                                text: 'Важные',
+                                              ),
+                                              Tab(
+                                                height: 48,
+                                                icon: Icon(
+                                                  Icons.forum,
+                                                  size: 20,
+                                                ),
+                                                text: 'Обсуждение',
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      if (_feedAccess.canCreateSomewhere)
+                                        IconButton.filledTonal(
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: isDark
+                                                ? null
+                                                : kEmeraldGlow.withValues(
+                                                    alpha: 0.16,
+                                                  ),
+                                            foregroundColor: isDark
+                                                ? null
+                                                : kPineGreen,
+                                          ),
+                                          onPressed: () async {
+                                            if (_feed == null) {
+                                              return;
+                                            }
+                                            await showFeedComposeSheet(
+                                              context: context,
+                                              feed: _feed!,
+                                              access: _feedAccess,
+                                              initialCategory: NewsCategory
+                                                  .values[_tabController.index],
+                                            );
+                                          },
+                                          icon: const Icon(Icons.add),
+                                          tooltip: 'Новая публикация',
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (_feedBootstrapping)
+                              LinearProgressIndicator(
+                                minHeight: 2,
+                                color: kPrimaryBlue,
+                                backgroundColor: Colors.transparent,
+                              ),
+                            Expanded(
+                              child: ColoredBox(
+                                color: Colors.transparent,
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: TabBarView(
+                                    controller: _tabController,
+                                    physics: const ClampingScrollPhysics(),
+                                    children: <Widget>[
+                                      _KeepAliveFeed(
+                                        child: buildCategoryFeed(
+                                          byCat.smi,
+                                          NewsCategory.smi,
+                                        ),
+                                      ),
+                                      _KeepAliveFeed(
+                                        child: buildCategoryFeed(
+                                          byCat.administration,
+                                          NewsCategory.administration,
+                                        ),
+                                      ),
+                                      _KeepAliveFeed(
+                                        child: buildCategoryFeed(
+                                          byCat.discussion,
+                                          NewsCategory.discussion,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        if (newsWaiting)
-                          const LinearProgressIndicator(minHeight: 2),
-                        Expanded(
-                          child: TabBarView(
-                            controller: _tabController,
-                            physics: const BouncingScrollPhysics(),
-                            children: <Widget>[
-                              _KeepAliveFeed(
-                                child: buildCategoryFeed(byCat.smi),
-                              ),
-                              _KeepAliveFeed(
-                                child: buildCategoryFeed(byCat.administration),
-                              ),
-                              _KeepAliveFeed(
-                                child: buildCategoryFeed(byCat.discussion),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                  PortalHomeWeatherCorner(
-                    future: _portalWeatherFuture,
-                    darkForeground: isDark,
-                  ),
-                ],
-              ),
-            );
-          },
+                ),
+                PortalHomeWeatherCorner(
+                  future: _portalWeatherFuture,
+                  darkForeground: isDark,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -851,17 +909,29 @@ class _PortalNewsTabBarShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!isDark) {
-      return child;
+      return RepaintBoundary(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: kPineGreen.withValues(alpha: 0.1)),
+            ),
+            child: child,
+          ),
+        ),
+      );
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+    // Без BackdropFilter: размытие на весь таб-бар при перелистывании сильно грузит GPU.
+    return RepaintBoundary(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.35),
+            color: Colors.black.withValues(alpha: 0.48),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
           ),
           child: child,
         ),
@@ -887,11 +957,11 @@ class _KeepAliveFeedState extends State<_KeepAliveFeed>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return widget.child;
+    return ColoredBox(color: Colors.transparent, child: widget.child);
   }
 }
 
-class SocialNewsCard extends StatelessWidget {
+class SocialNewsCard extends StatefulWidget {
   const SocialNewsCard({
     super.key,
     required this.post,
@@ -906,6 +976,24 @@ class SocialNewsCard extends StatelessWidget {
   final VoidCallback onShare;
 
   @override
+  State<SocialNewsCard> createState() => _SocialNewsCardState();
+}
+
+class _SocialNewsCardState extends State<SocialNewsCard> {
+  bool _bodyExpanded = false;
+
+  SocialPost get post => widget.post;
+
+  void _openGallery(List<String> urls, int i) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => FeedFullscreenGallery(urls: urls, initialIndex: i),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final ColorScheme cs = Theme.of(context).colorScheme;
@@ -913,7 +1001,8 @@ class SocialNewsCard extends StatelessWidget {
     final Color muted = isDark
         ? Colors.white.withValues(alpha: 0.65)
         : cs.onSurface.withValues(alpha: 0.65);
-    const double kCardRadius = 25;
+    final double kCardRadius = isDark ? 25 : 24;
+    final bool hasGallery = post.imageUrls.isNotEmpty;
 
     final Widget column = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -922,22 +1011,21 @@ class SocialNewsCard extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Row(
             children: <Widget>[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: kPortalGold.withValues(alpha: 0.22),
-                  border: Border.all(
-                    color: kPortalGold.withValues(alpha: 0.55),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.campaign_rounded,
-                  color: kPortalGold,
-                  size: 22,
-                ),
-              ),
+              post.authorAvatarUrl != null && post.authorAvatarUrl!.isNotEmpty
+                  ? CityNetworkImage.avatar(
+                      context: context,
+                      imageUrl: post.authorAvatarUrl,
+                      diameter: 40,
+                      placeholderName: post.author,
+                    )
+                  : CircleAvatar(
+                      radius: 20,
+                      child: Icon(
+                        Icons.campaign_rounded,
+                        color: isDark ? kPortalGold : kEmeraldGlow,
+                        size: 22,
+                      ),
+                    ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -957,6 +1045,9 @@ class SocialNewsCard extends StatelessWidget {
             padding: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
             child: Text(
               post.author,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              softWrap: true,
               style: GoogleFonts.montserrat(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -968,6 +1059,9 @@ class SocialNewsCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             post.title,
+            maxLines: 6,
+            overflow: TextOverflow.ellipsis,
+            softWrap: true,
             style: GoogleFonts.montserrat(
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -976,12 +1070,86 @@ class SocialNewsCard extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 10),
+        if (hasGallery)
+          SizedBox(
+            height: 120,
+            child: ListView.separated(
+              addAutomaticKeepAlives: true,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              itemCount: post.imageUrls.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, int i) {
+                const double thumbH = 120;
+                const double thumbW = thumbH * 16 / 9;
+                return RepaintBoundary(
+                  child: GestureDetector(
+                    onTap: () => _openGallery(post.imageUrls, i),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        width: thumbW,
+                        height: thumbH,
+                        child: ProgressiveCachedImage(
+                          imageUrl: post.imageUrls[i],
+                          width: thumbW,
+                          height: thumbH,
+                          fit: BoxFit.cover,
+                          borderRadius: 0,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          )
+        else if (post.mediaUrl != null &&
+            post.mediaUrl!.isNotEmpty) ...<Widget>[
+          if (post.mediaType == 'video')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: InlineVideoBlock(url: post.mediaUrl!),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GestureDetector(
+                onTap: () => _openGallery(<String>[post.mediaUrl!], 0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: LayoutBuilder(
+                    builder: (BuildContext context, BoxConstraints bc) {
+                      final double w = bc.maxWidth;
+                      double h = w / (16 / 9);
+                      if (h > 300) {
+                        h = 300;
+                      }
+                      return SizedBox(
+                        width: w,
+                        height: h,
+                        child: CityNetworkImage.fillParent(
+                          imageUrl: post.mediaUrl!,
+                          boxFit: BoxFit.cover,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+        ],
         if (post.body.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
               post.body,
+              maxLines: _bodyExpanded ? null : 4,
+              overflow: _bodyExpanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
               style: GoogleFonts.montserrat(
                 fontSize: 15,
                 height: 1.4,
@@ -989,57 +1157,38 @@ class SocialNewsCard extends StatelessWidget {
               ),
             ),
           ),
-        ],
-        const SizedBox(height: 12),
-        if (post.mediaUrl != null && post.mediaUrl!.isNotEmpty) ...<Widget>[
-          if (post.mediaType == 'video')
-            InlineVideoBlock(url: post.mediaUrl!)
-          else
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints bc) {
-                    final double w = bc.maxWidth;
-                    double h = w / (16 / 9);
-                    if (h > 300) {
-                      h = 300;
-                    }
-                    return SizedBox(
-                      width: w,
-                      height: h,
-                      child: CityNetworkImage.fillParent(
-                        imageUrl: post.mediaUrl!,
-                        boxFit: BoxFit.cover,
-                      ),
-                    );
-                  },
-                ),
-              ),
+          if (post.body.length > 140 || post.body.split('\n').length > 4)
+            TextButton(
+              onPressed: () => setState(() => _bodyExpanded = !_bodyExpanded),
+              child: Text(_bodyExpanded ? 'Свернуть' : 'Развернуть'),
             ),
         ],
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Row(
-            children: <Widget>[
-              ActionChipPill(
-                icon: post.isLiked ? Icons.favorite : Icons.favorite_border,
-                label: post.likes.toString(),
-                iconColor: post.isLiked ? const Color(0xFFE91E63) : muted,
-                onPressed: onLike,
-              ),
-              ActionChipPill(
-                icon: Icons.chat_bubble_outline,
-                label: post.comments.toString(),
-                onPressed: onComment,
-              ),
-              ActionChipPill(
-                icon: Icons.send_outlined,
-                label: '',
-                onPressed: onShare,
-              ),
-            ],
+          child: ValueListenableBuilder<FeedPostCounters>(
+            valueListenable: FeedPostStateHub.instance.notifierFor(post.id),
+            builder: (BuildContext context, FeedPostCounters c, _) {
+              return Row(
+                children: <Widget>[
+                  ActionChipPill(
+                    icon: c.isLiked ? Icons.favorite : Icons.favorite_border,
+                    label: c.likes.toString(),
+                    iconColor: c.isLiked ? const Color(0xFFE91E63) : muted,
+                    onPressed: widget.onLike,
+                  ),
+                  ActionChipPill(
+                    icon: Icons.chat_bubble_outline,
+                    label: c.comments.toString(),
+                    onPressed: widget.onComment,
+                  ),
+                  ActionChipPill(
+                    icon: Icons.send_outlined,
+                    label: '',
+                    onPressed: widget.onShare,
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -1049,36 +1198,29 @@ class SocialNewsCard extends StatelessWidget {
       return RepaintBoundary(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(kCardRadius),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(kCardRadius),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              ),
-              child: column,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.52),
+              borderRadius: BorderRadius.circular(kCardRadius),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
             ),
+            child: column,
           ),
         ),
       );
     }
 
     return RepaintBoundary(
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(kCardRadius),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(kCardRadius),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(kCardRadius),
+            border: Border.all(color: kPineGreen.withValues(alpha: 0.08)),
+          ),
+          child: column,
         ),
-        clipBehavior: Clip.antiAlias,
-        child: column,
       ),
     );
   }

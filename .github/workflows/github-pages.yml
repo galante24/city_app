@@ -59,6 +59,11 @@ jobs:
             --dart-define-from-file=api_keys.json \
             --no-wasm-dry-run
 
+      # Дублируем JSON рядом с index.html: [loadSupabaseRuntimeConfigIfMissing] может подхватить по HTTP,
+      # если compile-time define’ы пусты (редкий сценарий / локальная выкладка build/web).
+      - name: Copy api_keys.json into web output (runtime fallback)
+        run: cp api_keys.json build/web/api_keys.json
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

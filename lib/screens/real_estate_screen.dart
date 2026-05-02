@@ -108,9 +108,9 @@ class RealEstateScreen extends StatelessWidget {
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${c.label} — раздел в разработке')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${c.label} — раздел в разработке')));
   }
 
   @override
@@ -136,23 +136,33 @@ class RealEstateScreen extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 0.72,
-              ),
-              itemCount: _items.length,
-              itemBuilder: (BuildContext context, int index) {
-                final _EstateCategory c = _items[index];
-                return _EstateCategoryCard(
-                  category: c,
-                  descriptionColor: _kDescriptionColor,
-                  onTap: () => _onCardTap(context, c),
-                );
-              },
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: <Widget>[
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                          childAspectRatio: 0.72,
+                        ),
+                    delegate: SliverChildBuilderDelegate((
+                      BuildContext context,
+                      int index,
+                    ) {
+                      final _EstateCategory c = _items[index];
+                      return _EstateCategoryCard(
+                        category: c,
+                        descriptionColor: _kDescriptionColor,
+                        onTap: () => _onCardTap(context, c),
+                      );
+                    }, childCount: _items.length),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -244,10 +254,7 @@ class _EstateCategoryCard extends StatelessWidget {
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: borderColor,
-                width: dark ? 1.25 : 1,
-              ),
+              border: Border.all(color: borderColor, width: dark ? 1.25 : 1),
             ),
             child: Stack(
               children: <Widget>[
@@ -265,11 +272,7 @@ class _EstateCategoryCard extends StatelessWidget {
                           boxShadow: iconShadows,
                         ),
                         alignment: Alignment.center,
-                        child: Icon(
-                          category.icon,
-                          size: 28,
-                          color: accent,
-                        ),
+                        child: Icon(category.icon, size: 28, color: accent),
                       ),
                       const SizedBox(height: 10),
                       FittedBox(

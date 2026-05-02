@@ -7,7 +7,7 @@ import '../app_constants.dart';
 import '../config/supabase_ready.dart';
 import '../schedule/lesosibirsk_bus_widgets.dart';
 import '../services/city_data_service.dart';
-import '../widgets/soft_tab_header.dart';
+import '../widgets/clean_screen_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 
 class ScheduleScreen extends StatefulWidget {
@@ -208,23 +208,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     if (!supabaseAppReady || _ferryStream == null) {
       return Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        extendBodyBehindAppBar: true,
+        backgroundColor: Colors.transparent,
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            SoftTabHeader(
+            CleanFloatingHeader(
               title: 'Расписание',
               trailing: SoftHeaderWeatherWithAction(
                 action: Icon(
                   Icons.directions_bus_filled_rounded,
                   size: 28,
-                  color: softHeaderTrailingIconColor(context),
+                  color: cleanHeaderIconColor(context),
                 ),
               ),
             ),
-            const Expanded(
-              child: Center(child: Text('Supabase не подключён')),
-            ),
+            const Expanded(child: Center(child: Text('Supabase не подключён'))),
           ],
         ),
       );
@@ -233,65 +232,69 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _ferryStream!,
-      builder: (BuildContext c, AsyncSnapshot<List<Map<String, dynamic>>> fSnap) {
-        final bool fWait =
-            fSnap.connectionState == ConnectionState.waiting && !fSnap.hasData;
-        final FerryStatusRow? ferry = fSnap.data != null && fSnap.data!.isNotEmpty
-            ? CityDataService.ferryFromScheduleRow(fSnap.data!.first)
-            : null;
+      builder:
+          (BuildContext c, AsyncSnapshot<List<Map<String, dynamic>>> fSnap) {
+            final bool fWait =
+                fSnap.connectionState == ConnectionState.waiting &&
+                !fSnap.hasData;
+            final FerryStatusRow? ferry =
+                fSnap.data != null && fSnap.data!.isNotEmpty
+                ? CityDataService.ferryFromScheduleRow(fSnap.data!.first)
+                : null;
 
-        return Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              SoftTabHeader(
-                title: 'Расписание',
-                trailing: SoftHeaderWeatherWithAction(
-                  action: Icon(
-                    Icons.directions_bus_filled_rounded,
-                    size: 28,
-                    color: softHeaderTrailingIconColor(context),
+            return Scaffold(
+              extendBodyBehindAppBar: true,
+              backgroundColor: Colors.transparent,
+              body: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  CleanFloatingHeader(
+                    title: 'Расписание',
+                    trailing: SoftHeaderWeatherWithAction(
+                      action: Icon(
+                        Icons.directions_bus_filled_rounded,
+                        size: 28,
+                        color: cleanHeaderIconColor(context),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              if (fWait) const LinearProgressIndicator(minHeight: 2),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
-                  children: <Widget>[
-                    Card(
-                      color: Theme.of(c).colorScheme.surface,
-                      clipBehavior: Clip.antiAlias,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: _ferryStrip(
-                        ferry: ferry,
-                        loading: fWait,
-                        isAdmin: isAdmin,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 8),
-                      child: Text(
-                        'Автобусы',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.onSurface,
+                  if (fWait) const LinearProgressIndicator(minHeight: 2),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
+                      children: <Widget>[
+                        Card(
+                          color: Theme.of(c).colorScheme.surface,
+                          clipBehavior: Clip.antiAlias,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: _ferryStrip(
+                            ferry: ferry,
+                            loading: fWait,
+                            isAdmin: isAdmin,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 20),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 8),
+                          child: Text(
+                            'Автобусы',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        const LesosibirskBusesSection(),
+                      ],
                     ),
-                    const LesosibirskBusesSection(),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
-      },
+            );
+          },
     );
   }
 }
