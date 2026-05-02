@@ -12,7 +12,7 @@ import '../../services/feed_service.dart';
 import '../../utils/social_feed_format.dart';
 import '../city_network_image.dart';
 import '../media_progressive_image.dart';
-import 'feed_fullscreen_gallery.dart';
+import 'comment_item.dart';
 
 /// Комментарии к посту в модальном окне (без перехода на экран поста).
 Future<void> showFeedCommentsBottomSheet({
@@ -119,6 +119,9 @@ class _FeedCommentsSheetState extends State<_FeedCommentsSheet> {
     if (_sending) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
     setState(() => _sending = true);
     try {
       await widget.feed.addComment(
@@ -151,7 +154,10 @@ class _FeedCommentsSheetState extends State<_FeedCommentsSheet> {
       return;
     }
     final List<XFile> files = await _picker.pickMultiImage(imageQuality: 88);
-    if (files.isEmpty || !mounted) {
+    if (files.isEmpty) {
+      return;
+    }
+    if (!mounted) {
       return;
     }
     setState(() => _sending = true);
@@ -298,12 +304,7 @@ class _FeedCommentsSheetState extends State<_FeedCommentsSheet> {
     final ThemeData theme = Theme.of(context);
     final String id = row['id'].toString();
     final String body = (row['body'] as String?) ?? '';
-    final List<String> imgs =
-        (row['image_urls'] as List?)
-            ?.map((dynamic e) => e.toString())
-            .where((String s) => s.trim().isNotEmpty)
-            .toList() ??
-        <String>[];
+    final List<String> imgs = commentMediaUrlsFromRow(row);
 
     final List<Map<String, dynamic>> children =
         byParent[id] ?? <Map<String, dynamic>>[];
@@ -351,10 +352,16 @@ class _FeedCommentsSheetState extends State<_FeedCommentsSheet> {
                     children: <Widget>[
                       Text(
                         _authorLabel(row),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       Text(
                         formatPostTime(row['created_at'] as String?),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
                         style: theme.textTheme.bodySmall,
                       ),
                       const SizedBox(height: 4),
@@ -368,21 +375,7 @@ class _FeedCommentsSheetState extends State<_FeedCommentsSheet> {
                       if (imgs.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
-                          child: FeedCommentAttachmentGrid(
-                            urls: imgs,
-                            thumb: thumb,
-                            onPhotoTap: (int i) {
-                              Navigator.push<void>(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => FeedFullscreenGallery(
-                                    urls: imgs,
-                                    initialIndex: i,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                          child: CommentItem(urls: imgs, thumb: thumb),
                         ),
                       const SizedBox(height: 6),
                       TextButton.icon(
@@ -461,267 +454,284 @@ class _FeedCommentsSheetState extends State<_FeedCommentsSheet> {
       minChildSize: 0.35,
       maxChildSize: 0.92,
       builder: (BuildContext context, ScrollController scrollCtl) {
-        return ClipRRect(
-          borderRadius: top,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: panelBg,
-              borderRadius: top,
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.12)
-                    : kPineGreen.withValues(alpha: 0.1),
-              ),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: kEmeraldGlow.withValues(alpha: isDark ? 0.2 : 0.28),
-                  blurRadius: 18,
-                  spreadRadius: 0,
-                  offset: const Offset(0, -4),
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: ClipRRect(
+            borderRadius: top,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: panelBg,
+                borderRadius: top,
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : kPineGreen.withValues(alpha: 0.1),
                 ),
-              ],
-            ),
-            child: Column(
-              children: <Widget>[
-                const SizedBox(height: 8),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(2),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: kEmeraldGlow.withValues(alpha: isDark ? 0.2 : 0.28),
+                    blurRadius: 18,
+                    spreadRadius: 0,
+                    offset: const Offset(0, -4),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          widget.postTitle?.trim().isNotEmpty == true
-                              ? widget.postTitle!.trim()
-                              : 'Комментарии',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.montserrat(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? Colors.white : kPineGreen,
+                ],
+              ),
+              child: Column(
+                children: <Widget>[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            widget.postTitle?.trim().isNotEmpty == true
+                                ? widget.postTitle!.trim()
+                                : 'Комментарии',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.montserrat(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : kPineGreen,
+                            ),
                           ),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          final String pid = widget.postId;
-                          final FeedService f = widget.feed;
-                          Navigator.pop(context);
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            final BuildContext? root =
-                                rootNavigatorKey.currentContext;
-                            if (root != null && root.mounted) {
-                              unawaited(
-                                Navigator.of(root).push<void>(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => FeedPostDetailScreen(
-                                      postId: pid,
-                                      feed: f,
+                        TextButton(
+                          onPressed: () {
+                            if (!context.mounted) {
+                              return;
+                            }
+                            final String pid = widget.postId;
+                            final FeedService f = widget.feed;
+                            Navigator.pop(context);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              final BuildContext? root =
+                                  rootNavigatorKey.currentContext;
+                              if (root != null && root.mounted) {
+                                unawaited(
+                                  Navigator.of(root).push<void>(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => FeedPostDetailScreen(
+                                        postId: pid,
+                                        feed: f,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              );
-                            }
-                          });
-                        },
-                        child: const Text('Пост'),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _error != null
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(_error!),
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: scrollCtl,
-                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                          itemCount: roots.length,
-                          itemBuilder: (BuildContext c, int i) {
-                            return _commentTile(
-                              roots[i],
-                              byParent,
-                              depth: 0,
-                              isDark: isDark,
-                            );
-                          },
-                        ),
-                ),
-                if (_replyParentId != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: InputChip(
-                        label: Text(
-                          _replyTargetAuthor != null &&
-                                  _replyTargetAuthor!.trim().isNotEmpty
-                              ? 'Ответ для ${_replyTargetAuthor!.trim()}'
-                              : 'Ответ',
-                        ),
-                        onDeleted: () {
-                          final String? ta = _replyTargetAuthor?.trim();
-                          setState(() {
-                            _replyParentId = null;
-                            _replyTargetAuthor = null;
-                            if (ta != null && ta.isNotEmpty) {
-                              final String prefix = '$ta, ';
-                              final String t = _body.text;
-                              if (t.startsWith(prefix)) {
-                                _body.text = t.substring(prefix.length);
+                                );
                               }
+                            });
+                          },
+                          child: const Text('Пост'),
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            if (!context.mounted) {
+                              return;
                             }
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                Material(
-                  elevation: 8,
-                  color: theme.colorScheme.surface,
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      left: 8,
-                      right: 12,
-                      top: 8,
-                      bottom:
-                          MediaQuery.paddingOf(context).bottom +
-                          MediaQuery.viewInsetsOf(context).bottom +
-                          8,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        if (_pendingCommentImages.isNotEmpty)
-                          RepaintBoundary(
-                            child: Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: 8,
-                                left: 4,
-                              ),
-                              child: SizedBox(
-                                height: 56,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: _pendingCommentImages.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(width: 6),
-                                  itemBuilder: (BuildContext c, int i) {
-                                    final String u = _pendingCommentImages[i];
-                                    return Stack(
-                                      children: <Widget>[
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          child: ProgressiveCachedImage(
-                                            imageUrl: u,
-                                            width: 56,
-                                            height: 56,
-                                            fit: BoxFit.cover,
-                                            borderRadius: 8,
-                                          ),
-                                        ),
-                                        Positioned(
-                                          top: 0,
-                                          right: 0,
-                                          child: Material(
-                                            color: Colors.black54,
-                                            shape: const CircleBorder(),
-                                            child: InkWell(
-                                              customBorder:
-                                                  const CircleBorder(),
-                                              onTap: () => setState(
-                                                () => _pendingCommentImages
-                                                    .removeAt(i),
-                                              ),
-                                              child: const Icon(
-                                                Icons.close,
-                                                size: 16,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                        Row(
-                          children: <Widget>[
-                            IconButton(
-                              tooltip: 'Фото (до 3)',
-                              onPressed:
-                                  _sending || _pendingCommentImages.length >= 3
-                                  ? null
-                                  : () => unawaited(_pickCommentImages()),
-                              icon: Icon(
-                                Icons.add_photo_alternate_outlined,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                            Expanded(
-                              child: RepaintBoundary(
-                                child: TextField(
-                                  controller: _body,
-                                  focusNode: _focus,
-                                  minLines: 1,
-                                  maxLines: 4,
-                                  textCapitalization:
-                                      TextCapitalization.sentences,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Комментарий…',
-                                    border: OutlineInputBorder(),
-                                    isDense: true,
-                                  ),
-                                  onSubmitted: (_) => unawaited(_send()),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            FilledButton(
-                              onPressed: _sending
-                                  ? null
-                                  : () => unawaited(_send()),
-                              child: _sending
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.send_rounded, size: 20),
-                            ),
-                          ],
+                            Navigator.pop(context);
+                          },
+                          icon: const Icon(Icons.close_rounded),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _error != null
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(_error!),
+                            ),
+                          )
+                        : ListView.builder(
+                            controller: scrollCtl,
+                            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                            itemCount: roots.length,
+                            itemBuilder: (BuildContext c, int i) {
+                              return _commentTile(
+                                roots[i],
+                                byParent,
+                                depth: 0,
+                                isDark: isDark,
+                              );
+                            },
+                          ),
+                  ),
+                  if (_replyParentId != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: InputChip(
+                          label: Text(
+                            _replyTargetAuthor != null &&
+                                    _replyTargetAuthor!.trim().isNotEmpty
+                                ? 'Ответ для ${_replyTargetAuthor!.trim()}'
+                                : 'Ответ',
+                          ),
+                          onDeleted: () {
+                            final String? ta = _replyTargetAuthor?.trim();
+                            setState(() {
+                              _replyParentId = null;
+                              _replyTargetAuthor = null;
+                              if (ta != null && ta.isNotEmpty) {
+                                final String prefix = '$ta, ';
+                                final String t = _body.text;
+                                if (t.startsWith(prefix)) {
+                                  _body.text = t.substring(prefix.length);
+                                }
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  Material(
+                    elevation: 8,
+                    color: theme.colorScheme.surface,
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        left: 8,
+                        right: 12,
+                        top: 8,
+                        bottom: MediaQuery.paddingOf(context).bottom + 8,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          if (_pendingCommentImages.isNotEmpty)
+                            RepaintBoundary(
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: 8,
+                                  left: 4,
+                                ),
+                                child: SizedBox(
+                                  height: 56,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: _pendingCommentImages.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(width: 6),
+                                    itemBuilder: (BuildContext c, int i) {
+                                      final String u = _pendingCommentImages[i];
+                                      return Stack(
+                                        children: <Widget>[
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            child: ProgressiveCachedImage(
+                                              imageUrl: u,
+                                              width: 56,
+                                              height: 56,
+                                              fit: BoxFit.cover,
+                                              borderRadius: 8,
+                                              memCacheHeightMaxPx: 600,
+                                            ),
+                                          ),
+                                          Positioned(
+                                            top: 0,
+                                            right: 0,
+                                            child: Material(
+                                              color: Colors.black54,
+                                              shape: const CircleBorder(),
+                                              child: InkWell(
+                                                customBorder:
+                                                    const CircleBorder(),
+                                                onTap: () {
+                                                  if (!mounted) {
+                                                    return;
+                                                  }
+                                                  setState(
+                                                    () => _pendingCommentImages
+                                                        .removeAt(i),
+                                                  );
+                                                },
+                                                child: const Icon(
+                                                  Icons.close,
+                                                  size: 16,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          Row(
+                            children: <Widget>[
+                              IconButton(
+                                tooltip: 'Фото (до 3)',
+                                onPressed:
+                                    _sending ||
+                                        _pendingCommentImages.length >= 3
+                                    ? null
+                                    : () => unawaited(_pickCommentImages()),
+                                icon: Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                              Expanded(
+                                child: RepaintBoundary(
+                                  child: TextField(
+                                    controller: _body,
+                                    focusNode: _focus,
+                                    minLines: 1,
+                                    maxLines: 4,
+                                    textCapitalization:
+                                        TextCapitalization.sentences,
+                                    decoration: const InputDecoration(
+                                      hintText: 'Комментарий…',
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                    onSubmitted: (_) => unawaited(_send()),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              FilledButton(
+                                onPressed: _sending
+                                    ? null
+                                    : () => unawaited(_send()),
+                                child: _sending
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.send_rounded, size: 20),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

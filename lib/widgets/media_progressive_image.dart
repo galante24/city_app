@@ -2,6 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
+import 'feed/feed_fullscreen_gallery.dart';
+
 /// Логические px → пиксели растра для [memCacheWidth] / [memCacheHeight].
 int progressiveImageMemDim(
   BuildContext context,
@@ -67,6 +69,9 @@ class ProgressiveCachedImage extends StatelessWidget {
     this.borderRadius = 0,
     this.fadeDuration = const Duration(milliseconds: 380),
     this.memCacheMaxPx = 2048,
+
+    /// Верхний предел декодированной высоты в пикселях растра (экономия памяти).
+    this.memCacheHeightMaxPx,
     this.filterQuality = FilterQuality.low,
   });
 
@@ -77,16 +82,17 @@ class ProgressiveCachedImage extends StatelessWidget {
   final double borderRadius;
   final Duration fadeDuration;
   final int memCacheMaxPx;
+  final int? memCacheHeightMaxPx;
   final FilterQuality filterQuality;
 
   @override
   Widget build(BuildContext context) {
     final int mw = progressiveImageMemDim(context, width, maxPx: memCacheMaxPx);
-    final int mh = progressiveImageMemDim(
-      context,
-      height,
-      maxPx: memCacheMaxPx,
-    );
+    int mh = progressiveImageMemDim(context, height, maxPx: memCacheMaxPx);
+    final int? cap = memCacheHeightMaxPx;
+    if (cap != null && mh > cap) {
+      mh = cap;
+    }
     final Widget img = CachedNetworkImage(
       imageUrl: imageUrl,
       width: width,
@@ -125,18 +131,42 @@ class ProgressiveCachedImage extends StatelessWidget {
   }
 }
 
-/// Сетка вложений в комментарии (до 3 снимков).
+/// Сетка вложений в комментарии (до 3 снимков): «таблетка» [BorderRadius.circular(26)], cover, тап → [FeedFullscreenGallery].
 class FeedCommentAttachmentGrid extends StatelessWidget {
   const FeedCommentAttachmentGrid({
     super.key,
     required this.urls,
-    required this.thumb,
-    required this.onPhotoTap,
+    this.thumb = 120,
+    this.maxTileHeight = 200,
   });
 
   final List<String> urls;
+
+  /// Верхняя граница ширины ячейки в сетке 2–3 фото.
   final double thumb;
-  final void Function(int index) onPhotoTap;
+
+  /// Высота превью при нескольких вложениях (одно фото — полная полоса до [_kStripMaxH]).
+  final double maxTileHeight;
+
+  static const double _kPillR = 26;
+  static const double _kStripMaxH = 350;
+
+  void _openGallery(BuildContext context, int index) {
+    if (!context.mounted) {
+      return;
+    }
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => FeedFullscreenGallery(
+          urls: urls,
+          initialIndex: index < 0
+              ? 0
+              : (index >= urls.length ? urls.length - 1 : index),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,33 +176,70 @@ class FeedCommentAttachmentGrid extends StatelessWidget {
     return RepaintBoundary(
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints bc) {
-          final double maxW = bc.maxWidth.isFinite ? bc.maxWidth : thumb * 3;
+          final double maxW = bc.maxWidth.isFinite && bc.maxWidth > 0
+              ? bc.maxWidth
+              : thumb * 3;
           final int n = urls.length;
+
+          if (n == 1) {
+            final String u = urls[0];
+            return Container(
+              constraints: const BoxConstraints(
+                minWidth: double.infinity,
+                maxHeight: _kStripMaxH,
+              ),
+              width: maxW,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(_kPillR),
+                child: GestureDetector(
+                  onTap: () => _openGallery(context, 0),
+                  child: ProgressiveCachedImage(
+                    imageUrl: u,
+                    width: maxW,
+                    height: _kStripMaxH,
+                    fit: BoxFit.cover,
+                    borderRadius: 0,
+                    memCacheHeightMaxPx: 600,
+                  ),
+                ),
+              ),
+            );
+          }
+
           final int cols = n >= 3 ? 3 : n;
-          const double gap = 5;
+          const double gap = 8;
           final double cellW = cols > 0
               ? ((maxW - gap * (cols - 1)) / cols).clamp(48.0, thumb)
               : thumb;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: List<Widget>.generate(n, (int i) {
-              final String u = urls[i];
-              return Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  onTap: () => onPhotoTap(i),
-                  borderRadius: BorderRadius.circular(8),
-                  child: ProgressiveCachedImage(
-                    imageUrl: u,
-                    width: cellW,
-                    height: cellW,
-                    fit: BoxFit.cover,
-                    borderRadius: 8,
+          final double tileH = maxTileHeight.clamp(88.0, _kStripMaxH);
+
+          return Container(
+            constraints: const BoxConstraints(
+              minWidth: double.infinity,
+              maxHeight: _kStripMaxH,
+            ),
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: List<Widget>.generate(n, (int i) {
+                final String u = urls[i];
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(_kPillR),
+                  child: GestureDetector(
+                    onTap: () => _openGallery(context, i),
+                    child: ProgressiveCachedImage(
+                      imageUrl: u,
+                      width: cellW,
+                      height: tileH,
+                      fit: BoxFit.cover,
+                      borderRadius: 0,
+                      memCacheHeightMaxPx: 600,
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           );
         },
       ),

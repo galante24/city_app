@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1072,38 +1073,51 @@ class _SocialNewsCardState extends State<SocialNewsCard> {
         ),
         const SizedBox(height: 10),
         if (hasGallery)
-          SizedBox(
-            height: 120,
-            child: ListView.separated(
-              addAutomaticKeepAlives: true,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              scrollDirection: Axis.horizontal,
-              itemCount: post.imageUrls.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (_, int i) {
-                const double thumbH = 120;
-                const double thumbW = thumbH * 16 / 9;
-                return RepaintBoundary(
-                  child: GestureDetector(
-                    onTap: () => _openGallery(post.imageUrls, i),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox(
-                        width: thumbW,
-                        height: thumbH,
-                        child: ProgressiveCachedImage(
-                          imageUrl: post.imageUrls[i],
-                          width: thumbW,
-                          height: thumbH,
-                          fit: BoxFit.cover,
-                          borderRadius: 0,
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints bc) {
+              final double maxW = bc.maxWidth.isFinite && bc.maxWidth > 0
+                  ? bc.maxWidth
+                  : MediaQuery.sizeOf(context).width;
+              return Container(
+                constraints: BoxConstraints(
+                  minWidth: double.infinity,
+                  maxHeight: 350,
+                ),
+                width: maxW,
+                child: ListView.separated(
+                  addAutomaticKeepAlives: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: post.imageUrls.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, int i) {
+                    final double slotW = math
+                        .min(maxW - 32, MediaQuery.sizeOf(context).width * 0.88)
+                        .clamp(160.0, 520.0);
+                    return RepaintBoundary(
+                      child: GestureDetector(
+                        onTap: () => _openGallery(post.imageUrls, i),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(26),
+                          child: SizedBox(
+                            width: slotW,
+                            height: 350,
+                            child: ProgressiveCachedImage(
+                              imageUrl: post.imageUrls[i],
+                              width: slotW,
+                              height: 350,
+                              fit: BoxFit.cover,
+                              borderRadius: 0,
+                              memCacheHeightMaxPx: 600,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
+                    );
+                  },
+                ),
+              );
+            },
           )
         else if (post.mediaUrl != null &&
             post.mediaUrl!.isNotEmpty) ...<Widget>[

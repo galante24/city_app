@@ -59,7 +59,11 @@ Future<void> main() async {
 
 Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await loadSupabaseRuntimeConfigIfMissing();
+  syncCompileTimeSupabaseIntoResolved();
+  // При «запечённых» в бандл ключах не трогаем диск/HTTP — мгновенный старт (Zero-Lag).
+  if (!kHasCompileTimeSupabaseDartDefines) {
+    await loadSupabaseRuntimeConfigIfMissing();
+  }
   if (!kIsWeb) {
     await SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.manual,
@@ -79,8 +83,8 @@ Future<void> _runApp() async {
   timeago.setLocaleMessages('ru', timeago.RuMessages());
   if (!kAreSupabaseSecretsConfigured) {
     debugPrint(
-      'Не заданы SUPABASE_URL / SUPABASE_ANON_KEY: '
-      'fromEnvironment пустой, api_keys.json (диск / web) не найден или плейсхолдер.',
+      'Конфигурация Supabase: пустые или плейсхолдерные SUPABASE_URL / SUPABASE_ANON_KEY '
+      '(ожидаются const String.fromEnvironment либо api_keys.json после load).',
     );
     runApp(const _AppWithoutSupabase());
     return;
@@ -113,37 +117,26 @@ Future<void> _runApp() async {
   runApp(const CityApp());
 }
 
-/// Минимальный экран, если в сборке нет define’ов (секреты не в репозитории).
+/// Экран «Конфигурация»: нет валидных ключей после [loadSupabaseRuntimeConfigIfMissing].
 class _AppWithoutSupabase extends StatelessWidget {
   const _AppWithoutSupabase();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Лесосибирск',
+      title: 'Конфигурация',
       theme: ThemeData(useMaterial3: true),
       home: Scaffold(
         appBar: AppBar(title: const Text('Конфигурация')),
         body: const Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'Проект собран без compile-time ключей Supabase.\n'
-            '\n'
-            'Локально:\n'
-            '  • приоритет: --dart-define / --dart-define-from-file=api_keys.json\n'
-            '  • иначе: файл api_keys.json в рабочей директории при запуске\n'
-            '\n'
-            'GitHub Pages:\n'
-            '  • workflow подставляет секреты в сборку (dart-define) **или** '
-            'положите api_keys.json рядом с index.html (загрузка по сети).\n'
-            '  • Settings → Secrets: SUPABASE_URL и SUPABASE_ANON_KEY\n'
-            '  • URL: лучше https://<ref>.supabase.co (если скопировали из API с /rest/v1/ — тоже ок, приложение обрежет).\n'
-            '  • workflow «Deploy to GitHub Pages» → пересборка web.\n'
-            '\n'
-            'Если ошибка авторизации упоминает your-project-id.supabase.co:\n'
-            '  замените плейсхолдеры в api_keys.json на URL и anon key из Dashboard → Settings → API.\n'
-            '\n'
-            'Пока URL/anon не «запечены» в сборку, вход и данные недоступны — это не сбой сети.',
+            'Нет рабочих ключей Supabase: const String.fromEnvironment '
+            '(SUPABASE_URL и SUPABASE_ANON_KEY) пусты или плейсхолдеры, '
+            'и не удалось подставить api_keys.json (диск / web).\n\n'
+            'Для web ключи должны быть переданы на этапе flutter build web '
+            '(--dart-define или --dart-define-from-file), иначе они не попадут в JS-бандл.\n\n'
+            'См. workflow .github/workflows/github-pages.yml и api_keys.example.json.',
           ),
         ),
       ),
@@ -434,7 +427,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     return MainTabIndex(
       index: _currentIndex,
       child: Scaffold(
-        resizeToAvoidBottomInset: true,
+        resizeToAvoidBottomInset: false,
         extendBody: true,
         extendBodyBehindAppBar: true,
         backgroundColor: Colors.transparent,
@@ -446,9 +439,28 @@ class _MainScaffoldState extends State<MainScaffold> {
                 _KeepAliveTab(key: ValueKey<int>(i), child: _stackChildren[i]),
           ),
         ),
-        bottomNavigationBar: CityMainNavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _onTabSelected,
+        bottomNavigationBar: Builder(
+          builder: (BuildContext context) {
+            final bool dark = Theme.of(context).brightness == Brightness.dark;
+            final Color dockBg = dark ? const Color(0xFF0F141C) : Colors.white;
+            return ColoredBox(
+              color: dockBg,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.grey.withValues(alpha: 0.35),
+                  ),
+                  CityMainNavigationBar(
+                    selectedIndex: _currentIndex,
+                    onDestinationSelected: _onTabSelected,
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );

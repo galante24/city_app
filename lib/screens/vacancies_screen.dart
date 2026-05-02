@@ -482,6 +482,33 @@ class _VacancyListTile extends StatelessWidget {
                       dense: true,
                     ),
                   ),
+                if (row['is_published'] != true)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: kPrimaryBlue.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            'На модерации',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: kPrimaryBlue,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 Text(
                   title,
                   maxLines: 4,

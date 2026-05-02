@@ -238,39 +238,43 @@ class _FeedComposeBodyState extends State<_FeedComposeBody> {
                         },
                 ),
               if (!_isEdit) const SizedBox(height: 12),
-              TextFormField(
-                controller: _title,
-                decoration: const InputDecoration(
-                  labelText: 'Заголовок',
-                  border: OutlineInputBorder(),
+              RepaintBoundary(
+                child: TextFormField(
+                  controller: _title,
+                  decoration: const InputDecoration(
+                    labelText: 'Заголовок',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                  textCapitalization: TextCapitalization.sentences,
+                  validator: (String? v) => (v == null || v.trim().isEmpty)
+                      ? 'Введите заголовок'
+                      : null,
                 ),
-                maxLines: 2,
-                textCapitalization: TextCapitalization.sentences,
-                validator: (String? v) => (v == null || v.trim().isEmpty)
-                    ? 'Введите заголовок'
-                    : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _desc,
-                focusNode: _descFocus,
-                decoration: InputDecoration(
-                  labelText: 'Описание',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    tooltip: 'Смайлы',
-                    icon: const Icon(Icons.emoji_emotions_outlined),
-                    onPressed: () => setState(() {
-                      _showEmoji = !_showEmoji;
-                      if (_showEmoji) {
-                        _descFocus.requestFocus();
-                      }
-                    }),
+              RepaintBoundary(
+                child: TextFormField(
+                  controller: _desc,
+                  focusNode: _descFocus,
+                  decoration: InputDecoration(
+                    labelText: 'Описание',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      tooltip: 'Смайлы',
+                      icon: const Icon(Icons.emoji_emotions_outlined),
+                      onPressed: () => setState(() {
+                        _showEmoji = !_showEmoji;
+                        if (_showEmoji) {
+                          _descFocus.requestFocus();
+                        }
+                      }),
+                    ),
                   ),
+                  minLines: 3,
+                  maxLines: 8,
+                  textCapitalization: TextCapitalization.sentences,
                 ),
-                minLines: 3,
-                maxLines: 8,
-                textCapitalization: TextCapitalization.sentences,
               ),
               if (_showEmoji)
                 SizedBox(
@@ -320,6 +324,7 @@ class _FeedComposeBodyState extends State<_FeedComposeBody> {
                                 height: 72,
                                 fit: BoxFit.cover,
                                 borderRadius: 8,
+                                memCacheHeightMaxPx: 600,
                               ),
                             ),
                           ),

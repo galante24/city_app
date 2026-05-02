@@ -12,7 +12,6 @@ import '../widgets/soft_tab_header.dart';
 import '../widgets/weather_app_bar_action.dart';
 import '../utils/capitalize_first_formatter.dart';
 
-
 /// Одна строка для SnackBar: код, сообщение, details, hint (без дублирования).
 String _postgrestTechnicalLine(PostgrestException e) {
   final StringBuffer b = StringBuffer();
@@ -55,9 +54,15 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
 
   static const double _fieldRadius = 14;
 
-  InputDecoration _decoration(BuildContext context, String label, {String? hint}) {
+  InputDecoration _decoration(
+    BuildContext context,
+    String label, {
+    String? hint,
+  }) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final Color outline = cs.outline.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.4 : 0.35);
+    final Color outline = cs.outline.withValues(
+      alpha: Theme.of(context).brightness == Brightness.dark ? 0.4 : 0.35,
+    );
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -161,7 +166,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
         try {
           imageUrl = await JobVacancyService.uploadVacancyImage(_picked!);
         } on Object {
-          // публикуем без фото, без всплывающих «ошибок» (любой авторизованный — без модерации)
+          // публикуем без фото
         }
       }
       await JobVacancyService.insert(
@@ -174,9 +179,13 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
       );
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Вакансия опубликована')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Вакансия отправлена на проверку. После подтверждения администратором она появится в списке.',
+            ),
+          ),
+        );
       }
     } on PostgrestException catch (e) {
       if (!mounted) {
@@ -202,7 +211,7 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Не удалось опубликовать. $text',
+            'Не удалось сохранить. $text',
             style: const TextStyle(fontSize: 14, height: 1.25),
           ),
           duration: const Duration(seconds: 10),
@@ -247,126 +256,128 @@ class _VacancyFormScreenState extends State<VacancyFormScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
                 children: <Widget>[
-            Text(
-              'Заполните поля. Фото — по желанию.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[800],
-                height: 1.3,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Material(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              clipBehavior: Clip.antiAlias,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              child: InkWell(
-                onTap: _saving ? null : _pickImage,
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
+                  Text(
+                    'Заполните поля. Фото — по желанию.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[800],
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Material(
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFDDDFE2)),
-                  ),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: _previewBlock(),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _title,
-              decoration: _decoration(context, 'Название вакансии'),
-              minLines: 1,
-              maxLines: 3,
-              textCapitalization: TextCapitalization.none,
-              inputFormatters: <TextInputFormatter>[CapitalizeFirstFormatter()],
-              validator: _req,
-              enabled: !_saving,
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _description,
-              decoration: _decoration(context, 'Описание вакансии'),
-              minLines: 4,
-              maxLines: 10,
-              validator: _req,
-              enabled: !_saving,
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _salary,
-              decoration: _decoration(
-                context,
-                'Зарплата',
-                hint: 'только цифры, напр. 60000',
-              ),
-              keyboardType: TextInputType.number,
-              inputFormatters: <TextInputFormatter>[
-                FilteringTextInputFormatter.digitsOnly,
-              ],
-              validator: _req,
-              enabled: !_saving,
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _address,
-              decoration: _decoration(context, 'Адрес работы'),
-              minLines: 1,
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-              validator: _req,
-              enabled: !_saving,
-            ),
-            const SizedBox(height: 14),
-            TextFormField(
-              controller: _phone,
-              keyboardType: TextInputType.phone,
-              inputFormatters: <TextInputFormatter>[
-                FilteringTextInputFormatter.allow(RegExp(r'[+\d]*')),
-                LengthLimitingTextInputFormatter(12),
-              ],
-              decoration: _decoration(
-                context,
-                'Контакты (телефон)',
-                hint: '+7 и 10 цифр',
-              ),
-              validator: _phoneValidator,
-              enabled: !_saving,
-            ),
-            const SizedBox(height: 28),
-            FilledButton(
-              onPressed: _saving ? null : _submit,
-              style: FilledButton.styleFrom(
-                backgroundColor: kPrimaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-              ),
-              child: _saving
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text(
-                      'Опубликовать',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                    clipBehavior: Clip.antiAlias,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    child: InkWell(
+                      onTap: _saving ? null : _pickImage,
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFDDDFE2)),
+                        ),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: _previewBlock(),
+                        ),
                       ),
                     ),
-            ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _title,
+                    decoration: _decoration(context, 'Название вакансии'),
+                    minLines: 1,
+                    maxLines: 3,
+                    textCapitalization: TextCapitalization.none,
+                    inputFormatters: <TextInputFormatter>[
+                      CapitalizeFirstFormatter(),
+                    ],
+                    validator: _req,
+                    enabled: !_saving,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _description,
+                    decoration: _decoration(context, 'Описание вакансии'),
+                    minLines: 4,
+                    maxLines: 10,
+                    validator: _req,
+                    enabled: !_saving,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _salary,
+                    decoration: _decoration(
+                      context,
+                      'Зарплата',
+                      hint: 'только цифры, напр. 60000',
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    validator: _req,
+                    enabled: !_saving,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _address,
+                    decoration: _decoration(context, 'Адрес работы'),
+                    minLines: 1,
+                    maxLines: 3,
+                    textCapitalization: TextCapitalization.sentences,
+                    validator: _req,
+                    enabled: !_saving,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.allow(RegExp(r'[+\d]*')),
+                      LengthLimitingTextInputFormatter(12),
+                    ],
+                    decoration: _decoration(
+                      context,
+                      'Контакты (телефон)',
+                      hint: '+7 и 10 цифр',
+                    ),
+                    validator: _phoneValidator,
+                    enabled: !_saving,
+                  ),
+                  const SizedBox(height: 28),
+                  FilledButton(
+                    onPressed: _saving ? null : _submit,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kPrimaryBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _saving
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Опубликовать',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
                 ],
               ),
             ),

@@ -2,11 +2,13 @@
 # Repository → Settings → Pages → Source: GitHub Actions.
 #
 # Secrets (Repository Actions и/или Environment "github-pages"):
-#   SUPABASE_URL        — любой из: https://<ref>.supabase.co или …/rest/v1/ из Dashboard (сборка режет до корня в коде через app_secrets).
+#   SUPABASE_URL        — https://<ref>.supabase.co или …/rest/v1/ из Dashboard (клиент обрежет хвост).
 #   SUPABASE_ANON_KEY   — anon public key (Dashboard → Settings → API)
 #
-# Корень приложения для gh-pages этого репозитория фиксируем в сборке как /city_app/
-# → https://<user>.github.io/city_app/
+# Ключи в бандл: два флага --dart-define=… из env (секреты шага). При проблемах с
+# кавычками в значениях можно заменить на jq + --dart-define-from-file=dart_defines.json.
+#
+# Корень приложения: /city_app/ → https://<user>.github.io/city_app/
 
 name: Deploy to GitHub Pages
 
@@ -39,30 +41,24 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Write api_keys.json from secrets (dart-define для web-сборки)
+      - name: Build web (Supabase из secrets → --dart-define)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          set -euo pipefail
           if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
-            echo "::error::Пустые secrets: задайте SUPABASE_URL и SUPABASE_ANON_KEY (Actions / Environment github-pages)."
+            echo "::error::Пустые secrets: задайте SUPABASE_URL и SUPABASE_ANON_KEY (Repository / Environment github-pages)."
             exit 1
           fi
-          jq -n --arg url "$SUPABASE_URL" --arg key "$SUPABASE_ANON_KEY" \
-            '{SUPABASE_URL:$url, SUPABASE_ANON_KEY:$key}' > api_keys.json
-
-      - name: Build web (dart-define baked into wasm/js)
-        run: |
           flutter build web \
             --release \
             --base-href "/city_app/" \
-            --dart-define-from-file=api_keys.json \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --no-wasm-dry-run
-
-      # Дублируем JSON рядом с index.html: [loadSupabaseRuntimeConfigIfMissing] может подхватить по HTTP,
-      # если compile-time define’ы пусты (редкий сценарий / локальная выкладка build/web).
-      - name: Copy api_keys.json into web output (runtime fallback)
-        run: cp api_keys.json build/web/api_keys.json
+          jq -n --arg url "$SUPABASE_URL" --arg key "$SUPABASE_ANON_KEY" \
+            '{SUPABASE_URL:$url, SUPABASE_ANON_KEY:$key}' > build/web/api_keys.json
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

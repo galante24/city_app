@@ -34,13 +34,15 @@ class VacancyDetailScreen extends StatefulWidget {
 class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
   bool _busy = false;
   bool? _canDelete;
+  late Map<String, dynamic> _row;
 
-  String get _id => widget.row['id']?.toString() ?? '';
-  String get _authorId => widget.row['author_id']?.toString() ?? '';
+  String get _id => _row['id']?.toString() ?? '';
+  String get _authorId => _row['author_id']?.toString() ?? '';
 
   @override
   void initState() {
     super.initState();
+    _row = Map<String, dynamic>.from(widget.row);
     unawaited(_resolveCanDelete());
   }
 
@@ -204,16 +206,45 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
     }
   }
 
+  Future<void> _publish() async {
+    if (!CityDataService.isCurrentUserAdminSync()) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await JobVacancyService.setPublished(_id, published: true);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _row['is_published'] = true;
+        _busy = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Вакансия опубликована')));
+    } on Object catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final String title = widget.row['title'] as String? ?? '';
-    final String desc = widget.row['description'] as String? ?? '';
-    final String salary = widget.row['salary'] as String? ?? '';
-    final String addr = widget.row['work_address'] as String? ?? '';
-    final String phone = widget.row['contact_phone'] as String? ?? '';
-    final String? imageUrl = widget.row['image_url'] as String?;
+    final String title = _row['title'] as String? ?? '';
+    final String desc = _row['description'] as String? ?? '';
+    final String salary = _row['salary'] as String? ?? '';
+    final String addr = _row['work_address'] as String? ?? '';
+    final String phone = _row['contact_phone'] as String? ?? '';
+    final String? imageUrl = _row['image_url'] as String?;
+    final bool published = _row['is_published'] == true;
     final String? me = Supabase.instance.client.auth.currentUser?.id;
     final bool isOwner = me != null && me == _authorId;
+    final bool isAdmin = CityDataService.isCurrentUserAdminSync();
     final String authorId = _authorId;
     final ColorScheme cs = Theme.of(context).colorScheme;
     final Color textPrimary = cs.onSurface;
@@ -246,223 +277,286 @@ class _VacancyDetailScreenState extends State<VacancyDetailScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: <Widget>[
-          if (authorId.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Container(
-                decoration: cloudCardDecoration(context, radius: 18),
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: SocialHeader(
-                  userId: authorId,
-                  author: authorMapFromRow(widget.row),
-                  createdAt: parseIsoUtc(widget.row['created_at'] as String?),
-                ),
-              ),
-            ),
-          VacancyCoverImage(
-            imageUrl: imageUrl,
-            borderRadius: 16,
-            fit: BoxFit.contain,
-            letterboxColor: cs.surfaceContainerHighest,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: textPrimary,
-              height: 1.2,
-            ),
-          ),
-          if (salary.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: kPrimaryBlue.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: <Widget>[
-                  const Icon(
-                    Icons.payments_outlined,
-                    color: kPrimaryBlue,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'от $salary ₽',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: kPrimaryBlue,
+                if (authorId.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Container(
+                      decoration: cloudCardDecoration(context, radius: 18),
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: SocialHeader(
+                        userId: authorId,
+                        author: authorMapFromRow(_row),
+                        createdAt: parseIsoUtc(_row['created_at'] as String?),
+                      ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ],
-          if (addr.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 16),
-            _InfoCard(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const Icon(
-                    Icons.place_outlined,
-                    size: 22,
-                    color: kPrimaryBlue,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Адрес',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: textSecondary,
-                          ),
+                if (!published && (isOwner || isAdmin))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Material(
+                      color: kPrimaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
                         ),
-                        const SizedBox(height: 4),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.hourglass_top_rounded,
+                              color: cs.primary,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                isAdmin && !isOwner
+                                    ? 'Черновик автора — не виден другим пользователям.'
+                                    : 'На модерации: после подтверждения администратором вакансия появится в общем списке.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.25,
+                                  color: textPrimary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                if (isAdmin && !published)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: FilledButton.icon(
+                      onPressed: _busy ? null : _publish,
+                      icon: const Icon(Icons.publish_rounded, size: 20),
+                      label: const Text('Опубликовать'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                VacancyCoverImage(
+                  imageUrl: imageUrl,
+                  borderRadius: 16,
+                  fit: BoxFit.contain,
+                  letterboxColor: cs.surfaceContainerHighest,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: textPrimary,
+                    height: 1.2,
+                  ),
+                ),
+                if (salary.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: kPrimaryBlue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        const Icon(
+                          Icons.payments_outlined,
+                          color: kPrimaryBlue,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          addr,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: textPrimary,
-                            height: 1.3,
+                          'от $salary ₽',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: kPrimaryBlue,
                           ),
                         ),
                       ],
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          _InfoCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Text(
-                  'Описание',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  desc,
-                  style: TextStyle(
-                    fontSize: 15,
-                    height: 1.45,
-                    color: bodyTextColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _InfoCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Text(
-                  'Контакты',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Material(
-                  color: kPrimaryBlue.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    onTap: () => _call(phone),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          const Icon(Icons.call, color: kPrimaryBlue, size: 24),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              phone,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                color: kPrimaryBlue,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Icon(Icons.chevron_right, color: textSecondary),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          if (!isOwner && me != null) ...<Widget>[
-            FilledButton(
-              onPressed: _busy ? null : _openChat,
-              style: FilledButton.styleFrom(
-                backgroundColor: kPrimaryBlue,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  if (_busy)
-                    const Padding(
-                      padding: EdgeInsets.only(right: 10),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+                if (addr.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 16),
+                  _InfoCard(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Icon(
+                          Icons.place_outlined,
+                          size: 22,
+                          color: kPrimaryBlue,
                         ),
-                      ),
-                    )
-                  else
-                    const Padding(
-                      padding: EdgeInsets.only(right: 8),
-                      child: Icon(Icons.chat_bubble_outline, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'Адрес',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                addr,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: textPrimary,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  const Text(
-                    'Связаться в чате',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ],
-              ),
-            ),
-          ] else if (isOwner) ...<Widget>[
-            Center(
-              child: Text(
-                'Это ваша вакансия',
-                style: TextStyle(color: textSecondary, fontSize: 14),
-              ),
-            ),
-          ],
+                const SizedBox(height: 12),
+                _InfoCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Text(
+                        'Описание',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        desc,
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.45,
+                          color: bodyTextColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _InfoCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Text(
+                        'Контакты',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Material(
+                        color: kPrimaryBlue.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          onTap: () => _call(phone),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                const Icon(
+                                  Icons.call,
+                                  color: kPrimaryBlue,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    phone,
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      color: kPrimaryBlue,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Icon(Icons.chevron_right, color: textSecondary),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                if (!isOwner && me != null) ...<Widget>[
+                  FilledButton(
+                    onPressed: _busy ? null : _openChat,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kPrimaryBlue,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        if (_busy)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 10),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        else
+                          const Padding(
+                            padding: EdgeInsets.only(right: 8),
+                            child: Icon(Icons.chat_bubble_outline, size: 22),
+                          ),
+                        const Text(
+                          'Связаться в чате',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (isOwner) ...<Widget>[
+                  Center(
+                    child: Text(
+                      'Это ваша вакансия',
+                      style: TextStyle(color: textSecondary, fontSize: 14),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

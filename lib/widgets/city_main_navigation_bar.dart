@@ -141,9 +141,9 @@ class _DarkDockNavBar extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: _topRadius,
-            color: const Color(0xFF0F141C).withValues(alpha: 0.96),
+            color: const Color(0xFF0F141C),
             border: Border(
-              top: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+              top: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
@@ -415,9 +415,9 @@ class _LightDockNavBar extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: _topRadius,
-            color: Colors.white.withValues(alpha: 0.96),
+            color: Colors.white,
             border: Border(
-              top: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+              top: BorderSide(color: Colors.grey.withValues(alpha: 0.3)),
             ),
           ),
           child: Padding(

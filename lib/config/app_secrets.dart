@@ -1,10 +1,11 @@
 /// Секреты **не** хранятся в репозитории.
 ///
-/// **Порядок (как в [loadSupabaseRuntimeConfigIfMissing]):**
-/// 1. Компиляция: `String.fromEnvironment('SUPABASE_URL')` и `SUPABASE_ANON_KEY`
-///    (`flutter run --dart-define=…`, CI, `flutter build web --dart-define-from-file=api_keys.json`).
-/// 2. Если после сборки строки пустые: чтение **`api_keys.json`** рядом с процессом (не web)
-///    или по HTTP **`api_keys.json`** относительно [Uri.base] (web, например GitHub Pages).
+/// **Порядок:**
+/// 1. **Основной путь:** `const String.fromEnvironment('SUPABASE_URL')` и
+///    `'SUPABASE_ANON_KEY'` — `flutter run/build --dart-define=…` или
+///    `--dart-define-from-file=api_keys.json` (ключи запекаются в бандл, для web — в JS).
+/// 2. Если define’ы пустые: [loadSupabaseRuntimeConfigIfMissing] — `api_keys.json` с диска (не web)
+///    или HTTP `api_keys.json` относительно [Uri.base] (web, fallback после выкладки).
 ///
 /// Формат `api_keys.example.json` — в корне проекта.
 library;
@@ -18,15 +19,37 @@ import 'supabase_overrides_stub.dart'
     if (dart.library.io) 'supabase_overrides_io.dart'
     as supabase_overrides;
 
-/// Значения из `--dart-define` / `--dart-define-from-file` (приоритет №1).
-String _supabaseUrlResolved = const String.fromEnvironment(
+/// Значения, **запечённые компилятором** (`--dart-define=…` / `--dart-define-from-file`).
+///
+/// Для web они попадают в JS-бандл на этапе `flutter build web` — это основной безопасный
+/// путь для GitHub Actions (секреты в CI, не в репозитории).
+const String kSupabaseUrlFromEnvironment = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: '',
 );
-String _supabaseAnonKeyResolved = const String.fromEnvironment(
+const String kSupabaseAnonKeyFromEnvironment = String.fromEnvironment(
   'SUPABASE_ANON_KEY',
   defaultValue: '',
 );
+
+/// Есть непустые compile-time define’ы (без ожидания I/O).
+bool get kHasCompileTimeSupabaseDartDefines {
+  return kSupabaseUrlFromEnvironment.trim().isNotEmpty &&
+      kSupabaseAnonKeyFromEnvironment.trim().isNotEmpty;
+}
+
+/// Синхронно переносит trim define’ов в рабочие поля (если они заданы).
+void syncCompileTimeSupabaseIntoResolved() {
+  if (!kHasCompileTimeSupabaseDartDefines) {
+    return;
+  }
+  _supabaseUrlResolved = kSupabaseUrlFromEnvironment.trim();
+  _supabaseAnonKeyResolved = kSupabaseAnonKeyFromEnvironment.trim();
+}
+
+/// Рабочие значения: стартуют из [kSupabaseUrlFromEnvironment]; при пустых — подгрузка из JSON.
+String _supabaseUrlResolved = kSupabaseUrlFromEnvironment;
+String _supabaseAnonKeyResolved = kSupabaseAnonKeyFromEnvironment;
 
 /// Текущий URL (после возможной подгрузки [loadSupabaseRuntimeConfigIfMissing]).
 String get kSupabaseUrl => _supabaseUrlResolved;
@@ -36,6 +59,10 @@ String get kSupabaseAnonKey => _supabaseAnonKeyResolved;
 
 /// Подставляет ключи из `api_keys.json`, если compile-time define’ы пустые.
 Future<void> loadSupabaseRuntimeConfigIfMissing() async {
+  syncCompileTimeSupabaseIntoResolved();
+  if (kHasCompileTimeSupabaseDartDefines) {
+    return;
+  }
   if (_supabaseUrlResolved.trim().isNotEmpty &&
       _supabaseAnonKeyResolved.trim().isNotEmpty) {
     return;

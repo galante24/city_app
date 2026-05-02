@@ -12,6 +12,7 @@ import '../services/feed_service.dart';
 import '../utils/social_feed_format.dart';
 import '../widgets/city_network_image.dart';
 import '../widgets/media_progressive_image.dart';
+import '../widgets/feed/comment_item.dart';
 import '../widgets/feed/feed_compose_sheet.dart';
 import '../widgets/feed/feed_fullscreen_gallery.dart';
 import '../widgets/feed/feed_share_to_chat_dialog.dart';
@@ -175,6 +176,9 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     int currentCount,
     bool liked,
   ) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       if (liked) {
         _likedCommentIds.remove(id);
@@ -210,6 +214,9 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
       }
     }
     if (bodyText.isEmpty && _replyImages.isEmpty) {
+      return;
+    }
+    if (!mounted) {
       return;
     }
     setState(() => _sending = true);
@@ -255,6 +262,9 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     if (files.isEmpty) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
     setState(() => _sending = true);
     try {
       for (final XFile f in files) {
@@ -297,11 +307,19 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
         ),
         actions: <Widget>[
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () {
+              if (ctx.mounted) {
+                Navigator.pop(ctx, false);
+              }
+            },
             child: const Text('Отмена'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              if (ctx.mounted) {
+                Navigator.pop(ctx, true);
+              }
+            },
             child: const Text('Удалить'),
           ),
         ],
@@ -312,9 +330,10 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     }
     try {
       await widget.feed.deletePost(p.id);
-      if (mounted) {
-        Navigator.pop(context);
+      if (!mounted) {
+        return;
       }
+      Navigator.pop(context);
     } on Object catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -466,12 +485,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
     final bool isDark = theme.brightness == Brightness.dark;
     final String id = row['id'].toString();
     final String body = (row['body'] as String?) ?? '';
-    final List<String> imgs =
-        (row['image_urls'] as List?)
-            ?.map((dynamic e) => e.toString())
-            .where((String s) => s.trim().isNotEmpty)
-            .toList() ??
-        <String>[];
+    final List<String> imgs = commentMediaUrlsFromRow(row);
     final int likes = (row['likes_count'] as num?)?.toInt() ?? 0;
     final bool liked = _likedCommentIds.contains(id);
     final String? me = Supabase.instance.client.auth.currentUser?.id;
@@ -531,10 +545,16 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                     children: <Widget>[
                       Text(
                         _authorLabel(row),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       Text(
                         formatPostTime(row['created_at'] as String?),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
                         style: theme.textTheme.bodySmall,
                       ),
                       const SizedBox(height: 4),
@@ -542,21 +562,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                       if (imgs.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
-                          child: FeedCommentAttachmentGrid(
-                            urls: imgs,
-                            thumb: thumb,
-                            onPhotoTap: (int i) {
-                              Navigator.push<void>(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => FeedFullscreenGallery(
-                                    urls: imgs,
-                                    initialIndex: i,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                          child: CommentItem(urls: imgs, thumb: thumb),
                         ),
                       const SizedBox(height: 6),
                       Wrap(
@@ -708,30 +714,48 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                 ),
                 const SizedBox(height: 8),
                 if (p.imageUrls.isNotEmpty)
-                  SizedBox(
-                    height: 120,
+                  Container(
+                    constraints: const BoxConstraints(
+                      minWidth: double.infinity,
+                      maxHeight: 350,
+                    ),
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: p.imageUrls.length,
                       separatorBuilder: (_, _) => const SizedBox(width: 8),
                       itemBuilder: (_, int i) {
+                        final double w = (MediaQuery.sizeOf(context).width - 40)
+                            .clamp(160.0, 420.0);
                         return RepaintBoundary(
                           child: GestureDetector(
-                            onTap: () => Navigator.push<void>(
-                              context,
-                              MaterialPageRoute<void>(
-                                builder: (_) => FeedFullscreenGallery(
-                                  urls: p.imageUrls,
-                                  initialIndex: i,
+                            onTap: () {
+                              if (!context.mounted) {
+                                return;
+                              }
+                              Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => FeedFullscreenGallery(
+                                    urls: p.imageUrls,
+                                    initialIndex: i,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(26),
+                              child: SizedBox(
+                                width: w,
+                                height: 350,
+                                child: ProgressiveCachedImage(
+                                  imageUrl: p.imageUrls[i],
+                                  width: w,
+                                  height: 350,
+                                  fit: BoxFit.cover,
+                                  borderRadius: 0,
+                                  memCacheHeightMaxPx: 600,
                                 ),
                               ),
-                            ),
-                            child: ProgressiveCachedImage(
-                              imageUrl: p.imageUrls[i],
-                              width: 160,
-                              height: 120,
-                              fit: BoxFit.cover,
-                              borderRadius: 10,
                             ),
                           ),
                         );
@@ -910,6 +934,7 @@ class _FeedPostDetailScreenState extends State<FeedPostDetailScreen> {
                                   height: 56,
                                   fit: BoxFit.cover,
                                   borderRadius: 8,
+                                  memCacheHeightMaxPx: 600,
                                 ),
                               ),
                             )

@@ -104,6 +104,7 @@ author:profiles!job_vacancies_author_id_fkey(
     }
     await c.from(_table).insert(<String, dynamic>{
       'author_id': uid,
+      'is_published': false,
       'title': title.trim(),
       'description': description.trim(),
       'salary': salary.trim(),
@@ -111,6 +112,18 @@ author:profiles!job_vacancies_author_id_fkey(
       'contact_phone': contactPhone.trim(),
       if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
     });
+  }
+
+  /// Только администратор (RLS + триггер в БД).
+  static Future<void> setPublished(String id, {required bool published}) async {
+    final c = _c;
+    if (c == null) {
+      throw StateError('Supabase не готов');
+    }
+    await c
+        .from(_table)
+        .update(<String, dynamic>{'is_published': published})
+        .eq('id', id);
   }
 
   static Future<void> deleteById(String id) async {

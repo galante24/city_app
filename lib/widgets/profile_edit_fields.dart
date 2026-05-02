@@ -236,27 +236,37 @@ class AboutBlock extends StatelessWidget {
               content: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: 520, maxHeight: maxH),
                 child: SingleChildScrollView(
-                  child: TextField(
-                    controller: controller,
-                    minLines: 4,
-                    maxLines: 10,
-                    maxLength: 500,
-                    decoration: const InputDecoration(
-                      hintText: 'Коротко о себе — видно в профиле в чатах',
-                      alignLabelWithHint: true,
-                      contentPadding: EdgeInsets.all(16),
-                      border: OutlineInputBorder(),
+                  child: RepaintBoundary(
+                    child: TextField(
+                      controller: controller,
+                      minLines: 4,
+                      maxLines: 10,
+                      maxLength: 500,
+                      decoration: const InputDecoration(
+                        hintText: 'Коротко о себе — видно в профиле в чатах',
+                        alignLabelWithHint: true,
+                        contentPadding: EdgeInsets.all(16),
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
                 ),
               ),
               actions: <Widget>[
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
+                  onPressed: () {
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx, false);
+                    }
+                  },
                   child: const Text('Отмена'),
                 ),
                 FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
+                  onPressed: () {
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx, true);
+                    }
+                  },
                   child: const Text('Сохранить'),
                 ),
               ],
@@ -268,6 +278,9 @@ class AboutBlock extends StatelessWidget {
         return;
       }
       await CityDataService.setMyAbout(controller.text);
+      if (!context.mounted) {
+        return;
+      }
       onSaved();
     } on Object catch (e) {
       if (context.mounted) {
