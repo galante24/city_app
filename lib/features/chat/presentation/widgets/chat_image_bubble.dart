@@ -3,29 +3,43 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../widgets/media_progressive_image.dart';
+import '../../../../widgets/adaptive_image.dart';
+import '../../../../widgets/media_shimmer_box.dart';
 
 /// Вынесенный кэш соотношения сторон по URL — меньше работы при скролле списка.
 final Map<String, Size> _chatImageIntrinsicSizeCache = <String, Size>{};
 
-/// Превью изображения в чате: ограничение по ширине экрана, [BoxFit.cover], кэш.
+/// Превью изображения в чате: по реальным пропорциям кадра, вписано в max×max, [BoxFit.contain].
+///
+/// Загрузка кадра после известных intrinsics — через [AdaptiveImage] (единая политика кэша/fade).
+/// [maxWidthPx] — явный лимит ширины (например сетка вложений в комментариях); иначе ~70 % экрана.
 class ChatImageBubble extends StatefulWidget {
   const ChatImageBubble({
     super.key,
     required this.imageUrl,
     required this.isMe,
+    this.maxWidthPx,
+    this.maxHeightPx = 280,
+    this.cornerRadius = 14,
   });
 
   final String imageUrl;
   final bool isMe;
+
+  /// Максимальная ширина в логических px; если `null` — [MediaQuery.size.width] × 0.7.
+  final double? maxWidthPx;
+
+  /// Максимальная высота превью.
+  final double maxHeightPx;
+
+  /// Скругление рамки (в чате 14, в комментариях ленты обычно 26).
+  final double cornerRadius;
 
   @override
   State<ChatImageBubble> createState() => _ChatImageBubbleState();
 }
 
 class _ChatImageBubbleState extends State<ChatImageBubble> {
-  static const double _kMaxHeight = 280;
-  static const double _kCornerRadius = 14;
   static const Color _kPlaceholderColor = Color(0xFFE0E0E0);
 
   /// Плейсхолдер до известных пропорций — тот же max width, AR 4:3, без скачка высоты баббла.
@@ -148,7 +162,9 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
   @override
   Widget build(BuildContext context) {
     final MediaQueryData mq = MediaQuery.of(context);
-    final double maxW = mq.size.width * 0.7;
+    final double maxW = widget.maxWidthPx ?? (mq.size.width * 0.7);
+    final double maxH = widget.maxHeightPx;
+    final double r = widget.cornerRadius;
     final Alignment align = widget.isMe
         ? Alignment.centerRight
         : Alignment.centerLeft;
@@ -158,9 +174,9 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
         child: Align(
           alignment: align,
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
+            constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(_kCornerRadius),
+              borderRadius: BorderRadius.circular(r),
               clipBehavior: Clip.antiAlias,
               child: SizedBox(
                 height: 120,
@@ -187,17 +203,17 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
         child: Align(
           alignment: align,
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
+            constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(_kCornerRadius),
+              borderRadius: BorderRadius.circular(r),
               clipBehavior: Clip.antiAlias,
               child: SizedBox(
                 width: placeholderW,
-                height: math.min(placeholderH, _kMaxHeight),
+                height: math.min(placeholderH, maxH),
                 child: MediaShimmerBox(
                   width: placeholderW,
-                  height: math.min(placeholderH, _kMaxHeight),
-                  borderRadius: _kCornerRadius,
+                  height: math.min(placeholderH, maxH),
+                  borderRadius: r,
                 ),
               ),
             ),
@@ -206,7 +222,7 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
       );
     }
 
-    final Size box = _layoutSize(_intrinsic!, maxW, _kMaxHeight);
+    final Size box = _layoutSize(_intrinsic!, maxW, maxH);
     final double dpr = mq.devicePixelRatio;
     final int memW = (box.width * dpr).round().clamp(1, 4096);
     final int memH = (box.height * dpr).round().clamp(1, 4096);
@@ -215,40 +231,40 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
       child: Align(
         alignment: align,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxW, maxHeight: _kMaxHeight),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(_kCornerRadius),
-            clipBehavior: Clip.antiAlias,
-            child: CachedNetworkImage(
+          constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
+          child: SizedBox(
+            width: box.width,
+            height: box.height,
+            child: AdaptiveImage(
               imageUrl: widget.imageUrl,
-              width: box.width,
-              height: box.height,
-              fit: BoxFit.cover,
+              maxWidthPercent: 1,
+              maxHeightPercent: 1,
+              borderRadius: r,
+              boxFit: BoxFit.contain,
               filterQuality: FilterQuality.low,
               fadeInDuration: const Duration(milliseconds: 380),
               fadeOutDuration: const Duration(milliseconds: 100),
-              memCacheWidth: memW,
-              memCacheHeight: memH,
-              placeholder: (BuildContext context, String _) {
-                return MediaShimmerBox(
-                  width: box.width,
-                  height: box.height,
-                  borderRadius: _kCornerRadius,
-                );
-              },
-              errorWidget: (BuildContext context, String url, Object error) {
-                return SizedBox(
-                  width: box.width,
-                  height: box.height,
-                  child: ColoredBox(
-                    color: _kPlaceholderColor,
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                );
-              },
+              memCacheWidthOverride: memW,
+              memCacheHeightOverride: memH,
+              memCacheMaxDimension: 4096,
+              networkPlaceholderBuilder:
+                  (BuildContext context, double w, double h) {
+                    return MediaShimmerBox(
+                      width: w,
+                      height: h,
+                      borderRadius: r,
+                    );
+                  },
+              networkErrorBuilder:
+                  (BuildContext context, double w, double h, Object? _) {
+                    return ColoredBox(
+                      color: _kPlaceholderColor,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.grey.shade600,
+                      ),
+                    );
+                  },
             ),
           ),
         ),

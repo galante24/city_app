@@ -3,6 +3,19 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+/// Кастомный плейсхолдер сети (ширина/высота — логические px ячейки).
+typedef AdaptiveNetworkPlaceholderBuilder =
+    Widget Function(BuildContext context, double width, double height);
+
+/// Кастомный виджет ошибки сети.
+typedef AdaptiveNetworkErrorBuilder =
+    Widget Function(
+      BuildContext context,
+      double width,
+      double height,
+      Object? error,
+    );
+
 /// Пресеты [AdaptiveImage.fromSource] для типовых экранов приложения.
 enum AdaptiveImageScene {
   /// Универсальный сценарий: ширина до 90 %, без фиксированного кадра.
@@ -58,6 +71,10 @@ class AdaptiveImage extends StatelessWidget {
     this.assetCacheHeight,
     this.assetGaplessPlayback = false,
     this.wrapInSafeArea = false,
+    this.networkPlaceholderBuilder,
+    this.networkErrorBuilder,
+    this.memCacheWidthOverride,
+    this.memCacheHeightOverride,
   });
 
   /// URL или путь к asset (`assets/...`).
@@ -90,6 +107,16 @@ class AdaptiveImage extends StatelessWidget {
   /// Оборачивает результат в [SafeArea] (редко нужно внутри уже «безопасных» лейаутов).
   final bool wrapInSafeArea;
 
+  /// Если задано — вместо [CircularProgressIndicator] при загрузке сети.
+  final AdaptiveNetworkPlaceholderBuilder? networkPlaceholderBuilder;
+
+  /// Если задано — вместо стандартной иконки ошибки сети.
+  final AdaptiveNetworkErrorBuilder? networkErrorBuilder;
+
+  /// Явные лимиты растра для [CachedNetworkImage] (иначе считаются из [memCacheMaxDimension]).
+  final int? memCacheWidthOverride;
+  final int? memCacheHeightOverride;
+
   /// Фабрика: угадывает asset/сеть и подставляет пресет [scene].
   factory AdaptiveImage.fromSource(
     String source, {
@@ -108,6 +135,10 @@ class AdaptiveImage extends StatelessWidget {
     int? assetCacheHeight,
     bool assetGaplessPlayback = false,
     bool wrapInSafeArea = false,
+    AdaptiveNetworkPlaceholderBuilder? networkPlaceholderBuilder,
+    AdaptiveNetworkErrorBuilder? networkErrorBuilder,
+    int? memCacheWidthOverride,
+    int? memCacheHeightOverride,
   }) {
     final String trimmed = source.trim();
     final bool inferredAsset = _inferIsAsset(trimmed, isNetwork);
@@ -128,6 +159,10 @@ class AdaptiveImage extends StatelessWidget {
       assetCacheHeight: assetCacheHeight,
       assetGaplessPlayback: assetGaplessPlayback,
       wrapInSafeArea: wrapInSafeArea,
+      networkPlaceholderBuilder: networkPlaceholderBuilder,
+      networkErrorBuilder: networkErrorBuilder,
+      memCacheWidthOverride: memCacheWidthOverride,
+      memCacheHeightOverride: memCacheHeightOverride,
     );
   }
 
@@ -203,13 +238,14 @@ class AdaptiveImage extends StatelessWidget {
   }
 
   Widget _networkCore({
+    required BuildContext context,
     required String url,
     required double layoutW,
     required double layoutH,
     required MediaQueryData mq,
   }) {
-    final int mw = _memCachePx(layoutW, mq);
-    final int mh = _memCachePx(layoutH, mq);
+    final int mw = memCacheWidthOverride ?? _memCachePx(layoutW, mq);
+    final int mh = memCacheHeightOverride ?? _memCachePx(layoutH, mq);
     return CachedNetworkImage(
       imageUrl: url,
       width: layoutW,
@@ -222,8 +258,10 @@ class AdaptiveImage extends StatelessWidget {
       memCacheWidth: mw,
       memCacheHeight: mh,
       placeholder: (BuildContext context, String url) =>
+          networkPlaceholderBuilder?.call(context, layoutW, layoutH) ??
           _placeholder(layoutW, layoutH),
       errorWidget: (BuildContext context, String url, Object? error) =>
+          networkErrorBuilder?.call(context, layoutW, layoutH, error) ??
           _errorTile(layoutW, layoutH),
     );
   }
@@ -329,7 +367,13 @@ class AdaptiveImage extends StatelessWidget {
 
     Widget core = isAsset
         ? _assetCore(path: path, layoutW: layoutW, layoutH: layoutH)
-        : _networkCore(url: path, layoutW: layoutW, layoutH: layoutH, mq: mq);
+        : _networkCore(
+            context: context,
+            url: path,
+            layoutW: layoutW,
+            layoutH: layoutH,
+            mq: mq,
+          );
 
     if (ar != null && ar > 0) {
       core = SizedBox(

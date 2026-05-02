@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/image_cache_extent.dart';
-import 'media_progressive_image.dart';
+import 'adaptive_image.dart';
+import 'media_shimmer_box.dart';
 
 /// Доля ширины экрана по умолчанию (~65%).
 const double kCityNetworkImageWidthFraction = 0.65;
@@ -61,6 +61,8 @@ Color _onAvatarPlaceholderColor(Color bg) {
 }
 
 /// Универсальная сеть-картинка: ограничения, [AspectRatio], скругление, loading/error.
+///
+/// Рендер сети через [AdaptiveImage] — единая политика кэша, fade и лимитов растра.
 ///
 /// **Размеры в БД (рекомендация):** рядом с `url` хранить `image_width` / `image_height`
 /// (int, пиксели оригинала) — из Edge Function при загрузке или после декодирования
@@ -420,41 +422,44 @@ class CityNetworkImage extends StatelessWidget {
     final int cw = imageCacheExtentPx(context, layoutW);
     final int ch = imageCacheExtentPx(context, layoutH);
     final bool compact = _compactPlaceholder(layoutW, layoutH);
-    final Widget img = CachedNetworkImage(
+    final Widget adaptive = AdaptiveImage(
       imageUrl: url,
-      fit: boxFit,
-      alignment: alignment,
-      width: layoutW.isFinite ? layoutW : null,
-      height: layoutH.isFinite ? layoutH : null,
-      memCacheWidth: cw,
-      memCacheHeight: ch,
+      maxWidthPercent: 1,
+      maxHeightPercent: 1,
+      borderRadius: 0,
+      boxFit: boxFit,
+      alignment: Alignment.center,
+      imageAlignment: alignment,
       fadeInDuration: const Duration(milliseconds: 320),
       fadeOutDuration: const Duration(milliseconds: 80),
       filterQuality: FilterQuality.low,
-      placeholder: (BuildContext context, String _) {
+      memCacheWidthOverride: cw,
+      memCacheHeightOverride: ch,
+      networkPlaceholderBuilder: (BuildContext context, double w, double h) {
         if (_useAvatarStylePlaceholder) {
-          return _avatarSolidTile(context, layoutW, layoutH);
+          return _avatarSolidTile(context, w, h);
         }
         if (compact) {
           return ColoredBox(color: placeholderColor);
         }
         return MediaShimmerBox(
-          width: layoutW,
-          height: layoutH,
+          width: w,
+          height: h,
           borderRadius: borderRadius.topLeft.x,
         );
       },
-      errorWidget: (BuildContext context, String _, Object _) {
-        if (_useAvatarStylePlaceholder) {
-          return _avatarSolidTile(context, layoutW, layoutH);
-        }
-        return _errorTile(context, layoutW, layoutH);
-      },
+      networkErrorBuilder:
+          (BuildContext context, double w, double h, Object? _) {
+            if (_useAvatarStylePlaceholder) {
+              return _avatarSolidTile(context, w, h);
+            }
+            return _errorTile(context, w, h);
+          },
     );
     if (clip && borderRadius != BorderRadius.zero) {
-      return ClipRRect(borderRadius: borderRadius, child: img);
+      return ClipRRect(borderRadius: borderRadius, child: adaptive);
     }
-    return img;
+    return adaptive;
   }
 
   Widget _errorTile(BuildContext context, double w, double h) {
