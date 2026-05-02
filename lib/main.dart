@@ -29,6 +29,7 @@ import 'services/supabase_session_migration.dart';
 import 'screens/auth_screen.dart';
 import 'main_shell_navigation.dart';
 import 'main_tab_index.dart';
+import 'widgets/adaptive_image.dart';
 import 'widgets/city_main_navigation_bar.dart';
 import 'screens/chats_list_screen.dart';
 import 'services/chat_unread_badge.dart';
@@ -59,11 +60,8 @@ Future<void> main() async {
 
 Future<void> _runApp() async {
   WidgetsFlutterBinding.ensureInitialized();
-  syncCompileTimeSupabaseIntoResolved();
-  // При «запечённых» в бандл ключах не трогаем диск/HTTP — мгновенный старт (Zero-Lag).
-  if (!kHasCompileTimeSupabaseDartDefines) {
-    await loadSupabaseRuntimeConfigIfMissing();
-  }
+  // Сначала define’ы из бандла, при невалидных/пустых — диск (не web) и HTTP api_keys.json (web).
+  await loadSupabaseRuntimeConfigIfMissing();
   if (!kIsWeb) {
     await SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.manual,
@@ -154,19 +152,19 @@ class _CityLightBackdropImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      kLightThemeBackgroundAsset,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
+    // Откат: полный прежний код фона — в git до ветки feature/adaptive-images-system
+    // (было: Image + asset, BoxFit.cover, cacheWidth/cacheHeight, errorBuilder → ColoredBox).
+    return AdaptiveImage(
+      imageUrl: kLightThemeBackgroundAsset,
+      isAsset: true,
+      maxWidthPercent: 1.0,
+      maxHeightPercent: 1.0,
+      boxFit: BoxFit.cover,
+      imageAlignment: Alignment.topCenter,
       filterQuality: FilterQuality.none,
-      isAntiAlias: false,
-      gaplessPlayback: true,
-      cacheWidth: kIsWeb ? null : _kDecodeW,
-      cacheHeight: kIsWeb ? null : _kDecodeH,
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const ColoredBox(color: Color(0xFFE8F0EC));
-          },
+      assetCacheWidth: kIsWeb ? null : _kDecodeW,
+      assetCacheHeight: kIsWeb ? null : _kDecodeH,
+      assetGaplessPlayback: true,
     );
   }
 }
@@ -179,19 +177,18 @@ class _CityDarkBackdropImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      kDarkThemeBackgroundAsset,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
+    // Откат: см. git — тёмный фон через Image+asset с теми же cache* и errorBuilder.
+    return AdaptiveImage(
+      imageUrl: kDarkThemeBackgroundAsset,
+      isAsset: true,
+      maxWidthPercent: 1.0,
+      maxHeightPercent: 1.0,
+      boxFit: BoxFit.cover,
+      imageAlignment: Alignment.topCenter,
       filterQuality: FilterQuality.none,
-      isAntiAlias: false,
-      gaplessPlayback: true,
-      cacheWidth: kIsWeb ? null : _kDecodeW,
-      cacheHeight: kIsWeb ? null : _kDecodeH,
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const ColoredBox(color: CityTheme.kDarkScaffold);
-          },
+      assetCacheWidth: kIsWeb ? null : _kDecodeW,
+      assetCacheHeight: kIsWeb ? null : _kDecodeH,
+      assetGaplessPlayback: true,
     );
   }
 }
@@ -205,19 +202,18 @@ class _CityAuthBackdropImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      kAuthBackgroundAsset,
-      fit: BoxFit.cover,
-      alignment: Alignment.center,
+    // Откат: см. git — фон авторизации через Image+asset и ColoredBox при ошибке.
+    return AdaptiveImage(
+      imageUrl: kAuthBackgroundAsset,
+      isAsset: true,
+      maxWidthPercent: 1.0,
+      maxHeightPercent: 1.0,
+      boxFit: BoxFit.cover,
+      imageAlignment: Alignment.center,
       filterQuality: FilterQuality.none,
-      isAntiAlias: false,
-      gaplessPlayback: true,
-      cacheWidth: kIsWeb ? null : _kDecodeW,
-      cacheHeight: kIsWeb ? null : _kDecodeH,
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const ColoredBox(color: Color(0xFF4A7BA7));
-          },
+      assetCacheWidth: kIsWeb ? null : _kDecodeW,
+      assetCacheHeight: kIsWeb ? null : _kDecodeH,
+      assetGaplessPlayback: true,
     );
   }
 }
@@ -236,7 +232,12 @@ class _CityAppState extends State<CityApp> {
   @override
   void initState() {
     super.initState();
-    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((
+      AuthState data,
+    ) {
+      if (data.event == AuthChangeEvent.tokenRefreshed) {
+        return;
+      }
       if (mounted) {
         setState(() {});
       }
@@ -435,8 +436,11 @@ class _MainScaffoldState extends State<MainScaffold> {
           index: _currentIndex,
           children: List<Widget>.generate(
             _stackChildren.length,
-            (int i) =>
-                _KeepAliveTab(key: ValueKey<int>(i), child: _stackChildren[i]),
+            (int i) => _KeepAliveTab(
+              key: ValueKey<int>(i),
+              active: i == _currentIndex,
+              child: _stackChildren[i],
+            ),
           ),
         ),
         bottomNavigationBar: Builder(
@@ -469,8 +473,10 @@ class _MainScaffoldState extends State<MainScaffold> {
 
 /// Чтобы [PageView] не сбрасывал скролл и состояние невидимых вкладок.
 class _KeepAliveTab extends StatefulWidget {
-  const _KeepAliveTab({super.key, required this.child});
+  const _KeepAliveTab({super.key, required this.active, required this.child});
 
+  /// Неактивные вкладки [IndexedStack] не должны крутить [AnimationController] / шиммеры.
+  final bool active;
   final Widget child;
 
   @override
@@ -485,7 +491,10 @@ class _KeepAliveTabState extends State<_KeepAliveTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return widget.child;
+    return TickerMode(
+      enabled: widget.active,
+      child: RepaintBoundary(child: widget.child),
+    );
   }
 }
 

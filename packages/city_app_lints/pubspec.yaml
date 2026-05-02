@@ -1,0 +1,11 @@
+name: city_app_lints
+description: Project-specific lints for city_app (AdaptiveImage policy).
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  analyzer: ^7.6.0
+  custom_lint_builder: ^0.7.5

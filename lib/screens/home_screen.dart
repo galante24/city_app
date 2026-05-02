@@ -17,9 +17,11 @@ import '../widgets/feed/feed_comments_bottom_sheet.dart';
 import '../widgets/feed/feed_compose_sheet.dart';
 import '../widgets/feed/feed_fullscreen_gallery.dart';
 import '../widgets/feed/feed_share_to_chat_dialog.dart';
+import '../features/chat/presentation/widgets/chat_image_bubble.dart';
 import '../widgets/city_network_image.dart';
 import '../widgets/media_progressive_image.dart';
 import '../utils/social_feed_format.dart';
+import '../widgets/adaptive_image.dart';
 import '../widgets/portal/portal_home_weather_corner.dart';
 
 class _PostsBuckets {
@@ -641,24 +643,17 @@ class _HomeScreenState extends State<HomeScreen>
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: <Widget>[
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.asset(
-                                      'assets/app_icon.png',
-                                      width: heraldSize,
-                                      height: heraldSize,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (
-                                            BuildContext context,
-                                            Object error,
-                                            StackTrace? stackTrace,
-                                          ) {
-                                            return SizedBox(
-                                              width: heraldSize,
-                                              height: heraldSize,
-                                            );
-                                          },
+                                  // Откат: герб через Image+asset в ClipRRect — см. git.
+                                  SizedBox(
+                                    width: heraldSize,
+                                    height: heraldSize,
+                                    child: AdaptiveImage(
+                                      imageUrl: 'assets/app_icon.png',
+                                      isAsset: true,
+                                      maxWidthPercent: 1.0,
+                                      maxHeightPercent: 1.0,
+                                      boxFit: BoxFit.cover,
+                                      borderRadius: 8,
                                     ),
                                   ),
                                   SizedBox(width: screenW < 360 ? 8 : 10),
@@ -1073,51 +1068,33 @@ class _SocialNewsCardState extends State<SocialNewsCard> {
         ),
         const SizedBox(height: 10),
         if (hasGallery)
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints bc) {
-              final double maxW = bc.maxWidth.isFinite && bc.maxWidth > 0
-                  ? bc.maxWidth
-                  : MediaQuery.sizeOf(context).width;
-              return Container(
-                constraints: BoxConstraints(
-                  minWidth: double.infinity,
-                  maxHeight: 350,
-                ),
-                width: maxW,
-                child: ListView.separated(
-                  addAutomaticKeepAlives: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: post.imageUrls.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (_, int i) {
-                    final double slotW = math
-                        .min(maxW - 32, MediaQuery.sizeOf(context).width * 0.88)
-                        .clamp(160.0, 520.0);
-                    return RepaintBoundary(
-                      child: GestureDetector(
-                        onTap: () => _openGallery(post.imageUrls, i),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(26),
-                          child: SizedBox(
-                            width: slotW,
-                            height: 350,
-                            child: ProgressiveCachedImage(
-                              imageUrl: post.imageUrls[i],
-                              width: slotW,
-                              height: 350,
-                              fit: BoxFit.cover,
-                              borderRadius: 0,
-                              memCacheHeightMaxPx: 600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
+          SizedBox(
+            height: 286,
+            child: ListView.separated(
+              addAutomaticKeepAlives: true,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              itemCount: post.imageUrls.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (BuildContext context, int i) {
+                final double capW = math.min(
+                  MediaQuery.sizeOf(context).width * 0.72,
+                  320,
+                );
+                return RepaintBoundary(
+                  child: GestureDetector(
+                    onTap: () => _openGallery(post.imageUrls, i),
+                    child: ChatImageBubble(
+                      imageUrl: post.imageUrls[i],
+                      isMe: false,
+                      maxWidthPx: capW,
+                      maxHeightPx: 280,
+                      cornerRadius: 26,
+                    ),
+                  ),
+                );
+              },
+            ),
           )
         else if (post.mediaUrl != null &&
             post.mediaUrl!.isNotEmpty) ...<Widget>[
@@ -1135,17 +1112,20 @@ class _SocialNewsCardState extends State<SocialNewsCard> {
                   borderRadius: BorderRadius.circular(16),
                   child: LayoutBuilder(
                     builder: (BuildContext context, BoxConstraints bc) {
-                      final double w = bc.maxWidth;
-                      double h = w / (16 / 9);
-                      if (h > 300) {
-                        h = 300;
-                      }
-                      return SizedBox(
-                        width: w,
-                        height: h,
-                        child: CityNetworkImage.fillParent(
-                          imageUrl: post.mediaUrl!,
-                          boxFit: BoxFit.cover,
+                      final double avail = bc.maxWidth;
+                      final double boxW = math.min(avail, 480);
+                      const double boxH = 280;
+                      return Center(
+                        child: SizedBox(
+                          width: boxW,
+                          height: boxH,
+                          child: ProgressiveCachedImageContain(
+                            imageUrl: post.mediaUrl!,
+                            width: boxW,
+                            height: boxH,
+                            borderRadius: 0,
+                            memCacheHeightMaxPx: 600,
+                          ),
                         ),
                       );
                     },
