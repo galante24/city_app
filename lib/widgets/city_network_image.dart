@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../utils/image_cache_extent.dart';
 import 'adaptive_image.dart';
 import 'media_shimmer_box.dart';
 
@@ -62,7 +61,7 @@ Color _onAvatarPlaceholderColor(Color bg) {
 
 /// Универсальная сеть-картинка: ограничения, [AspectRatio], скругление, loading/error.
 ///
-/// Рендер сети через [AdaptiveImage] — единая политика кэша, fade и лимитов растра.
+/// Рендер через [AdaptiveImage] (единая система кэша, fade, политики изображений).
 ///
 /// **Размеры в БД (рекомендация):** рядом с `url` хранить `image_width` / `image_height`
 /// (int, пиксели оригинала) — из Edge Function при загрузке или после декодирования
@@ -378,7 +377,7 @@ class CityNetworkImage extends StatelessWidget {
     );
   }
 
-  /// Круглый аватар: [CachedNetworkImage], fade-in, memCache, без Shimmer —
+  /// Круглый аватар: сеть через [AdaptiveImage], fade-in, memCache, без Shimmer —
   /// при загрузке/ошибке — цветной плейсхолдер с инициалами, если задан [placeholderName].
   static Widget avatar({
     required BuildContext context,
@@ -419,47 +418,48 @@ class CityNetworkImage extends StatelessWidget {
     required double layoutH,
     bool clip = true,
   }) {
-    final int cw = imageCacheExtentPx(context, layoutW);
-    final int ch = imageCacheExtentPx(context, layoutH);
     final bool compact = _compactPlaceholder(layoutW, layoutH);
-    final Widget adaptive = AdaptiveImage(
-      imageUrl: url,
-      maxWidthPercent: 1,
-      maxHeightPercent: 1,
-      borderRadius: 0,
-      boxFit: boxFit,
-      alignment: Alignment.center,
-      imageAlignment: alignment,
-      fadeInDuration: const Duration(milliseconds: 320),
-      fadeOutDuration: const Duration(milliseconds: 80),
-      filterQuality: FilterQuality.low,
-      memCacheWidthOverride: cw,
-      memCacheHeightOverride: ch,
-      networkPlaceholderBuilder: (BuildContext context, double w, double h) {
-        if (_useAvatarStylePlaceholder) {
-          return _avatarSolidTile(context, w, h);
-        }
-        if (compact) {
-          return ColoredBox(color: placeholderColor);
-        }
-        return MediaShimmerBox(
-          width: w,
-          height: h,
-          borderRadius: borderRadius.topLeft.x,
-        );
-      },
-      networkErrorBuilder:
-          (BuildContext context, double w, double h, Object? _) {
-            if (_useAvatarStylePlaceholder) {
-              return _avatarSolidTile(context, w, h);
-            }
-            return _errorTile(context, w, h);
-          },
+    final Widget img = SizedBox(
+      width: layoutW.isFinite ? layoutW : null,
+      height: layoutH.isFinite ? layoutH : null,
+      child: AdaptiveImage(
+        imageUrl: url,
+        maxWidthPercent: 1,
+        maxHeightPercent: 1,
+        boxFit: boxFit,
+        borderRadius: 0,
+        imageAlignment: alignment,
+        filterQuality: FilterQuality.low,
+        fadeInDuration: const Duration(milliseconds: 320),
+        fadeOutDuration: const Duration(milliseconds: 80),
+        // Совпадает с прежним imageCacheExtentPx: (logical * dpr).round(), верх 2048.
+        memCacheMaxDimension: 2048,
+        networkPlaceholderBuilder: (BuildContext context, double w, double h) {
+          if (_useAvatarStylePlaceholder) {
+            return _avatarSolidTile(context, w, h);
+          }
+          if (compact) {
+            return ColoredBox(color: placeholderColor);
+          }
+          return MediaShimmerBox(
+            width: w,
+            height: h,
+            borderRadius: borderRadius.topLeft.x,
+          );
+        },
+        networkErrorBuilder:
+            (BuildContext context, double w, double h, Object? _) {
+              if (_useAvatarStylePlaceholder) {
+                return _avatarSolidTile(context, w, h);
+              }
+              return _errorTile(context, w, h);
+            },
+      ),
     );
     if (clip && borderRadius != BorderRadius.zero) {
-      return ClipRRect(borderRadius: borderRadius, child: adaptive);
+      return ClipRRect(borderRadius: borderRadius, child: img);
     }
-    return adaptive;
+    return img;
   }
 
   Widget _errorTile(BuildContext context, double w, double h) {

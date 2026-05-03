@@ -2,9 +2,7 @@
 
 ## Правило
 
-**Все изображения из сети или из `assets/` должны отображаться через [`AdaptiveImage`](../lib/widgets/adaptive_image.dart)** (или [`AdaptiveImage.fromSource`](../lib/widgets/adaptive_image.dart) с пресетом сцены). Прямые вызовы `Image.network` и `Image.asset` не используются; политика проверяется скриптом `tool/check_adaptive_image_policy.dart` (в CI: workflow `flutter_ci.yml`). Опционально можно подключить пакет [`packages/city_app_lints`](../packages/city_app_lints/README.md) и **custom_lint** (если путь к проекту без пробелов в имени папки).
-
-Виджеты **`CityNetworkImage`** и **`ChatImageBubble`** строят сеть на `AdaptiveImage` с кастомными плейсхолдерами/ошибками через `networkPlaceholderBuilder` / `networkErrorBuilder` и при необходимости `memCacheWidthOverride` / `memCacheHeightOverride`.
+**Все изображения из сети или из `assets/` должны отображаться через [`AdaptiveImage`](../lib/widgets/adaptive_image.dart)** (или [`AdaptiveImage.fromSource`](../lib/widgets/adaptive_image.dart) с пресетом сцены). Виджеты **`ChatImageBubble`** и **`CityNetworkImage`** также строятся на `AdaptiveImage` (с сохранением shimmer/аватар-плейсхолдеров через `networkPlaceholderBuilder` / `networkErrorBuilder`). Прямые вызовы `Image.network` и `Image.asset` не используются; политика проверяется скриптом `tool/check_adaptive_image_policy.dart` и job **CI** (`.github/workflows/ci.yml`). Опционально можно подключить пакет [`packages/city_app_lints`](../packages/city_app_lints/README.md) и **custom_lint** (если путь к проекту без пробелов в имени папки).
 
 Исключения допускаются только внутри самой реализации `adaptive_image.dart`.
 

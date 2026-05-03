@@ -3,19 +3,6 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-/// Кастомный плейсхолдер сети (ширина/высота — логические px ячейки).
-typedef AdaptiveNetworkPlaceholderBuilder =
-    Widget Function(BuildContext context, double width, double height);
-
-/// Кастомный виджет ошибки сети.
-typedef AdaptiveNetworkErrorBuilder =
-    Widget Function(
-      BuildContext context,
-      double width,
-      double height,
-      Object? error,
-    );
-
 /// Пресеты [AdaptiveImage.fromSource] для типовых экранов приложения.
 enum AdaptiveImageScene {
   /// Универсальный сценарий: ширина до 90 %, без фиксированного кадра.
@@ -52,7 +39,8 @@ enum AdaptiveImageScene {
 /// без лишнего [SafeArea] вокруг каждой картинки — оборачивайте экран в [SafeArea] при
 /// полноэкранном контенте или включите [wrapInSafeArea].
 class AdaptiveImage extends StatelessWidget {
-  const AdaptiveImage({
+  // ignore: prefer_const_constructors_in_immutables — опциональные builder'ы не const.
+  AdaptiveImage({
     super.key,
     required this.imageUrl,
     this.isAsset = false,
@@ -73,8 +61,6 @@ class AdaptiveImage extends StatelessWidget {
     this.wrapInSafeArea = false,
     this.networkPlaceholderBuilder,
     this.networkErrorBuilder,
-    this.memCacheWidthOverride,
-    this.memCacheHeightOverride,
   });
 
   /// URL или путь к asset (`assets/...`).
@@ -107,15 +93,18 @@ class AdaptiveImage extends StatelessWidget {
   /// Оборачивает результат в [SafeArea] (редко нужно внутри уже «безопасных» лейаутов).
   final bool wrapInSafeArea;
 
-  /// Если задано — вместо [CircularProgressIndicator] при загрузке сети.
-  final AdaptiveNetworkPlaceholderBuilder? networkPlaceholderBuilder;
+  /// Кастомный плейсхолдер сети (иначе — [CircularProgressIndicator]).
+  final Widget Function(BuildContext context, double w, double h)?
+  networkPlaceholderBuilder;
 
-  /// Если задано — вместо стандартной иконки ошибки сети.
-  final AdaptiveNetworkErrorBuilder? networkErrorBuilder;
-
-  /// Явные лимиты растра для [CachedNetworkImage] (иначе считаются из [memCacheMaxDimension]).
-  final int? memCacheWidthOverride;
-  final int? memCacheHeightOverride;
+  /// Кастомная ошибка сети (иначе — плитка с [Icons.error]).
+  final Widget Function(
+    BuildContext context,
+    double w,
+    double h,
+    Object? error,
+  )?
+  networkErrorBuilder;
 
   /// Фабрика: угадывает asset/сеть и подставляет пресет [scene].
   factory AdaptiveImage.fromSource(
@@ -135,10 +124,10 @@ class AdaptiveImage extends StatelessWidget {
     int? assetCacheHeight,
     bool assetGaplessPlayback = false,
     bool wrapInSafeArea = false,
-    AdaptiveNetworkPlaceholderBuilder? networkPlaceholderBuilder,
-    AdaptiveNetworkErrorBuilder? networkErrorBuilder,
-    int? memCacheWidthOverride,
-    int? memCacheHeightOverride,
+    Widget Function(BuildContext context, double w, double h)?
+    networkPlaceholderBuilder,
+    Widget Function(BuildContext context, double w, double h, Object? error)?
+    networkErrorBuilder,
   }) {
     final String trimmed = source.trim();
     final bool inferredAsset = _inferIsAsset(trimmed, isNetwork);
@@ -161,8 +150,6 @@ class AdaptiveImage extends StatelessWidget {
       wrapInSafeArea: wrapInSafeArea,
       networkPlaceholderBuilder: networkPlaceholderBuilder,
       networkErrorBuilder: networkErrorBuilder,
-      memCacheWidthOverride: memCacheWidthOverride,
-      memCacheHeightOverride: memCacheHeightOverride,
     );
   }
 
@@ -238,14 +225,13 @@ class AdaptiveImage extends StatelessWidget {
   }
 
   Widget _networkCore({
-    required BuildContext context,
     required String url,
     required double layoutW,
     required double layoutH,
     required MediaQueryData mq,
   }) {
-    final int mw = memCacheWidthOverride ?? _memCachePx(layoutW, mq);
-    final int mh = memCacheHeightOverride ?? _memCachePx(layoutH, mq);
+    final int mw = _memCachePx(layoutW, mq);
+    final int mh = _memCachePx(layoutH, mq);
     return CachedNetworkImage(
       imageUrl: url,
       width: layoutW,
@@ -367,13 +353,7 @@ class AdaptiveImage extends StatelessWidget {
 
     Widget core = isAsset
         ? _assetCore(path: path, layoutW: layoutW, layoutH: layoutH)
-        : _networkCore(
-            context: context,
-            url: path,
-            layoutW: layoutW,
-            layoutH: layoutH,
-            mq: mq,
-          );
+        : _networkCore(url: path, layoutW: layoutW, layoutH: layoutH, mq: mq);
 
     if (ar != null && ar > 0) {
       core = SizedBox(

@@ -1,0 +1,47 @@
+# Анализ + политика изображений на каждый PR и push в main.
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: Adaptive image policy (Image.network / Image.asset)
+        run: |
+          set -euo pipefail
+          echo "::group::dart run tool/check_adaptive_image_policy.dart"
+          dart run tool/check_adaptive_image_policy.dart
+          echo "::endgroup::"
+
+      - name: flutter analyze
+        run: flutter analyze

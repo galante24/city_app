@@ -11,7 +11,8 @@ final Map<String, Size> _chatImageIntrinsicSizeCache = <String, Size>{};
 
 /// Превью изображения в чате: по реальным пропорциям кадра, вписано в max×max, [BoxFit.contain].
 ///
-/// Загрузка кадра после известных intrinsics — через [AdaptiveImage] (единая политика кэша/fade).
+/// Загрузка кадра после известных intrinsics — через [AdaptiveImage] (единая политика кэша/fade/ошибок).
+///
 /// [maxWidthPx] — явный лимит ширины (например сетка вложений в комментариях); иначе ~70 % экрана.
 class ChatImageBubble extends StatefulWidget {
   const ChatImageBubble({
@@ -223,48 +224,52 @@ class _ChatImageBubbleState extends State<ChatImageBubble> {
     }
 
     final Size box = _layoutSize(_intrinsic!, maxW, maxH);
-    final double dpr = mq.devicePixelRatio;
-    final int memW = (box.width * dpr).round().clamp(1, 4096);
-    final int memH = (box.height * dpr).round().clamp(1, 4096);
 
     return RepaintBoundary(
       child: Align(
         alignment: align,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxW, maxHeight: maxH),
-          child: SizedBox(
-            width: box.width,
-            height: box.height,
-            child: AdaptiveImage(
-              imageUrl: widget.imageUrl,
-              maxWidthPercent: 1,
-              maxHeightPercent: 1,
-              borderRadius: r,
-              boxFit: BoxFit.contain,
-              filterQuality: FilterQuality.low,
-              fadeInDuration: const Duration(milliseconds: 380),
-              fadeOutDuration: const Duration(milliseconds: 100),
-              memCacheWidthOverride: memW,
-              memCacheHeightOverride: memH,
-              memCacheMaxDimension: 4096,
-              networkPlaceholderBuilder:
-                  (BuildContext context, double w, double h) {
-                    return MediaShimmerBox(
-                      width: w,
-                      height: h,
-                      borderRadius: r,
-                    );
-                  },
-              networkErrorBuilder:
-                  (BuildContext context, double w, double h, Object? _) {
-                    return ColoredBox(
-                      color: _kPlaceholderColor,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.grey.shade600,
-                      ),
-                    );
-                  },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(r),
+            clipBehavior: Clip.antiAlias,
+            // Раньше: прямой [CachedNetworkImage]; теперь [AdaptiveImage] в фиксированном box (см. docs/IMAGE_GUIDELINES.md).
+            child: SizedBox(
+              width: box.width,
+              height: box.height,
+              child: AdaptiveImage(
+                imageUrl: widget.imageUrl,
+                maxWidthPercent: 1,
+                maxHeightPercent: 1,
+                boxFit: BoxFit.contain,
+                borderRadius: 0,
+                filterQuality: FilterQuality.low,
+                fadeInDuration: const Duration(milliseconds: 380),
+                fadeOutDuration: const Duration(milliseconds: 100),
+                memCacheMaxDimension: 4096,
+                networkPlaceholderBuilder:
+                    (BuildContext context, double w, double h) {
+                      return MediaShimmerBox(
+                        width: w,
+                        height: h,
+                        borderRadius: r,
+                      );
+                    },
+                networkErrorBuilder:
+                    (BuildContext context, double w, double h, Object? _) {
+                      return SizedBox(
+                        width: w,
+                        height: h,
+                        child: ColoredBox(
+                          color: _kPlaceholderColor,
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      );
+                    },
+              ),
             ),
           ),
         ),

@@ -1,57 +1,49 @@
 # city_app
 
-Приложение «Лесосибирск» (Flutter + Supabase).
+Приложение «Лесосибирск» (Flutter). Сборка и ключи — см. `api_keys.example.json`, `--dart-define-from-file=api_keys.json`.
 
 ## Быстрый старт
 
-1. Установите [Flutter](https://docs.flutter.dev/get-started/install) (stable).
-2. Склонируйте репозиторий. **Для опционального [custom_lint](https://pub.dev/packages/custom_lint)** используйте путь **без пробелов** в имени каталога, например `C:\Projects\city_app`, а не `C:\My Projects\city_app` — иначе `dart run custom_lint` может не найти path-зависимость `packages/city_app_lints`.
-3. В корне приложения выполните:
-
-```bash
-dart run tool/setup.dart
-```
-
-Скрипт выполнит `flutter pub get`, при подключённом в `pubspec.yaml` пакете `custom_lint` и пути без пробелов — `dart run custom_lint`, затем **`dart run tool/check_adaptive_image_policy.dart`** (запрет прямых `Image.network` / `Image.asset` в `lib/`).
-
-Вручную:
-
 ```bash
 flutter pub get
-dart run tool/check_adaptive_image_policy.dart
+dart run tool/setup.dart
+flutter run --dart-define-from-file=api_keys.json
 ```
 
-Ключи Supabase и др.: см. `api_keys.example.json`, запуск с `--dart-define-from-file=api_keys.json`.
+## Adaptive images & custom_lint
 
-## Политика изображений
+Сеть и `assets/` для UI: [**`AdaptiveImage`**](lib/widgets/adaptive_image.dart) и гайд [**`docs/IMAGE_GUIDELINES.md`**](docs/IMAGE_GUIDELINES.md). В CI на каждый PR/push в `main` гоняется **`dart run tool/check_adaptive_image_policy.dart`** (см. [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
-Все сетевые и asset-картинки в `lib/` должны идти через [`AdaptiveImage`](lib/widgets/adaptive_image.dart). Подробности: [docs/IMAGE_GUIDELINES.md](docs/IMAGE_GUIDELINES.md).
+### Путь к проекту **без пробелов** (рекомендуется)
 
-### Подключение custom_lint (путь без пробелов)
+Инструмент **`custom_lint`** с локальным пакетом **`packages/city_app_lints`** на Windows часто **ломается**, если каталог содержит пробел (например `C:\My Projects\city_app`). Клонируйте в путь вида **`C:\src\city_app`** или **`C:\Projects\city_app`**.
 
-1. Убедитесь, что каталог клона **не содержит пробелов** в полном пути.
-2. В `pubspec.yaml` в `dev_dependencies` добавьте:
+После клонирования в такой путь:
 
-```yaml
-  custom_lint: ^0.7.5
-  city_app_lints:
-    path: packages/city_app_lints
-```
+1. В **`pubspec.yaml`** в `dev_dependencies` добавьте:
 
-3. В `analysis_options.yaml` в секции `analyzer:`:
+   ```yaml
+   custom_lint: ^0.7.5
+   city_app_lints:
+     path: packages/city_app_lints
+   ```
 
-```yaml
-analyzer:
-  plugins:
-    - custom_lint
-  errors:
-    use_adaptive_image: error
-```
+2. В **`analysis_options.yaml`** под `analyzer:`:
 
-4. Выполните `flutter pub get`, затем `dart run custom_lint`. При нарушении (прямой `Image.asset` / `Image.network` вне `lib/widgets/adaptive_image.dart`) анализатор сообщит правилом **`use_adaptive_image`**.
+   ```yaml
+   plugins:
+     - custom_lint
+   errors:
+     use_adaptive_image: error
+   ```
 
-Полный README пакета линтов: [packages/city_app_lints/README.md](packages/city_app_lints/README.md).
+3. Выполните **`flutter pub get`**.
 
-## CI
+4. Проверка: **`dart run custom_lint`** — при появлении в `lib/` прямых **`Image.network`** / **`Image.asset`** (кроме [`lib/widgets/adaptive_image.dart`](lib/widgets/adaptive_image.dart)) должны быть ошибки **`use_adaptive_image`**.
 
-Workflow [`.github/workflows/flutter_ci.yml`](.github/workflows/flutter_ci.yml) на **pull_request** и **push** в `main`/`master` запускает `dart run tool/check_adaptive_image_policy.dart` и `flutter analyze`.
+Подробности: [`packages/city_app_lints/README.md`](packages/city_app_lints/README.md).
+
+## Документация Flutter
+
+- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
+- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
